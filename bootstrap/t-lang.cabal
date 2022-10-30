@@ -1,0 +1,112 @@
+cabal-version: 1.12
+
+-- This file has been generated from package.yaml by hpack version 0.35.0.
+--
+-- see: https://github.com/sol/hpack
+
+name:           t-lang
+version:        0.1.0.0
+description:    Please see the README on GitHub at <https://github.com/githubuser/t-lang#readme>
+homepage:       https://github.com/githubuser/t-lang#readme
+bug-reports:    https://github.com/githubuser/t-lang/issues
+author:         Xbo1
+maintainer:     xbo1@dunor.dev
+copyright:      2022 Xbo1
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+extra-source-files:
+    README.md
+    CHANGELOG.md
+
+source-repository head
+  type: git
+  location: https://github.com/githubuser/t-lang
+
+library
+  exposed-modules:
+      Tlang
+      Tlang.Codegen
+      Tlang.Emit
+      Tlang.Lexer.Comment
+      Tlang.Lexer.Lexer
+      Tlang.Lexer.Operator
+      Tlang.Parser
+      Tlang.Semantic
+      Tlang.Syntax
+      Tlang.Type.AlgebraType
+      Tlang.Type.Class
+      Tlang.Type.Deduction
+      Tlang.Type.Primitive
+  other-modules:
+      Paths_t_lang
+  hs-source-dirs:
+      src
+  default-extensions:
+      TupleSections
+      GeneralizedNewtypeDeriving
+      OverloadedLabels
+      BlockArguments
+      TupleSections
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  build-depends:
+      base >=4.9 && <5
+    , bytestring
+    , containers >=0.6.5 && <0.7
+    , haskeline
+    , llvm-hs
+    , llvm-hs-pure ==9.0.0
+    , mtl
+    , parsec
+  default-language: Haskell2010
+
+executable t-lang-exe
+  main-is: Main.hs
+  other-modules:
+      Paths_t_lang
+  hs-source-dirs:
+      app
+  default-extensions:
+      TupleSections
+      GeneralizedNewtypeDeriving
+      OverloadedLabels
+      BlockArguments
+      TupleSections
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.9 && <5
+    , bytestring
+    , containers >=0.6.5 && <0.7
+    , haskeline
+    , llvm-hs
+    , llvm-hs-pure ==9.0.0
+    , mtl
+    , parsec
+    , t-lang
+  default-language: Haskell2010
+
+test-suite t-lang-test
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  other-modules:
+      Paths_t_lang
+  hs-source-dirs:
+      test
+  default-extensions:
+      TupleSections
+      GeneralizedNewtypeDeriving
+      OverloadedLabels
+      BlockArguments
+      TupleSections
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      base >=4.9 && <5
+    , bytestring
+    , containers >=0.6.5 && <0.7
+    , haskeline
+    , llvm-hs
+    , llvm-hs-pure ==9.0.0
+    , mtl
+    , parsec
+    , t-lang
+  default-language: Haskell2010
