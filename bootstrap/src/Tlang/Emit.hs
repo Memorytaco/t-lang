@@ -1,6 +1,12 @@
 module Tlang.Emit
 where
 
+{-
+
+Resolve type -> generate LLVM IR -> return the IR Module
+
+-}
+
 import Tlang.Parser as TParser
 import Tlang.Codegen
 import qualified Tlang.Semantic as Semantic
@@ -22,7 +28,7 @@ type TypedSemanticName = TParser.TypedName Semantic.TypResolv
 
 genModule :: AST.Module -> [TParser.ModuleElement (TParser.TypedName Semantic.TypResolv) TParser.TypAnno] -> IO AST.Module
 genModule transmod fns = withContext $ \context -> withModuleFromAST context ast $ \m -> do
-  moduleLLVMAssembly m >>= C8.putStrLn
+  moduleLLVMAssembly m >>= C8.putStrLn  -- print out the llvm IR
   return ast
       where ast = runLLVM transmod $ mapM codegen fns
             -- liftError :: ExceptT String IO a -> IO a

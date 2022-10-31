@@ -1,0 +1,44 @@
+// this is comment
+/* this is
+   block comment
+/*
+fn main: i32 {
+  argc : int, argv : int ->
+  print! "Hello world, 你好世界！";
+  0
+}
+
+// a global binding
+let a : i32 = 32;
+
+// possible record type syntax
+data pair 'a 'b {
+  fst: 'a;
+  snd: 'b;
+}
+
+// a possible record type syntax
+data StudentName 'a {
+  name: string;
+  age: i8;
+  id: 'a;
+}
+
+// a possible sum type syntax
+data Either 'l 'r {
+  left = 'l;
+  right = 'r;
+}
+
+// an inplace method declaration
+class Functor 'f {
+  map: ('a -> 'b) -> 'f 'a -> 'f b;
+}
+
+// a
+impl Monad (Either 'l) {
+  map: ('a -> 'b) -> Either 'l 'a -> Either 'l 'b = {
+    f: ('a -> 'b), val: Either 'l 'a ->
+    // match syntax is not determined yet
+  }
+}

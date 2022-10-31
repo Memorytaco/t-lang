@@ -1,6 +1,16 @@
 module Tlang.Parser
 where
 
+{-
+
+As the file name suggests.
+
+This module includes
+- TypedName, UntypedName. we have UntypedName when building up AST, and then we resolve it to TypedName.
+- TypeAnno. it is used to represent user type annotation and it also serves as initial type to literal value.
+
+-}
+
 import Text.Parsec
 import Text.Parsec.String (Parser)
 import Data.Functor.Identity
@@ -12,9 +22,10 @@ import Tlang.Lexer.Lexer
 
 data SyntaxTree name = SyntaxTree [ModuleElement name TypAnno] deriving (Show, Eq)
 
--- name reference
+-- name reference, we don't know what this name is, so simply record the name.
 newtype UntypedName = UntypedName { getUntypedName :: String } deriving (Show, Eq)
 
+-- we will know what kind of name we are dealing with when we try to solve types of expressions or definitions.
 data TypedName a = TypedFunc String a -- function declaration, external symbol or local symbol
                  | TypedGlobalVar String a
                  | TypedLocalVar String a
@@ -27,7 +38,8 @@ getTypedName (TypedFunc nam typ) = (nam, typ)
 getTypedName (TypedLocalVar nam typ) = (nam, typ)
 getTypedName (TypedTypeDec nam typ) = (nam, typ)
 
--- Expression, parametric with bin operator type
+-- Expression, parametric with binary operator.
+-- TODO: extend or refactor the expression structure to hold lambda;
 data Expr name op = ExLit LitValue  -- literal value
                   | ExRef name      -- variable or term name reference
                   | ExCall name [Expr name op]  -- function application
@@ -49,6 +61,9 @@ data TypAnno = TypName String   -- simple name for type name reference, to be re
              | TypRec String [(String, TypAnno)]  -- Record type declaration
              deriving (Show, Eq)
 
+-- function block will be represented by a lambda, a function definition is no more than assign a name along with type
+-- annotation to a lambda expression.
+-- TODO: allow user to use lambda in expression.
 data LambdaBlock name = LambdaBlock
     { lambdaVars :: [(name, Maybe TypAnno)]
     , lambdaExprs :: [Expr name Op]
@@ -190,6 +205,8 @@ defBinding = do
   reservedOp ";"
   return $ ModuleBinding (UntypedName name) (Just typ) val
 
+-- TODO: Introduce record type declaration syntax here
+-- TODO: Build type alias
 defSimpleType :: Parser (ModuleElement UntypedName TypAnno)
 defSimpleType = do
   reserved "data"
@@ -206,6 +223,7 @@ language p = do
   eof
   return r
 
+-- Toplevel definition
 toplevel :: Parser [ModuleElement UntypedName TypAnno]
 toplevel = many $ do
   def <- defSimpleType <|> defBinding <|> defFunction

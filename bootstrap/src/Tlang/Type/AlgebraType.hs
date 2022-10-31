@@ -2,6 +2,12 @@ module Tlang.Type.AlgebraType
 
 where
 
+{-
+
+This module build up abstraction of record type and sum type.
+
+-}
+
 import qualified Tlang.Type.Primitive as PrimT
 import Tlang.Type.Class (LLVMTypeConvert (..))
 import LLVM.AST.Type (Type (..))

@@ -15,14 +15,14 @@ data CommandLineOption =
 
 help :: Parser CommandLineOption
 help = do
-  _ <- string "help" <|> try (string "--help") <|> string "-h"
+  _ <- string "help" <|> try (string "--help") <|> string "-h" <?> "Help token"
   spaces
   topic <- optionMaybe (try $ many1 anyChar)
   return $ HELP topic
 
 repl :: Parser CommandLineOption
 repl = do
-  _ <- string "repl"
+  _ <- string "repl" <?> "Repl token"
   return REPL
 
 identifier :: Parser String
@@ -33,11 +33,11 @@ identifier = do
 compile :: Parser CommandLineOption
 compile = do
   string "compile" >> spaces
-  outs <- sepBy1 identifier spaces
+  outs <- sepBy1 identifier spaces <?> "file list"
   return $ case outs of
     [a] -> COMPILE a Nothing
     [a, b] -> COMPILE a (Just b)
     (a:b:_) -> COMPILE a (Just b)
 
 command :: [String] -> Either ParseError CommandLineOption
-command ags = parse (try help <|> try repl <|> compile) "commandline" $ foldl1 (\a b -> a <> " " <> b) ags
+command ags = parse (try help <|> try repl <|> (compile <?> "Compile token")) "commandline" $ foldl1 (\a b -> a <> " " <> b) ags

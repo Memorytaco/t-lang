@@ -51,7 +51,10 @@ main = do
   case args of
     [] -> printHelp
     _ -> case command args of
-     Left err -> putStrLn $ show err
+     Left err -> do putStrLn "Got trouble? The input arguments seem wrong. Errors below: "
+                    putStrLn $ show err
+                    putStrLn "--------"
+                    printHelp
      Right cmd -> do
        putStrLn $ show cmd
        case cmd of

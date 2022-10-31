@@ -8,6 +8,12 @@ module Tlang.Type.Primitive
   )
 where
 
+{-
+
+Language primitive types, the fundamental building blocks of type.
+
+-}
+
 import Tlang.Type.Class (LLVMTypeConvert (..))
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 

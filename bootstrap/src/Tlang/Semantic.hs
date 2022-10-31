@@ -1,6 +1,12 @@
 module Tlang.Semantic
 where
 
+{-
+
+This module resolves type for expression, function definition or declaration.
+
+-}
+
 import Tlang.Parser
 
 import qualified Tlang.Type.Primitive as PrimTyp

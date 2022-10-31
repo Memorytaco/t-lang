@@ -1,6 +1,12 @@
 module Tlang.Codegen
 where
 
+{-
+
+Basic primitives for building up LLVM IR. No code generation logic here.
+
+-}
+
 import LLVM.AST as AST
 import LLVM.AST.Global as Global
 import qualified LLVM.AST.Linkage as Linkage

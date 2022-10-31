@@ -5,6 +5,8 @@ import Text.Parsec.String
 import Text.Parsec.Language (emptyDef)
 import qualified Text.Parsec.Token as Token
 
+-- Define language token parser
+
 lexer :: Token.TokenParser ()
 lexer = Token.makeTokenParser language
   where language = emptyDef

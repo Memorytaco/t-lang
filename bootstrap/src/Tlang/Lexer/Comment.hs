@@ -1,6 +1,8 @@
 module Tlang.Lexer.Comment
 where
 
+-- MODULE OF NO USE
+
 import Text.Parsec.String
 
 data Comment = CommentLine String | CommentBlock String deriving (Show, Eq)
