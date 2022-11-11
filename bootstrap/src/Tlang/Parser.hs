@@ -18,36 +18,44 @@ import Data.Functor.Identity
 import qualified Text.Parsec.Expr as Ex
 import qualified Text.Parsec.Token as Token
 
+import Data.Functor.Foldable (Base)
+import Data.Functor.Foldable.TH
+
 import Tlang.Lexer.Lexer
 
-data SyntaxTree name = SyntaxTree [ModuleElement name TypAnno] deriving (Show, Eq)
+-- name reference, we don't know what type this name is, so simply records it.
+data UntypedName = UntypedName String | UntypedMarker deriving (Show, Eq)
 
--- name reference, we don't know what this name is, so simply record the name.
-newtype UntypedName = UntypedName { getUntypedName :: String } deriving (Show, Eq)
+-- Another Wrapper to help analyze expression
+data TypedName a = TypedName String a
+                 | TypedOnly a
+                 deriving (Eq, Functor)
 
--- we will know what kind of name we are dealing with when we try to solve types of expressions or definitions.
-data TypedName a = TypedFunc String a -- function declaration, external symbol or local symbol
-                 | TypedGlobalVar String a
-                 | TypedLocalVar String a
-                 | TypedTypeDec String a  -- for type declaration
-                 deriving (Show, Eq)
+instance Show a => Show (TypedName a) where
+  show (TypedName n a) = n <> ": " <> show a
+  show (TypedOnly a) = show a
 
-getTypedName :: TypedName a -> (String, a)
-getTypedName (TypedGlobalVar nam typ) = (nam, typ)
-getTypedName (TypedFunc nam typ) = (nam, typ)
-getTypedName (TypedLocalVar nam typ) = (nam, typ)
-getTypedName (TypedTypeDec nam typ) = (nam, typ)
+getTypedNameT :: TypedName a -> a
+getTypedNameT (TypedName _ a) = a
+getTypedNameT (TypedOnly a) = a
 
--- Expression, parametric with binary operator.
+-- Expression, parametric with binary operator and also one name tag.
 -- TODO: extend or refactor the expression structure to hold lambda;
-data Expr name op = ExLit LitValue  -- literal value
-                  | ExRef name      -- variable or term name reference
-                  | ExCall name [Expr name op]  -- function application
-                  | ExBind (name, Maybe TypAnno) (Expr name op)   -- variable binding
-                  | ExOp op (Expr name op) (Expr name op) -- binary operator
+data Expr op name = ExLit name LitValue -- literal value
+                  | ExRef name          -- variable or term name reference
+                  | ExCall name (Expr op name) (Expr op name)     -- application
+                  | ExBind name (Maybe TypAnno) (Expr op name)    -- variable binding
+                  | ExOp op name (Expr op name) (Expr op name)    -- binary operator
                   deriving (Show, Eq)
 
 data LitValue = LitInt Integer | LitNumber Double | LitString String deriving (Show, Eq)
+
+getExprName :: Expr op name -> name
+getExprName (ExLit n _) = n
+getExprName (ExRef n) = n
+getExprName (ExCall n _ _) = n
+getExprName (ExBind n _ _) = n
+getExprName (ExOp _ n _ _) = n
 
 -- Operator
 data Op = OpAdd | OpMinus | OpMulti | OpDivide deriving (Show, Eq, Ord)
@@ -66,14 +74,14 @@ data TypAnno = TypName String   -- simple name for type name reference, to be re
 -- TODO: allow user to use lambda in expression.
 data LambdaBlock name = LambdaBlock
     { lambdaVars :: [(name, Maybe TypAnno)]
-    , lambdaExprs :: [Expr name Op]
+    , lambdaExprs :: [Expr Op name]
     } deriving (Show, Eq)
 
 -- language module definition
 data LanguageModule name anno = LanguageModule String [ModuleElement name anno] deriving (Show, Eq)
 data ModuleElement name anno
   = ModuleFunction name (Maybe anno) (Maybe (LambdaBlock name)) -- FIXME: type annotation for parameter is required
-  | ModuleBinding  name (Maybe anno) (Expr name Op) -- name binding: for global constant or function alias
+  | ModuleBinding  name (Maybe anno) (Expr Op name) -- name binding: for global constant or function alias
   | ModuleTemplate name -- TODO, the definition here is not completed
   | ModuleType     name anno  -- TODO, the definition here is not completed
   | ModuleUnsafe   name anno  -- TODO, the definition here is not completed
@@ -89,9 +97,26 @@ getLangModEleNamePair (ModuleUnsafe name anno) = (name, Just anno)
 getLangModEleBlock :: ModuleElement name anno -> Maybe (LambdaBlock name)
 getLangModEleBlock (ModuleFunction _ _ block) = block
 getLangModEleBlock _ = Nothing
-getLangModEleExpr :: ModuleElement name anno -> Maybe (Expr name Op)
+getLangModEleExpr :: ModuleElement name anno -> Maybe (Expr Op name)
 getLangModEleExpr (ModuleBinding _ _ v) = Just v
 getLangModEleExpr _ = Nothing
+
+$(makeBaseFunctor ''Expr)
+$(makeBaseFunctor ''TypAnno)
+
+onExprNameF :: (name1 -> name2) -> Base (Expr op name1) (Expr op name2) -> (Expr op name2)
+onExprNameF f (ExLitF name v) = ExLit (f name) v
+onExprNameF f (ExRefF name) = ExRef (f name)
+onExprNameF f (ExCallF name v1 v2) = ExCall (f name) v1 v2
+onExprNameF f (ExBindF name a v) = ExBind (f name) a v
+onExprNameF f (ExOpF op name v1 v2) = ExOp op (f name) v1 v2
+
+mapExprNameF :: (name -> a) -> (a -> a -> a) -> Base (Expr op name) a -> a
+mapExprNameF f _ (ExLitF n _) = f n
+mapExprNameF f _ (ExRefF n) = f n
+mapExprNameF f o (ExCallF n a1 a2) = f n `o` (a1 `o` a2)
+mapExprNameF f o (ExBindF n _ a) = f n `o` a
+mapExprNameF f o (ExOpF _ n a1 a2) = f n `o` (a1 `o` a2)
 
 {-
 -- parser definition
@@ -100,10 +125,10 @@ getLangModEleExpr _ = Nothing
 -- Expression
 binary
   :: String -> op -> Ex.Assoc
-  -> Ex.Operator String () Data.Functor.Identity.Identity (Expr UntypedName op)
-binary s f assoc = Ex.Infix (reservedOp s >> return (ExOp f)) assoc
+  -> Ex.Operator String () Data.Functor.Identity.Identity (Expr op UntypedName)
+binary s f assoc = Ex.Infix (reservedOp s >> return (ExOp f UntypedMarker)) assoc
 
-expr :: Parser (Expr UntypedName Op)
+expr :: Parser (Expr Op UntypedName)
 expr = Ex.buildExpressionParser table exprParser
     where table = [ [ binary "*" OpMulti Ex.AssocLeft
                     , binary "/" OpDivide Ex.AssocLeft
@@ -113,27 +138,26 @@ expr = Ex.buildExpressionParser table exprParser
                     ]
                   ]
 
-variable, intLit, floatingLit, stringLit, funcApply, exprParser :: Parser (Expr UntypedName Op)
+variable, intLit, floatingLit, stringLit, exprApply, exprParser :: Parser (Expr Op UntypedName)
 variable = do
     v <- identifier
     return (ExRef $ UntypedName v)
 floatingLit = do
   n <- float
-  return (ExLit $ LitNumber n)
+  return (ExLit UntypedMarker $ LitNumber n)
 intLit = do
   n <- integer
-  return (ExLit $ LitInt n)
+  return (ExLit UntypedMarker $ LitInt n)
 stringLit = do
   s <- stringLiteral
-  return (ExLit $ LitString s)
-funcApply = do
-  name <- identifier
-  args <- parens $ commaSep expr
-  return $ ExCall (UntypedName name) args
+  return (ExLit UntypedMarker $ LitString s)
+exprApply = do
+  ops <- many $ parens expr <|> stringLit <|> (try floatingLit <|> try intLit) <|> variable
+  return $ foldl1 (ExCall UntypedMarker) ops
 exprParser = try floatingLit
     <|> try intLit
     <|> try stringLit
-    <|> try funcApply
+    <|> try exprApply 
     <|> variable
     <|> parens expr
 

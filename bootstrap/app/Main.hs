@@ -5,6 +5,7 @@ import Tlang
 import CLI.Parser (CommandLineOption (..), command)
 
 import Control.Monad
+import Control.Monad.Except
 import Control.Monad.Trans
 import System.Console.Haskeline
 import qualified LLVM.AST as AST
@@ -13,28 +14,27 @@ import LLVM.Context
 import LLVM.Module
 import LLVM.Internal.Target
 
-process :: AST.Module -> String -> IO (Maybe AST.Module)
-process transmod line = do
-    let res = parseToplevel line
-    case res of
+process :: AST.Module -> (NameTable, TopSubstitution, Int) -> String -> IO (Maybe ((NameTable, TopSubstitution, Int), AST.Module))
+process m (terms, env, c) line = do
+    res'either <- runExceptT $ evalResolv env c line
+    case res'either of
       Left err -> print err >> return Nothing
-      Right ex -> case fst . execResolv . fmap sequence $ mapM resolve ex of
-        Left err -> print err >> return Nothing
-        Right exTyped -> do
-          mapM_ print exTyped
-          modUpdate <- genModule transmod exTyped
-          return $ Just modUpdate
+      Right ((tenv, counter), defs) -> do
+        next'maybe <- genModule m terms defs
+        return $ next'maybe >>= \(tb, next) -> return ((tb, tenv, counter), next)
 
 repl :: IO ()
-repl = runInputT defaultSettings (loop (createModule "stdin"))
+repl = runInputT defaultSettings (loop (createModule "stdin" "input") ([], moduleEnvironment, 0))
   where
-      loop transmod = do
+      loop mod (tb, tenv, c) = do
             minput <- getInputLine "ready> "
             case minput of
               Nothing -> outputStrLn "Goodbye."
               Just input -> do
-                mod'maybe <- liftIO $ process transmod input
-                loop (maybe transmod id mod'maybe)
+                res'maybe <- liftIO $ process mod (tb, tenv, c) input
+                case res'maybe of
+                  Nothing -> loop mod (tb, tenv, c)
+                  Just (group, m) -> loop m group
 
 helpMsg = [ "tool <command> {args}"
           , "commands"
@@ -60,11 +60,11 @@ main = do
        case cmd of
           REPL -> repl
           HELP _ -> printHelp
-          COMPILE ifile Nothing -> readFile ifile >>= process (createModule ifile) >> return ()
-          COMPILE ifile (Just ofile) -> readFile ifile >>= process (createModule ifile) >>= \mod'maybe -> do
+          COMPILE ifile Nothing -> readFile ifile >>= process (createModule ifile ifile) ([], moduleEnvironment, 0) >> return ()
+          COMPILE ifile (Just ofile) -> readFile ifile >>= process (createModule ifile ifile) ([], moduleEnvironment, 0) >>= \mod'maybe -> do
             case mod'maybe of
               Nothing -> return ()
-              Just transmod -> withContext \context -> do
+              Just (_, transmod) -> withContext \context -> do
                 withModuleFromAST context transmod \llvmMod -> do
                   initializeNativeTarget
                   withHostTargetMachineDefault \targetMachine -> do

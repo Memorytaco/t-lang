@@ -15,7 +15,10 @@ lexer = Token.makeTokenParser language
                    , Token.commentEnd = "*/"
                    , Token.nestedComments = True
                    , Token.caseSensitive = True
-                   , Token.reservedNames = ["fn", "let", "data", "if", "then", "else", "match", "module", "export", "unsafe", "ref"]
+                   , Token.reservedNames = [ "fn", "let", "data", "if", "then"
+                                           , "else", "match", "module", "export"
+                                           , "unsafe", "ref"
+                                           ]
                    , Token.reservedOpNames = [";", ":", "="]
                    }
 

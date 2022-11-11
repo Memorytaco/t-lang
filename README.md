@@ -21,9 +21,18 @@ Then you are free to try `stack run` command.
 
 # Future Plan
 
+## Language Build Progress
+
+- [ ] Support lazy evaluation
+- [ ] Support pattern match
+- [ ] Support lambda expression
+- [ ] Support language module
+- [ ] Support code branch selection
+
 ## Language Feature
 
-- [ ] Build up a robust simple typed system
+- [x] Build up a robust simple typed system
+    - [x] Build Constraint Based type infer system
 - [ ] Build up unsafe communication scheme, to allow direct executable symbol map between t-lang and C
 - [ ] Introduce Sum types
 - [ ] Introduce Parametric type like system, more formal name later
@@ -32,7 +41,7 @@ Then you are free to try `stack run` command.
 
 ## Tools
 
-- [ ] Finish up current compiler
+- [ ] Build basic bootstrap compiler
 - [ ] Allow the ability to export **Debug Symbol**
 
 ## General

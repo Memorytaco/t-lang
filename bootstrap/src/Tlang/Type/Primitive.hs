@@ -20,19 +20,34 @@ import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 data PrimType = PrimNum PrimNumType
               | PrimData PrimBitType
               | PrimArray PrimType PrimArrayLength
-              deriving (Show, Eq)
+              deriving (Eq)
+
+instance Show PrimType where
+  show (PrimNum v) = show v
+  show (PrimData v) = show v
+  show (PrimArray t len) = "[" <> show t <> " x " <> show len <> "]"
 
 data PrimNumType = PrimInteger IntegerLength
                  | PrimFloat FloatLength
-                 deriving (Show, Eq)
-data PrimBitType = PrimBitType Integer BitAlign deriving (Show, Eq)
+                 deriving (Eq)
+instance Show PrimNumType where
+  show (PrimInteger v) = show v
+  show (PrimFloat v) = show v
+
+data PrimBitType = PrimBitType Integer BitAlign deriving (Eq)
+
+instance Show PrimBitType where
+  show (PrimBitType len _) = "bit" <> show len
 
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
 data BitAlign = BitAlignNone
               | BitAlign2 | BitAlign4 | BitAlign8 | BitAlign16 | BitAlign32 | BitAlign64
               deriving (Show, Eq, Ord)
-data PrimArrayLength = ArrayLengthNone | ArrayLength Integer deriving (Show, Eq)
+data PrimArrayLength = ArrayLengthNone | ArrayLength Integer deriving (Eq)
+instance Show PrimArrayLength where
+  show (ArrayLength i) = show i
+  show _ = "_"
 
 instance LLVMTypeConvert PrimNumType where
   llvmType (PrimInteger I8)   = IntegerType 8
