@@ -1,4 +1,4 @@
-module Tlang.Type.Polymorphism
+module Tlang.Type.Checker.Constraint
   ( variables
 
   , Symbol (..)

@@ -8,16 +8,15 @@ Resolve type -> generate LLVM IR -> return the IR Module
 -}
 
 import Tlang.Parser
+import Tlang.Parser.Pratt
 import Tlang.Codegen
-import Tlang.Semantic
-import Tlang.Type.Class (LLVMTypeConvert (..))
-import Tlang.Type.Polymorphism
+import Tlang.Analysis.Stage1
+import Tlang.Type.Checker
 
 import LLVM.Context (withContext)
 import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
 import LLVM.AST as AST hiding (function)
 import LLVM.AST.Typed
-import qualified LLVM.AST.Name as AST
 import qualified LLVM.AST.Constant as AST
 import qualified LLVM.AST.Type as AST
 
@@ -29,8 +28,6 @@ import qualified Data.Map as Map
 
 import Control.Monad.Except
 import Control.Monad.RWS
-import Data.Functor.Identity (Identity)
-import Data.List (find)
 
 type ResolvedName = TypedName (SymbolString TypResolv)
 type CodegenEnv m = (MonadError String m, MonadState NameTable m, MonadReader NameTable m)
@@ -99,7 +96,7 @@ lambdaGen (LambdaBlock (fmap fst -> vars) es) = do
 
 -- Expression Generation
 exprgen :: CodegenEnv m
-        => Expr Op ResolvedName -> Codegen m (Either [Operand] Operand)
+        => Expr (Operator String) ResolvedName -> Codegen m (Either [Operand] Operand)
 exprgen (ExLit (getTypedNameT -> _typ) cVal) = case cVal of
     LitInt num -> return . Right $ IR.int32 num
     LitNumber num -> return . Right $ IR.double num
@@ -130,7 +127,7 @@ exprgen (ExCall (getTypedNameT -> typ) e1 e2) = do
                  in Right <$> IR.call callee ((, []) <$> vars)
     (_ :-> _) -> return $ Left ops
 
-exprgen (ExOp op (getTypedNameT -> _typ) opa opb) =
+exprgen (ExOp (Operator _ _ _ op) (getTypedNameT -> _typ) opa opb) =
   case Map.lookup op (fst opstb) of
     Just opf -> do
       let err = throwError "Ilegal Operand type, Lambda is not supported now"
@@ -140,18 +137,18 @@ exprgen (ExOp op (getTypedNameT -> _typ) opa opb) =
     Nothing -> throwError "Unsupported operator"
     where
       opstb :: Monad m
-            => ( Map.Map Op (Operand -> Operand -> Codegen m Operand)
-               , Map.Map Op (Operand -> Operand -> Codegen m Operand))
+            => ( Map.Map String (Operand -> Operand -> Codegen m Operand)
+               , Map.Map String (Operand -> Operand -> Codegen m Operand))
       opstb = ( Map.fromList
-                [ (OpAdd,     IR.fadd)
-                , (OpMinus,   IR.fsub)
-                , (OpMulti,   IR.fmul)
-                , (OpDivide,  IR.fdiv)
+                [ ("+", IR.fadd)
+                , ("-", IR.fsub)
+                , ("*", IR.fmul)
+                , ("/", IR.fdiv)
                 ]
                 , Map.fromList
-                [ (OpAdd,     IR.add)
-                , (OpMinus,   IR.sub)
-                , (OpMulti,   IR.mul)
+                [ ("+", IR.add)
+                , ("-", IR.sub)
+                , ("*", IR.mul)
                 -- , (OpDivide,  IR.div)
                 ]
               )

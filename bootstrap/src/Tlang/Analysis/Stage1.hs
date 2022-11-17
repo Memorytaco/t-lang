@@ -1,4 +1,4 @@
-module Tlang.Semantic where
+module Tlang.Analysis.Stage1 where
 
 {-
 
@@ -7,8 +7,9 @@ This module resolves type for expression, function definition or declaration.
 -}
 
 import Tlang.Parser
+import Tlang.Parser.Pratt
 import Tlang.Type.Class (LLVMTypeConvert (..))
-import Tlang.Type.Polymorphism
+import Tlang.Type.Checker
 
 import qualified Tlang.Type.Primitive as PrimTyp
 import qualified Tlang.Type.AlgebraType as AlgeTyp
@@ -316,7 +317,7 @@ instance Monad m => MonadState InferContextTState (InferContextT m) where
     put ctx
     lift $ put solutions
 
-type InferExprRes = (Expr Op (TypedName (SymbolString TypResolv)), SymbolString TypResolv)
+type InferExprRes = (Expr (Operator String) (TypedName (SymbolString TypResolv)), SymbolString TypResolv)
 
 -- return concret type or a principal type
 inferExpr :: (MonadError String m)
@@ -363,7 +364,7 @@ newSymbolName = do
 
 -- build up envrionment for type inference
 reConstructExpr :: (MonadError String m)
-                => TopSubstitution -> Expr Op UntypedName -> InferContextT m InferExprRes
+                => TopSubstitution -> Expr (Operator String) UntypedName -> InferContextT m InferExprRes
 reConstructExpr env (ExLit _ lit) = do
   -- TODO: add value polymorphism
   let sym = case lit of

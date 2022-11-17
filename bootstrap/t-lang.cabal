@@ -27,17 +27,19 @@ library
   exposed-modules:
       CLI.Parser
       Tlang
+      Tlang.Analysis
+      Tlang.Analysis.Stage1
       Tlang.Codegen
       Tlang.Codegen.Core
       Tlang.Emit
       Tlang.Lexer.Lexer
       Tlang.Parser
-      Tlang.Semantic
+      Tlang.Parser.Pratt
       Tlang.Syntax
       Tlang.Type.AlgebraType
+      Tlang.Type.Checker
+      Tlang.Type.Checker.Constraint
       Tlang.Type.Class
-      Tlang.Type.Deduction
-      Tlang.Type.Polymorphism
       Tlang.Type.Primitive
   other-modules:
       Paths_t_lang

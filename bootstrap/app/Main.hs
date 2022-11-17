@@ -4,9 +4,7 @@ import Tlang
 
 import CLI.Parser (CommandLineOption (..), command)
 
-import Control.Monad
 import Control.Monad.Except
-import Control.Monad.Trans
 import System.Console.Haskeline
 import qualified LLVM.AST as AST
 import System.Environment
@@ -26,16 +24,17 @@ process m (terms, env, c) line = do
 repl :: IO ()
 repl = runInputT defaultSettings (loop (createModule "stdin" "input") ([], moduleEnvironment, 0))
   where
-      loop mod (tb, tenv, c) = do
+      loop m (tb, tenv, c) = do
             minput <- getInputLine "ready> "
             case minput of
               Nothing -> outputStrLn "Goodbye."
               Just input -> do
-                res'maybe <- liftIO $ process mod (tb, tenv, c) input
+                res'maybe <- liftIO $ process m (tb, tenv, c) input
                 case res'maybe of
-                  Nothing -> loop mod (tb, tenv, c)
-                  Just (group, m) -> loop m group
+                  Nothing -> loop m (tb, tenv, c)
+                  Just (group, nm) -> loop nm group
 
+helpMsg :: [String]
 helpMsg = [ "tool <command> {args}"
           , "commands"
           , "  help,--help,-h"
@@ -43,6 +42,7 @@ helpMsg = [ "tool <command> {args}"
           , "  compile <input path> {output}"
           ]
 
+printHelp :: IO ()
 printHelp = mapM_ putStrLn helpMsg
 
 main :: IO ()

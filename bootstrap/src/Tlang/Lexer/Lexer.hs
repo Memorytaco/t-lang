@@ -1,13 +1,20 @@
 module Tlang.Lexer.Lexer
+  ( lexer
+  , integer, natural
+  , float
+  , parens, braces, brackets
+  , stringLiteral
+  , commaSep, semiSep
+  , identifier, operator
+  , reserved, reservedOp
+  )
 where
 
-import Text.Parsec.String
+import Text.Parsec
 import Text.Parsec.Language (emptyDef)
 import qualified Text.Parsec.Token as Token
 
--- Define language token parser
-
-lexer :: Token.TokenParser ()
+lexer :: Token.TokenParser u
 lexer = Token.makeTokenParser language
   where language = emptyDef
                    { Token.commentLine = "//"
@@ -19,38 +26,33 @@ lexer = Token.makeTokenParser language
                                            , "else", "match", "module", "export"
                                            , "unsafe", "ref"
                                            ]
-                   , Token.reservedOpNames = [";", ":", "="]
+                   , Token.reservedOpNames = [";", ":"]
+                   -- , Token.opLetter = oneOf "!#$%&*+,-./:;<=>?@\\^_|~"
                    }
 
-integer :: Parser Integer
+integer, natural :: Parsec String u Integer
 integer = Token.integer lexer
+natural = Token.natural lexer
 
-float :: Parser Double
+float :: Parsec String u Double
 float = Token.float lexer
 
-parens :: Parser a -> Parser a
+parens, braces, brackets :: Parsec String u a -> Parsec String u a
 parens = Token.parens lexer
-
-braces :: Parser a -> Parser a
 braces = Token.braces lexer
-
-brackets :: Parser a -> Parser a
 brackets = Token.brackets lexer
 
-stringLiteral :: Parser String
+stringLiteral :: Parsec String u String
 stringLiteral = Token.stringLiteral lexer
 
-commaSep :: Parser a -> Parser [a]
+commaSep, semiSep :: Parsec String u a -> Parsec String u [a]
 commaSep = Token.commaSep lexer
-
-semiSep :: Parser a -> Parser [a]
 semiSep = Token.semiSep lexer
 
-identifier :: Parser String
+identifier, operator :: Parsec String u String
 identifier = Token.identifier lexer
+operator = Token.operator lexer
 
-reserved :: String -> Parser ()
+reserved, reservedOp :: String -> Parsec String u ()
 reserved = Token.reserved lexer
-
-reservedOp :: String -> Parser ()
 reservedOp = Token.reservedOp lexer
