@@ -8,11 +8,10 @@ This module resolves type for expression, function definition or declaration.
 
 import Tlang.Parser
 import Tlang.Parser.Pratt
-import Tlang.Type.Class (LLVMTypeConvert (..))
+import Tlang.Type.Class (LLVMTypeEncode (..))
 import Tlang.Type.Checker
 
-import qualified Tlang.Type.Primitive as PrimTyp
-import qualified Tlang.Type.AlgebraType as AlgeTyp
+import qualified Tlang.Type as T
 
 import Control.Monad.State
 
@@ -33,32 +32,15 @@ instance Show VName where
 
 type SymbolString typ = Symbol VName typ
 
-data TypResolv = TypResPrim PrimTyp.PrimType -- primitive type
-               | TypResRec (AlgeTyp.SimpleRecordType TypResolv) -- simple structure type for now
-               | TypResArray TypResolv (Maybe Integer) -- direct array type is mapped into primitiveType
-               | TypResName String  -- type name reference
-               | TypResPtr TypResolv -- pointer type
-               | TypResVoid
-               deriving (Eq)
+type TypResolv = T.SimpleType String String
 
-instance Show TypResolv where
-  show (TypResPrim v) = show v
-  show (TypResRec v) = show v
-  show (TypResArray a _) = "[" <> show a <> "]"
-  show (TypResName name) = "&" <> name
-  show (TypResPtr a) = "ref " <> show a
-  show TypResVoid = "void"
-
-instance LLVMTypeConvert TypResolv where
-  llvmType (TypResPrim p) = llvmType p
-  llvmType (TypResRec t) = llvmType t
-  llvmType (TypResArray eleT len'maybe) =
-    case ArrayType <$> fmap fromIntegral len'maybe of
-      Nothing -> ArrayType 0 (llvmType eleT)
-      Just f -> f $ llvmType eleT
-  llvmType (TypResName name) = NamedTypeReference $ mkName name
-  llvmType (TypResPtr t) = ptr $ llvmType t
-  llvmType TypResVoid = VoidType
+-- data TypResolv = TypResPrim PrimTyp.PrimType -- primitive type
+--                | TypResRec (AlgeTyp.SimpleRecordType TypResolv) -- simple structure type for now
+--                | TypResArray TypResolv (Maybe Integer) -- direct array type is mapped into primitiveType
+--                | TypResName String  -- type name reference
+--                | TypResPtr TypResolv -- pointer type
+--                | TypResVoid
+--                deriving (Eq)
 
 type TopSubstitution = ([VName :|-> SymbolString TypResolv], [String :|-> SymbolString TypResolv])
 
@@ -79,7 +61,7 @@ annoResolve = cata go
       -- to Resolve this, the pointer wrapping and unwrapping is done in next codegen stage.
       sym <- w
       case sym of
-        Solved typ -> return . Solved $ TypResPtr typ
+        Solved typ -> return . Solved . T.Lift . T.ptr $ T.Extend typ
         UnSolved _ -> throwError $ "Unknown typ for annotation ptr " <> show sym
         _ -> throwError $ "Unknown typ for annotation ptr " <> show sym
     go (TypArrowF r1 r2) = do
@@ -90,31 +72,30 @@ annoResolve = cata go
       typ <- anno
       (typs, _) <- ask
       case sigma typs typ of
-        Solved t -> return . Solved $ TypResArray t len'maybe
+        Solved t -> return . Solved . T.Lift . T.Seq $ T.SeqArray (T.Extend t) len'maybe
         _ -> throwError $ "Unknown type element for annotation Array: " <> show typ
     go _ = undefined -- Type application and record type will be introduced in the future
 
 preTypeDef :: [VName :|-> SymbolString TypResolv]
 preTypeDef = (\(name, typ) -> fromString name :|-> Solved typ) <$> (prism ++ compounds)
-  where prism = fmap TypResPrim <$>
-                [ ("bool",  PrimTyp.bool)
-                , ("float", PrimTyp.float)
-                , ("double",PrimTyp.double)
-                , ("i8",    PrimTyp.int8)
-                , ("i16",   PrimTyp.int16)
-                , ("i32",   PrimTyp.int32)
-                , ("i128",  PrimTyp.int128)
-                , ("char",  PrimTyp.char)
-                , ("short", PrimTyp.short)
-                , ("long",  PrimTyp.long)
-                , ("u8",    PrimTyp.uint8)
-                , ("u16",   PrimTyp.uint16)
-                , ("u32",   PrimTyp.uint32)
-                , ("u64",   PrimTyp.uint64)
-                , ("byte",  PrimTyp.byte)
+  where prism = fmap T.Lift <$>
+                [ ("bool",  T.bool)
+                , ("float", T.float)
+                , ("double",T.double)
+                , ("i8",    T.int8)
+                , ("i16",   T.int16)
+                , ("i32",   T.int32)
+                , ("i128",  T.int128)
+                , ("char",  T.char)
+                , ("short", T.short)
+                , ("long",  T.long)
+                , ("u8",    T.uint8)
+                , ("u16",   T.uint16)
+                , ("u32",   T.uint32)
+                , ("u64",   T.uint64)
+                , ("byte",  T.byte)
                 ]
-        compounds = [ ("void", TypResVoid)
-                    , ("str", TypResPtr . TypResPrim $ PrimTyp.char)
+        compounds = [ ("str", T.Lift $ T.Ptr T.char Nothing)
                     ]
 
 -- environment is used to handle toplevel definition
@@ -150,11 +131,11 @@ execResolv ma env counter = do
         case tname of
           TypedOnly _ -> throwError "Function lacks name"
           TypedName name typ -> return (types, (name :|-> typ) :terms)
-      newEnv (ModuleBinding tname _ _) e = undefined
-      newEnv (ModuleType tname _) e = undefined
+      newEnv (ModuleBinding tname _ _) _e = undefined -- TODO
+      newEnv (ModuleType tname _) _e = undefined -- TODO
       newEnv _ _ = undefined
   nenv <- newEnv term env
-  return ((nenv, counter), term)
+  return ((nenv, ncounter), term)
 
 evalResolv :: Monad m
            => TopSubstitution -- top level environment with type information
@@ -162,12 +143,12 @@ evalResolv :: Monad m
            -> String  -- content to parse
            -> ExceptT String m ( (TopSubstitution, Int)
                                , [ModuleElement (TypedName (SymbolString TypResolv)) TypAnno])
-evalResolv env c s = do
+evalResolv env count s = do
   result <- liftEither . bimap show id $ parseToplevel s
   let connect m f = do
-        ((env, c), ls) <- m
-        fmap (:ls) <$> f env c
-  foldl connect (pure ((env, c), [])) $ execResolv . resolve <$> result
+        ((nenv, c), ls) <- m
+        fmap (:ls) <$> f nenv c
+  foldl connect (pure ((env, count), [])) $ execResolv . resolve <$> result
 
 
 -- lift untyped term into a system to process it and keeps all information untouched and let it be returned.
@@ -203,7 +184,7 @@ resolve (ModuleFunction (UntypedName name) retyp'maybe body'maybe) = do
   where
     getBodyRet :: (LambdaBlock (TypedName (SymbolString TypResolv))) -> (SymbolString TypResolv)
     getBodyRet (LambdaBlock _ exs) = case getExprName <$> exs of
-                                       [] -> Solved TypResVoid
+                                       [] -> Solved (T.Lift T.int8)  -- FIXME, define void equivlent type
                                        as -> case last as of
                                                TypedOnly t -> t
                                                TypedName _ t -> t
@@ -368,9 +349,9 @@ reConstructExpr :: (MonadError String m)
 reConstructExpr env (ExLit _ lit) = do
   -- TODO: add value polymorphism
   let sym = case lit of
-        LitInt _ -> Solved $ TypResPrim PrimTyp.int32
-        LitNumber _ -> Solved $ TypResPrim PrimTyp.double
-        LitString _ -> Solved . TypResPtr . TypResPrim $ PrimTyp.char
+        LitInt _ -> Solved $ T.Lift T.int32
+        LitNumber _ -> Solved $ T.Lift T.double
+        LitString _ -> Solved . T.Lift . T.ptr $ T.char
   return (ExLit (TypedOnly sym) lit, sym)
 reConstructExpr (_, terms) (ExRef (UntypedName name)) = do
   sym'maybe <- InferContextT $ findBindingBy (== VName name)
@@ -401,9 +382,6 @@ reConstructExpr env (ExOp op _ expr1 expr2) = do
   return (ExOp op (TypedOnly sym) e1 e2, sym)
 reConstructExpr _ _ = undefined -- TODO
 
-testResolve m = runResolvT m moduleEnvironment () ([], []) ([], 0)
-testInfer m = runInferContext m ([], []) ([], 0)
-
 playTypeChecker :: Monad m
                 => String
                 -> m (Either String [ModuleElement (TypedName (SymbolString TypResolv)) TypAnno])
@@ -425,7 +403,7 @@ getLLVMType sym = do
     go :: Base (SymbolString TypResolv) (m (SimpleTree Type))
        -> m (SimpleTree Type)
     go (UnSolvedF n) = throwError $ "UnSolved type: " <> show n
-    go (SolvedF t) = return . Leaf $ llvmType t
+    go (SolvedF t) = return . Leaf $ encode t
     go (a1 :->$ a2) = do
       t1 <- a1
       t2 <- a2

@@ -25,14 +25,15 @@ repl :: IO ()
 repl = runInputT defaultSettings (loop (createModule "stdin" "input") ([], moduleEnvironment, 0))
   where
       loop m (tb, tenv, c) = do
-            minput <- getInputLine "ready> "
+            minput <- getInputLine "repl> "
             case minput of
               Nothing -> outputStrLn "Goodbye."
               Just input -> do
                 res'maybe <- liftIO $ process m (tb, tenv, c) input
                 case res'maybe of
                   Nothing -> loop m (tb, tenv, c)
-                  Just (group, nm) -> loop nm group
+                  Just (group, nm) -> do
+                    loop nm group
 
 helpMsg :: [String]
 helpMsg = [ "tool <command> {args}"

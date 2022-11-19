@@ -1,8 +1,8 @@
 name:                t-lang
 version:             0.1.0.0
-github:              "githubuser/t-lang"
+github:              "memorytaco/t-lang"
 license:             BSD3
-author:              "Xbo1"
+author:              "xbo1"
 maintainer:          "xbo1@dunor.dev"
 copyright:           "2022 Xbo1"
 
@@ -12,12 +12,12 @@ extra-source-files:
 
 # Metadata used when publishing your package
 # synopsis:            Short description of your package
-# category:            Web
+category:            Programming Language
 
 # To avoid duplicated efforts in documentation and dealing with the
 # complications of embedding Haddock markup inside cabal files, it is
 # common to point users to the README.md file.
-description:         Please see the README on GitHub at <https://github.com/githubuser/t-lang#readme>
+description:         Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
 
 dependencies:
 - base >= 4.9 && < 5
@@ -32,6 +32,8 @@ dependencies:
 - recursion-schemes
 - free >= 5.1.9
 - bifunctors
+- libffi
+- megaparsec
 
 ghc-options:
 - -Wall
@@ -58,6 +60,9 @@ default-extensions:
 - LambdaCase
 - StandaloneDeriving
 - ConstraintKinds
+- GADTs
+- UndecidableInstances
+- DataKinds
 
 - TemplateHaskell
 - KindSignatures

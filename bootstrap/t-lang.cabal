@@ -6,10 +6,11 @@ cabal-version: 1.12
 
 name:           t-lang
 version:        0.1.0.0
-description:    Please see the README on GitHub at <https://github.com/githubuser/t-lang#readme>
-homepage:       https://github.com/githubuser/t-lang#readme
-bug-reports:    https://github.com/githubuser/t-lang/issues
-author:         Xbo1
+description:    Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
+category:       Programming Language
+homepage:       https://github.com/memorytaco/t-lang#readme
+bug-reports:    https://github.com/memorytaco/t-lang/issues
+author:         xbo1
 maintainer:     xbo1@dunor.dev
 copyright:      2022 Xbo1
 license:        BSD3
@@ -21,7 +22,7 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/githubuser/t-lang
+  location: https://github.com/memorytaco/t-lang
 
 library
   exposed-modules:
@@ -29,17 +30,24 @@ library
       Tlang
       Tlang.Analysis
       Tlang.Analysis.Stage1
+      Tlang.AST
+      Tlang.AST.Expression
+      Tlang.AST.Module
+      Tlang.AST.Name
+      Tlang.AST.Type
       Tlang.Codegen
       Tlang.Codegen.Core
       Tlang.Emit
+      Tlang.JIT
       Tlang.Lexer.Lexer
       Tlang.Parser
       Tlang.Parser.Pratt
       Tlang.Syntax
-      Tlang.Type.AlgebraType
+      Tlang.Type
       Tlang.Type.Checker
       Tlang.Type.Checker.Constraint
       Tlang.Type.Class
+      Tlang.Type.Concrete
       Tlang.Type.Primitive
   other-modules:
       Paths_t_lang
@@ -59,6 +67,9 @@ library
       LambdaCase
       StandaloneDeriving
       ConstraintKinds
+      GADTs
+      UndecidableInstances
+      DataKinds
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -74,8 +85,10 @@ library
     , containers >=0.6.5 && <0.7
     , free >=5.1.9
     , haskeline
+    , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure ==9.0.0
+    , megaparsec
     , mtl
     , parsec
     , recursion-schemes
@@ -102,6 +115,9 @@ executable t-lang-exe
       LambdaCase
       StandaloneDeriving
       ConstraintKinds
+      GADTs
+      UndecidableInstances
+      DataKinds
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -117,8 +133,10 @@ executable t-lang-exe
     , containers >=0.6.5 && <0.7
     , free >=5.1.9
     , haskeline
+    , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure ==9.0.0
+    , megaparsec
     , mtl
     , parsec
     , recursion-schemes
@@ -147,6 +165,9 @@ test-suite t-lang-test
       LambdaCase
       StandaloneDeriving
       ConstraintKinds
+      GADTs
+      UndecidableInstances
+      DataKinds
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -162,8 +183,10 @@ test-suite t-lang-test
     , containers >=0.6.5 && <0.7
     , free >=5.1.9
     , haskeline
+    , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure ==9.0.0
+    , megaparsec
     , mtl
     , parsec
     , recursion-schemes

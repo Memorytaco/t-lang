@@ -186,4 +186,32 @@ packages:
       size: 314
   original:
     hackage: StateVar-1.2.2@sha256:3c022c00485fe165e3080d5da6b3ca9c9b02f62c5deebc584d1b3d1309ce673e,1673
+- completed:
+    hackage: libffi-0.2.1@sha256:72b41cefb799f3d3509c6cec8ecbf5023cf442c53a601aaaacee5872c722908b,2745
+    pantry-tree:
+      sha256: 3f1b0ce342e78bc10eb1fc837e53b3780edcaeb948d5276526a6f93d1036e9fe
+      size: 571
+  original:
+    hackage: libffi-0.2.1@sha256:72b41cefb799f3d3509c6cec8ecbf5023cf442c53a601aaaacee5872c722908b,2745
+- completed:
+    hackage: megaparsec-9.2.2@sha256:c306a135ec25d91d252032c6128f03598a00e87ea12fcf5fc4878fdffc75c768,3219
+    pantry-tree:
+      sha256: db9715d6910e64d3bbfce69895042a66fcdcd64a54805563834bf0821562b74f
+      size: 1518
+  original:
+    hackage: megaparsec-9.2.2@sha256:c306a135ec25d91d252032c6128f03598a00e87ea12fcf5fc4878fdffc75c768,3219
+- completed:
+    hackage: case-insensitive-1.2.1.0@sha256:9dfd3171fc7698cf8d931727d3af3a7b389135b583e46b5adac1f9d2026fff61,2244
+    pantry-tree:
+      sha256: d6f175b17eacce002fc5336c17e119d989bd97f8ad9702446163c9e27c7c79b7
+      size: 688
+  original:
+    hackage: case-insensitive-1.2.1.0@sha256:9dfd3171fc7698cf8d931727d3af3a7b389135b583e46b5adac1f9d2026fff61,2244
+- completed:
+    hackage: parser-combinators-1.3.0@sha256:edd54ba56cbae8fadbcceebcfef31b2c70a835e92e5eda41151b939c40647281,1570
+    pantry-tree:
+      sha256: 0754c8d3f213156877f8085da2ad74433167a6c30272b8b64119a2628bd7ade0
+      size: 795
+  original:
+    hackage: parser-combinators-1.3.0@sha256:edd54ba56cbae8fadbcceebcfef31b2c70a835e92e5eda41151b939c40647281,1570
 snapshots: []
