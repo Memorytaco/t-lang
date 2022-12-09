@@ -1,4 +1,4 @@
-module Tlang.Analysis.Stage1 where
+module Tlang.Analysis.TypeInfer where
 
 {-
 
@@ -6,10 +6,9 @@ This module resolves type for expression, function definition or declaration.
 
 -}
 
-import Tlang.Parser
-import Tlang.Parser.Pratt
 import Tlang.Type.Class (LLVMTypeEncode (..))
 import Tlang.Type.Checker
+import Tlang.AST
 
 import qualified Tlang.Type as T
 
@@ -33,14 +32,6 @@ instance Show VName where
 type SymbolString typ = Symbol VName typ
 
 type TypResolv = T.SimpleType String String
-
--- data TypResolv = TypResPrim PrimTyp.PrimType -- primitive type
---                | TypResRec (AlgeTyp.SimpleRecordType TypResolv) -- simple structure type for now
---                | TypResArray TypResolv (Maybe Integer) -- direct array type is mapped into primitiveType
---                | TypResName String  -- type name reference
---                | TypResPtr TypResolv -- pointer type
---                | TypResVoid
---                deriving (Eq)
 
 type TopSubstitution = ([VName :|-> SymbolString TypResolv], [String :|-> SymbolString TypResolv])
 
@@ -155,9 +146,9 @@ evalResolv env count s = do
 -- if we have some principal types, it returns with no error and caller need to put into more information to
 -- resolve the principal type. Otherwise, it reports error with EitherT.
 resolve :: forall m. Monad m
-        => ModuleElement UntypedName TypAnno
+        => ModuleElement UnTypedName TypAnno
         -> ResolvType String m (ModuleElement (TypedName (SymbolString TypResolv)) TypAnno)
-resolve (ModuleFunction (UntypedName name) retyp'maybe body'maybe) = do
+resolve (ModuleFunction (UnTypedName name) retyp'maybe body'maybe) = do
   (_, gBindings :: [String :|-> SymbolString TypResolv]) <- ask
   case find (\(n :|-> _) -> n == name) gBindings of
     Just _ -> throwError $ "Duplicated Global Definition of " ++ name
@@ -188,7 +179,7 @@ resolve (ModuleFunction (UntypedName name) retyp'maybe body'maybe) = do
                                        as -> case last as of
                                                TypedOnly t -> t
                                                TypedName _ t -> t
-    resolvLambda :: LambdaBlock UntypedName
+    resolvLambda :: LambdaBlock UnTypedName
                  -> ResolvType String m
                     ((LambdaBlock (TypedName (SymbolString TypResolv))), [SymbolString TypResolv])
     resolvLambda (LambdaBlock vars exprs) = do
@@ -205,7 +196,7 @@ resolve (ModuleFunction (UntypedName name) retyp'maybe body'maybe) = do
               nName <- newSymbolName
               modify \((bindings, a), b) -> (((VName varName := UnSolved nName) :bindings, a), b)
               return $ TypedName varName (UnSolved nName)
-        (UntypedMarker, _) -> throwError $ "Internal Parser Error: Lambda Parameter has no name"
+        (UnTyped, _) -> throwError $ "Internal Parser Error: Lambda Parameter has no name"
 
       -- construct expression
       env@(typs, _) <- ask
@@ -345,7 +336,7 @@ newSymbolName = do
 
 -- build up envrionment for type inference
 reConstructExpr :: (MonadError String m)
-                => TopSubstitution -> Expr (Operator String) UntypedName -> InferContextT m InferExprRes
+                => TopSubstitution -> Expr Op (UnTypedName Op) -> InferContextT m InferExprRes
 reConstructExpr env (ExLit _ lit) = do
   -- TODO: add value polymorphism
   let sym = case lit of
@@ -361,12 +352,12 @@ reConstructExpr (_, terms) (ExRef (UntypedName name)) = do
                  Just (_ :|-> sym) -> return (ExRef (TypedName name sym), sym)
                  Nothing -> throwError $ "No available variable named " <> name
 
-reConstructExpr env (ExCall _ expr1 expr2) = do
+reConstructExpr env (ExBeta _ expr1 expr2) = do
   (e1, sym1) <- inferExpr [] $ reConstructExpr env expr1
   (e2, sym2) <- inferExpr [] $ reConstructExpr env expr2
   tname <- newSymbolName
   InferContextT $ addConstraint (sym1 := (sym2 :-> UnSolved tname))
-  return (ExCall (TypedOnly $ UnSolved tname) e1 e2, UnSolved tname)
+  return (ExBeta (TypedOnly $ UnSolved tname) e1 e2, UnSolved tname)
 reConstructExpr env (ExOp op _ expr1 expr2) = do
   (e1, sym1) <- inferExpr [] $ reConstructExpr env expr1
   (e2, sym2) <- inferExpr [] $ reConstructExpr env expr2

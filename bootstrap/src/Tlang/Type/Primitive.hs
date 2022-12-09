@@ -32,7 +32,7 @@ data BaseType t a where
   Ptr     :: BaseType t a -> Maybe Integer -> BaseType t a
   -- | raw sequential type, array
   Seq     :: t (BaseType t a) -> BaseType t a
-  -- ^ Aggregate type
+  -- | Aggregate type
   Struct  :: [BaseType t a] -> Bool -> BaseType t a
   Extend  :: a -> BaseType t a
 
@@ -52,7 +52,7 @@ data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
 
 instance (Show a, Show (t (BaseType t a))) => Show (BaseType t a) where
-  show (Scala t) = show t
+  show (Scala t) = show t <> "#"
   show (Ptr t _) = show t <> "*"
   show (Seq t) = show t
   show (Struct ts True) = "<{" <> intercalate ", " (show <$> ts) <> "}>"

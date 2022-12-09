@@ -2,62 +2,36 @@ module Tlang.Type
   ( module Primitive
   , module Concrete
 
-  , SystemF (..)
-  , SystemOmega (..)
-  , SystemOmegaF (..)
-  , TypeKind (..)
-  , KindT (..)
+  , Type (..)
   , SimpleType
   )
 where
 
 import Tlang.Type.Primitive as Primitive
 import Tlang.Type.Concrete as Concrete
-import Data.Functor.Foldable.TH
 import Tlang.Type.Class (LLVMTypeEncode (..), TypeEquality (..), LLVMTypeClass (..), TypeClass (..))
 import Data.List (intercalate)
+import Tlang.AST.Type hiding (Type)
 import qualified LLVM.AST as T
 import qualified LLVM.AST.AddrSpace as T
 import qualified LLVM.AST.Type as T
 
-type SimpleType k nam = ConcreteType SeqT (SystemOmega (KindT k) nam)
+type SimpleType nam = ConcreteType SeqT (Type (TypeKind KindVal) nam)
 
--- A System F definition, with forall notation. TODO
-data SystemF nam t =
-    FQuantified nam -- ^ Introduce type variable
-  | FNewType nam t  -- ^ Introduce type Alias
-  | FLabel nam t     -- ^ Introduce Term Constructor, both for variant type and record type
-  | FVariant nam [SystemF nam t]  -- ^ A toplevel variant definition, record type is simply a `Struct` in `Tlang.Type.Primitive`
-  deriving (Show, Eq)
-
-data KindT e = KindType | KindVar e deriving (Eq)
-instance Show e => Show (KindT e) where
-  show KindType = "*"
-  show (KindVar e) = show e
-
--- A Naive definition for type kind system
-data TypeKind k = KConcrete k | KPartial (TypeKind k) (TypeKind k) deriving (Eq)
-
-instance Show k => Show (TypeKind k) where
-  show (KConcrete k) = show k
-  show (KPartial a b) = show a <> " -> " <> show b
-
--- A System FΩ definition. with Higher Kinded Type Support. TODO
-data SystemOmega k nam t =
+-- A System FΩ definition. with Higher Kinded Type Support.
+data Type k nam t =
     OQuantified nam (TypeKind k) -- ^ Normal type variable
-  | OTypeAlias nam [nam] (SystemOmega k nam t)  -- ^ Type alias
+  | OTypeAlias nam [nam] (Type k nam t)  -- ^ Type alias
   | OTypeName nam Bool -- ^ Type name reference, with a recursive marker, True means recursive and false means non recursive
-  | OApply (TypeKind k) (SystemOmega k nam t) (SystemOmega k nam t)  -- ^ Type Application, which means the first one should at least has kind * -> *
-  | OLabel nam Integer (SystemOmega k nam t)    -- ^ Label for Record and Variant
+  | OApply (TypeKind k) (Type k nam t) (Type k nam t)  -- ^ Type Application, which means the first one should at least has kind * -> *
+  | OLabel nam Integer (Type k nam t)    -- ^ Label for Record and Variant
   | OEnum nam Integer -- label branch with no additional type
-  | OVariant nam [nam] [SystemOmega k nam t]  -- ^ TopLevel Variant definition
+  | OVariant nam [nam] [Type k nam t]  -- ^ TopLevel Variant definition
   | ORecord nam [nam] t -- ^ TopLevel Record definition
   | OLift t -- ^ Lift type up into this level
   deriving (Eq)
 
-$(makeBaseFunctor ''SystemOmega)
-
-instance (Show t, Show k, Show nam) => Show (SystemOmega k nam t) where
+instance (Show t, Show k, Show nam) => Show (Type k nam t) where
   show (OQuantified name k) = "∀" <> show name <> " :: " <> show k
   show (OTypeAlias name va t) = "@" <> show name <> " " <> intercalate " " (show <$> va) <> " = " <> show t
   show (OTypeName nam b) = (if b then "μ" else "") <> show nam
@@ -68,7 +42,7 @@ instance (Show t, Show k, Show nam) => Show (SystemOmega k nam t) where
   show (ORecord name vars t) = show name <> " " <> intercalate " " (fmap show vars) <> show t
   show (OLift t) = show t
 
-instance (Show nam, LLVMTypeEncode t) => LLVMTypeEncode (SystemOmega k nam t) where
+instance (Show nam, LLVMTypeEncode t) => LLVMTypeEncode (Type k nam t) where
   encode (OQuantified name _) = error $ "UnExpected quantified variable " <> show name
   encode (OTypeAlias name va t) =
     case va of
@@ -91,7 +65,7 @@ instance (Show nam, LLVMTypeEncode t) => LLVMTypeEncode (SystemOmega k nam t) wh
       _ -> error $ "Unexpected type variable of " <> show vs <> " for " <> show name
   encode (OLift t) = encode t
 
-instance (LLVMTypeClass t) => LLVMTypeClass (SystemOmega k nam t) where
+instance (LLVMTypeClass t) => LLVMTypeClass (Type k nam t) where
   classOf (OQuantified _ _) = Aggregate
   classOf (OTypeAlias _ _ t) = classOf t
   classOf (OTypeName _ _) = Aggregate -- we don't know whether a typename is primitive or else, it should be replaced before checking
@@ -103,8 +77,8 @@ instance (LLVMTypeClass t) => LLVMTypeClass (SystemOmega k nam t) where
   classOf (OLift t) = classOf t
 
 instance
-  ( Eq k, Eq nam, TypeEquality t t, TypeEquality (SystemOmega k nam t) t
-  ) => TypeEquality (SystemOmega k nam t) (SystemOmega k nam t) where
+  ( Eq k, Eq nam, TypeEquality t t, TypeEquality (Type k nam t) t
+  ) => TypeEquality (Type k nam t) (Type k nam t) where
     OLift a ==? OLift b = a ==? b
     OLift a ==? b = b ==? a
     a ==? OLift b = a ==? b
@@ -120,20 +94,20 @@ instance
     _ ==? _ = False
 
 instance
-  ( TypeEquality (t (BaseType t (ConcreteType t (SystemOmega k n))))
-                 (t (BaseType t (ConcreteType t (SystemOmega k n))))
+  ( TypeEquality (t (BaseType t (ConcreteType t (Type k n))))
+                 (t (BaseType t (ConcreteType t (Type k n))))
   , Eq k, Eq n
-  ) => TypeEquality (SystemOmega k n (ConcreteType t (SystemOmega k n))) (ConcreteType t (SystemOmega k n)) where
+  ) => TypeEquality (Type k n (ConcreteType t (Type k n))) (ConcreteType t (Type k n)) where
     OLift a ==? Lift b = a ==? b
     OLift a ==? Field b = b ==? a
     a ==? Field b = a ==? b
     a ==? Lift b = a ==? b
 
 instance
-  ( TypeEquality (t (BaseType t (ConcreteType t (SystemOmega k n))))
-                 (t (BaseType t (ConcreteType t (SystemOmega k n))))
+  ( TypeEquality (t (BaseType t (ConcreteType t (Type k n))))
+                 (t (BaseType t (ConcreteType t (Type k n))))
   , Eq k, Eq n
-  ) => TypeEquality (SystemOmega k n (ConcreteType t (SystemOmega k n))) (BaseType t (ConcreteType t (SystemOmega k n))) where
+  ) => TypeEquality (Type k n (ConcreteType t (Type k n))) (BaseType t (ConcreteType t (Type k n))) where
     OLift a ==? Extend b = a ==? b
     OLift a ==? b = a ==? b
     _ ==? _ = False

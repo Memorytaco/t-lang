@@ -1,6 +1,5 @@
 module Tlang.Type.Concrete
   ( ConcreteType (..)
-  -- , ConcreteTypeF (..)
   , SeqT (..)
   )
 where
@@ -21,7 +20,7 @@ data ConcreteType t f where
   -- | Introduce whatever type system using `f`
   Field :: f (ConcreteType t f) -> ConcreteType t f
 
--- | A hint provided by user to determin which type we will use, but the result is not guarentee
+-- | A hint provided by user to determin which type we will use, but the result is not guarenteed
 data SeqT a where
   SeqVector :: a -> Integer -> SeqT a
   SeqArray  :: a -> Maybe Integer -> SeqT a

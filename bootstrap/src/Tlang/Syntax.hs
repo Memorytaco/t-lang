@@ -26,7 +26,7 @@ LambdaParameter <- Identifier TypeAnnotation?
 
 LambdaStatement <- LambdaStatement ";" Expression | Expression
 
-Expression <- Identifier / Literature / Expression ("+" / "-" / "*" / "/") Expression 
+Expression <- Identifier / Literature / Expression ("+" / "-" / "*" / "/") Expression
 Binding <- "let" Identifier TypeAnnotation? "=" Expression
 
 TypeAnnotation <- ":" Type

@@ -10,7 +10,7 @@ Resolve type -> generate LLVM IR -> return the IR Module
 import Tlang.Parser
 import Tlang.Parser.Pratt
 import Tlang.Codegen
-import Tlang.Analysis.Stage1
+import Tlang.Analysis
 import Tlang.Type.Checker
 
 import LLVM.Context (withContext)

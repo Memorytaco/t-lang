@@ -34,6 +34,7 @@ dependencies:
 - bifunctors
 - libffi
 - megaparsec
+- text
 
 ghc-options:
 - -Wall
@@ -48,8 +49,8 @@ ghc-options:
 
 default-extensions:
 - TupleSections
-- GeneralizedNewtypeDeriving
 - OverloadedLabels
+- OverloadedStrings
 - BlockArguments
 - TupleSections
 - TypeOperators
@@ -63,6 +64,10 @@ default-extensions:
 - GADTs
 - UndecidableInstances
 - DataKinds
+- FunctionalDependencies
+- GeneralizedNewtypeDeriving
+- TypeApplications
+- DerivingStrategies
 
 - TemplateHaskell
 - KindSignatures

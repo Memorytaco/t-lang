@@ -1,6 +1,8 @@
 module Tlang.Analysis
-  ( module Semantic
+  ( module Rectify
+  , module TypeInfer
   )
 where
 
-import Tlang.Analysis.Stage1 as Semantic
+import Tlang.Analysis.TypeInfer as TypeInfer
+import Tlang.Analysis.Rectify as Rectify

@@ -1,44 +1,52 @@
 module Tlang.AST.Module
   ( Module (..)
-  , ModuleNameSpace (..)
-  , ModuleElement (..)
-
-  , getLangModEleNamePair
-  , getLangModEleBlock
+  , ModulePath (..)
+  , Declaration (..)
+  , Import (..)
+  , Use (..)
+  , TypDecl
+  , Op
   )
 where
 
-import Tlang.Parser.Pratt
-import Tlang.AST.Expression
+import Tlang.AST.Expr
+import Tlang.AST.Type
+import Tlang.AST.Operator
+
+import Data.List (intercalate)
+
+-- | default operator type
+type Op = Operator String
 
 -- | language module definition
-data Module deps defs = Module ModuleNameSpace deps defs deriving (Show, Eq)
+data Module name sym syminfo op tname info =
+  Module { mPath :: ModulePath name
+         , mSyms :: [Import name sym syminfo]
+         , mDecl :: [Declaration op tname info]
+         } deriving (Show, Eq)
 
-newtype ModuleNameSpace = ModuleNameSpace { getModuleNameSpace :: String } deriving (Eq, Ord)
-instance Show ModuleNameSpace where
-  show (ModuleNameSpace n) = n
+data ModulePath s = ModulePath [s] s deriving (Eq, Ord)
 
+instance (Show s) => Show (ModulePath s) where
+  show (ModulePath ls e) = intercalate "/" $ show <$> (ls <> [e])
 
--- toplevel definition in a module
-data ModuleElement name anno
-  = ModuleFunction name (Maybe anno) (Maybe (LambdaBlock name))
-  | ModuleBinding  name (Maybe anno) (Expr (Operator String) name) -- name binding: for global constant or function alias
-  | ModuleOperator (Operator String) -- for user defined operator
-  | ModuleType     name anno  -- TODO, the definition here is not completed
-  | ModuleUnsafe   name anno  -- TODO, the definition here is not completed
+instance {-# Incoherent #-} Show (ModulePath String) where
+  show (ModulePath ls e) = intercalate "/" (ls <> [e])
+
+-- | Import moduleName, symbols and qualified name
+data Import name sym info = Import (ModulePath name) [Use sym info] (Maybe sym) deriving (Show, Eq)
+
+-- | symbol in import list
+-- Use representation of symbol and its definition
+data Use sym info = Use sym info deriving (Show, Eq, Functor)
+
+-- | toplevel type declaration, to assign names to types. aka. named type.
+type TypDecl = NamedType
+
+-- | toplevel definition in a module
+data Declaration op tname info
+  = LetD info (Expr op info)            -- ^ toplevel binding, used to declare value and function
+  | TypD (TypDecl tname ())      -- ^ user defined data type
+  | FixD op                             -- ^ fixity of user defined operator
+  | FnD info (Maybe (Lambda op info))   -- ^ function marked with `fn` keywords, used to communicate between c and host lang
   deriving (Show, Eq)
-
-
-getLangModEleNamePair :: ModuleElement name anno -> (name, Maybe anno)
-getLangModEleNamePair (ModuleFunction name anno _) = (name, anno)
-getLangModEleNamePair (ModuleBinding name anno _) = (name, anno)
-getLangModEleNamePair (ModuleType name anno) = (name, Just anno)
-getLangModEleNamePair (ModuleUnsafe name anno) = (name, Just anno)
-
-getLangModEleBlock :: ModuleElement name anno -> Maybe (LambdaBlock name)
-getLangModEleBlock (ModuleFunction _ _ block) = block
-getLangModEleBlock _ = Nothing
-getLangModEleExpr :: ModuleElement name anno -> Maybe (Expr (Operator String) name)
-getLangModEleExpr (ModuleBinding _ _ v) = Just v
-getLangModEleExpr _ = Nothing
-
