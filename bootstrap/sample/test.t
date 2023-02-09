@@ -21,13 +21,13 @@ let i: i32 = 699
 ;;
 
 let main: i32 -> str -> i32 = {
-  argc, argv: str => 
+  ?argc, ?argv: str =>
     printLn "Hello world";
-    let i = 32 in
-    let b = 66 in
+    let ?i = 32 in
+    let ?b = 66 in
+    let ?q = { a= 6: i8 , c = 80} in
     printString "I have variables of "; printInt argc;
     printLn "";
     0
 }
-
 ;;

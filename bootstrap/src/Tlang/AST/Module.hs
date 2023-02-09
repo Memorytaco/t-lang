@@ -1,11 +1,10 @@
 module Tlang.AST.Module
   ( Module (..)
-  , ModulePath (..)
+  , ModuleID (..)
+  , ModuleSource
   , Declaration (..)
-  , Import (..)
+  , FnSymbol (..)
   , Use (..)
-  , TypDecl
-  , Op
   )
 where
 
@@ -15,38 +14,31 @@ import Tlang.AST.Operator
 
 import Data.List (intercalate)
 
--- | default operator type
-type Op = Operator String
-
 -- | language module definition
-data Module name sym syminfo op tname info =
-  Module { mPath :: ModulePath name
-         , mSyms :: [Import name sym syminfo]
-         , mDecl :: [Declaration op tname info]
-         } deriving (Show, Eq)
+data Module typ name info
+  = Module ModuleSource ModuleID [Use info] [Declaration typ name]
+  deriving (Show, Eq, Functor)
 
-data ModulePath s = ModulePath [s] s deriving (Eq, Ord)
+type ModuleSource = String
 
-instance (Show s) => Show (ModulePath s) where
-  show (ModulePath ls e) = intercalate "/" $ show <$> (ls <> [e])
+data ModuleID = ModuleID [String] String deriving (Eq, Ord)
+instance Show ModuleID where
+  show (ModuleID prefix name) = intercalate "/" $ prefix <> [name]
 
-instance {-# Incoherent #-} Show (ModulePath String) where
-  show (ModulePath ls e) = intercalate "/" (ls <> [e])
-
--- | Import moduleName, symbols and qualified name
-data Import name sym info = Import (ModulePath name) [Use sym info] (Maybe sym) deriving (Show, Eq)
-
--- | symbol in import list
--- Use representation of symbol and its definition
-data Use sym info = Use sym info deriving (Show, Eq, Functor)
-
--- | toplevel type declaration, to assign names to types. aka. named type.
-type TypDecl = NamedType
+-- | A use statement to import symbol name.
+-- Use (origin name, current name) [symbol list]
+data Use info = Use (ModuleID, ModuleID) [info] deriving (Show, Eq, Functor)
 
 -- | toplevel definition in a module
-data Declaration op tname info
-  = LetD info (Expr op info)            -- ^ toplevel binding, used to declare value and function
-  | TypD (TypDecl tname ())      -- ^ user defined data type
-  | FixD op                             -- ^ fixity of user defined operator
-  | FnD info (Maybe (Lambda op info))   -- ^ function marked with `fn` keywords, used to communicate between c and host lang
+data Declaration typ name
+  = FixD (Operator String)  -- ^ fixity of user defined operator
+  | TypD (name :== typ)     -- ^ user defined data type
+  | LetD name (Expr typ ((:@) typ) name)  -- ^ toplevel binding, used to declare value and function
+  | FnD name typ (FnSymbol typ name)      -- ^ function marked with `fn` keywords, used to communicate between c and host lang
+  deriving (Show, Eq)
+
+data FnSymbol typ name
+  = FnDefault       -- ^ default setting using declared name
+  | FnSymbol String -- ^ external symbol name
+  | FnDecl (Lambda typ ((:@) typ) name) -- ^ export a function out
   deriving (Show, Eq)

@@ -1,12 +1,17 @@
 module Tlang.Parser.Expr
   ( ExpressionToken
-  , declaration
+  , ParseExpr
+  , ParseExprType
+  , ParseLambda
+  , ParseLambdaType
+
   , Parser
   , getParser
   , unParser
   , play
+  , parseExpr
 
-  , lambda
+  , bigLambda
   )
 where
 
@@ -16,14 +21,18 @@ import Tlang.Parser.Lexer
 import Tlang.AST
 
 import Text.Megaparsec
-import Data.Text (Text, pack)
+import Text.Megaparsec.Char (char, string)
+import Data.Text (Text, pack, unpack)
 import Control.Monad.Reader (ReaderT (..), ask, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
-import Control.Monad (MonadPlus)
+import Control.Monad (MonadPlus, void)
+import Control.Monad.Identity (Identity)
 import Data.List (find)
 import Data.Void (Void)
+import Data.Bifunctor (first)
 
 import qualified Tlang.Parser.Type as TypParser
+import qualified Tlang.Parser.Pattern as PatParser
 
 newtype Parser e m a = Parser
   { unWrapParser :: ReaderT ([Operator String], [Operator String]) (ParsecT e Text m) a
@@ -32,7 +41,12 @@ newtype Parser e m a = Parser
     deriving newtype (Alternative, MonadFail, MonadPlus)
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
-type ExpressionToken = OperatorClass String (Expr Op (UnTypedName Op))
+type ParseExpr typ = Expr typ ((:@) typ) Symbol
+type ParseExprType c f = ParseExpr (TypParser.ParseType c f)
+type ParseLambda typ = Lambda typ ((:@) typ) Symbol
+type ParseLambdaType c f = ParseLambda (TypParser.ParseType c f)
+
+type ExpressionToken = OperatorClass String (ParseExprType None Identity)
 
 getParser :: Parser e m a -> ([Operator String], [Operator String]) -> ParsecT e Text m a
 getParser = runReaderT . unWrapParser
@@ -44,28 +58,42 @@ unParser :: ShowErrorComponent e
          => ([Operator String], [Operator String])
          -> ParsecT e Text m ()
          -> Integer
-         -> ParsecT e Text m (Expr Op (UnTypedName Op))
+         -> ParsecT e Text m (ParseExprType None Identity)
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
-play :: ([Operator String], [Operator String]) -> Text -> IO ()
-play op txt = either errorBundlePretty show <$> runParserT (unParser @Void op eof (-100)) "stdin" txt >>= putStrLn 
+play :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType None Identity))
+play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
+
+parseExpr :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType None Identity))
+parseExpr op txt = first errorBundlePretty
+  <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 
 instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) where
-  type Expression ExpressionToken = (Expr Op (UnTypedName Op))
-  next = try (OpNorm <$> variable <?> "Identifier")
-     <|> (OpNorm <$> num <?> "Literal Number")
-     <|> (OpNorm <$> str <?> "Literal String")
-     <|> try (OpRep . Right <$> operator <?> "Expr Operator")
+  type Expression ExpressionToken = (ParseExprType None Identity)
+  next = (OpNorm <$> try variable <?> "Identifier, Label and Selector")
+     <|> (OpNorm <$> literal <?> "Literal")
+     <|> (OpNorm <$> lexeme typ <?> "Type literal")
      <|> (OpRep . Left  <$> special <?> "Pair Operator")
+     <|> (OpRep . Right <$> (sym <|> operator) <?> "Operator")
     where
-      variable = identifier >>= return . ExRef . UnTypedName TypInfer
-      num = try floating <|> nat
-      nat = integer >>= return . ExLit UnTyped . LitInt
-      floating = float >>= return . ExLit UnTyped . LitNumber
-      str = stringLiteral >>= return . ExLit UnTyped . LitString
+      nat = ExLit . LitInt <$> integer <?> "Natural Number"
+      floating = ExLit . LitNumber <$> float <?> "Floating Number"
+      str = ExLit . LitString <$> stringLiteral <?> "Literal String"
+      literal = try floating <|> nat <|> str
+
+      name = ExRef . Symbol <$> identifier
+      vlabel = char '`' *> identifier >>= return . flip ExVar Nothing . Symbol
+      field = char '.' *> identifier >>= return . ExSel . Symbol
+      variable = name <|> vlabel <|> field
+
       withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) *> pure (Left v)
                          <|> (reservedOp (pack r) <|> reserved (pack r)) *> pure (Right v)
       special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("let", "in"), ("{", "}")]
+      sym = unpack <$> (reservedOp ":" <|> reservedOp "\\")
+      typ = string "@()" *> return (ExTyp TypUni)
+        <|> string "@(" *> (ExTyp <$> pType (void . lookAhead $ reservedOp ")") (-100) <* reservedOp ")")
+        <|> string "@{" *> (ExTyp <$> (fst <$> ask >>= liftParser . TypParser.getParser TypParser.record))
+        <|> string "@" *> (ExTyp . TypRef . Symbol <$> identifier)
 
   peek = lookAhead next
 
@@ -77,69 +105,99 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   nud end = withOperator return \case
     (Left (Left  (l, r))) -> case l of
       "let" -> letExpr (lookAhead end)
-      "{" -> lambda >>= pure . ExLambda UnTyped
-      _ -> do ntok <- peek
-              matchPairOperator (Right ("(", ")")) ntok
-                (next *> (return . ExLit UnTyped $ LitUnit)) $ pratt (reservedOp (pack r) *> pure ()) (-100)
+      "{" -> try record <|> ExAbs <$> bigLambda
+      _ -> tunit <|> try tup <|> pratt (void . lookAhead $ reservedOp (pack r)) (-100) <* reservedOp (pack r)
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
     (Right s) -> getOperator s >>= \op@(Operator assoc _ r _) ->
       case assoc of
         Infix -> fail $ "expect prefix or unifix operator but got infix operator " <> show op
         Postfix -> fail $ "expect prefix or unifix operator but got postfix operator " <> show op
-        _ -> do right <- pratt end r
-                return $ ExOp op UnTyped right Nothing
+        _ -> case s of
+          "\\" -> ExAbs <$> smallLambda end
+          _ -> do right <- pratt end r
+                  return $ ExApp (ExRef $ Op s) right []
 
-  led end left = withOperator (return . ExBeta UnTyped left) \case
+  -- led end left = withOperator (return . ExApp left) \case
+  led end left = withOperator (handleNorm left) \case
     (Left (Left  (l, r))) -> case l of
       "let" -> letExpr (lookAhead end)
-      "{" -> lambda >>= pure . ExLambda UnTyped
-      _ -> do ntok <- peek
-              matchPairOperator (Right ("(", ")")) ntok
-                (next *> (return . ExBeta UnTyped left . ExLit UnTyped $ LitUnit))
-                $ pratt (reservedOp (pack r) *> pure ()) (-100) >>= return . ExBeta UnTyped left
+      "{" -> try record <|> ExAbs <$> bigLambda >>= return . apply left
+      _ -> do right <- tunit <|> try tup <|> pratt (void . lookAhead $ reservedOp (pack r)) (-100) <* reservedOp (pack r)
+              return $ apply left right
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
-    (Right s) -> getOperator s >>= \op@(Operator assoc _ r _) ->
+    (Right s) -> getOperator s >>= \(Operator assoc _ r _) ->
       case assoc of
         Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
-        Infix -> pratt end r >>= return . ExOp op UnTyped left . Just
-        _ -> return $ ExOp op UnTyped left Nothing
+        Infix -> case s of
+            ":" -> ExAnno . (left :@) <$> pType end (-100)
+            _ -> pratt end r >>= return . ExApp (ExRef $ Op s) left . (:[])
+        _ -> case s of
+            "\\" -> apply left . ExAbs <$> smallLambda end
+            _ -> return $ ExApp (ExRef $ Op s) left []
+    where
+      apply (ExApp l1 l2 rs) r = ExApp l1 l2 (rs <> [r])
+      apply (ExVar s Nothing) r = ExVar s (Just r)
+      apply l r = ExApp l r []
 
--- | variable in "variable: typannotation" form, doesn't consume end
-declaration :: ShowErrorComponent e => Parser e m () -> Parser e m (UnTypedName Op)
-declaration end = do
-  r <- ask
-  let typParser e = liftParser . TypParser.unParser (fst r) (getParser e r)
-  name <- identifier
-  typ'maybe <- optional $ (reservedOp ":") *> typParser (lookAhead end) (-100)
-  return $ UnTypedName (maybe TypInfer TypAnno typ'maybe) name
-
--- | let binding in expression
-letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (Expr Op (UnTypedName Op))
-letExpr end = do
-  var <- declaration (reservedOp "=" *> pure ()) <?> "binding name"
-  _ <- reservedOp "="
-  initializer <- pratt (reserved "in" *> pure ()) (-100)
-  body <- pratt end (-100)
-  return $ ExBind UnTyped (var, initializer) body
+-- | special case for application
+handleNorm
+  :: Monad m => Expr typ anno name -> Expr typ anno name -> m (Expr typ anno name)
+handleNorm (ExVar s Nothing) r = return $ ExVar s (Just r)
+handleNorm (ExApp l1 l2 rs) r = return $ ExApp l1 l2 (rs <> [r])
+handleNorm a r = return $ ExApp a r []
 
 -- | need a complete definition of pattern match syntax
-patternExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (Pattern (UnTypedName Op))
-patternExpr end = wild <|> var
-  where
-    wild = reserved "_" *> pure PatWild
-    var = declaration end >>= pure . PatVar
+pPattern :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (PatParser.ParsePatternType None Identity)
+pPattern end r = ask >>= \e -> liftParser $ PatParser.unParser e (getParser end e) r
+pType :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (TypParser.ParseType None Identity)
+pType end r = ask >>= \e -> liftParser $ TypParser.unParser (fst e) (getParser end e) r
+
+-- | let binding in expression
+letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseExprType None Identity)
+letExpr end = do
+  pat <- pPattern (void . lookAhead $ reservedOp "=") (-100) <* reservedOp "=" <?> "binding name"
+  initializer <- pratt (void . lookAhead $ reserved "in") (-100) <* reserved "in"
+  body <- pratt end (-100)
+  return $ ExLet pat initializer body
 
 -- | lambda block parser
-lambda :: ShowErrorComponent e => Parser e m (Lambda Op (UnTypedName Op))
-lambda = do
-  let branch = patternExpr ((reservedOp "," <|> reservedOp "=>") *> pure ()) `sepBy` (reservedOp ",")
-  patts <- optional . try $ branch <* reservedOp "=>"
-  body <- pratt (lookAhead $ reservedOp "}" *> pure ()) (-100)
-  _ <- reservedOp "}"
-  return $ Lambda [LambdaBranch (maybe [] id patts) body]
+bigLambda :: ShowErrorComponent e => Parser e m (ParseLambdaType None Identity)
+bigLambda = do
+  let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> [",", "=>", "|"] ) (-100)
+      groupPat = fmap PatGrp $ iPattern `sepBy1` reservedOp ","
+      seqPat = fmap PatSeq $ groupPat `sepBy1` reservedOp "|"
+      branch = (,) <$> seqPat <*> (reservedOp "=>" *> pratt (void . lookAhead $ reservedOp "}" <|> reservedOp "|" ) (-100))
+  lambda <-
+    try ((`Lambda` []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "}") (-100))
+    <|> Lambda <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
+  void $ reservedOp "}"
+  return lambda
+smallLambda :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseLambdaType None Identity)
+smallLambda end = do
+  let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> ["=>", ","] ) (-100)
+      seqPat = fmap PatSeq $ iPattern <* reservedOp "," >>= \v -> (v:) <$> iPattern `sepBy1` reservedOp ","
+      branch = (,) <$> ((try seqPat <|> iPattern) <* reservedOp "=>") <*> pratt (lookAhead $ end <|> void (reservedOp ",")) (-100)
+  Lambda <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
+
+record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType None Identity)
+record = do
+  let rprefix :: ShowErrorComponent e => Parser e m String -> Parser e m String
+      rprefix m = optional (oneOf ['&', '.']) >>= maybe m (\a -> (a:) <$> m)
+      rlabel = (try $ Symbol <$> rprefix identifier) <|> Op <$> operator
+      field = (,) <$> (rlabel <* reservedOp "=") <*> pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
+      -- rowof = RowOf <$> (reservedOp "..." *> pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100))
+  ExRec <$> field `sepBy1` reservedOp "," <* reservedOp "}"
+
+tup =
+  let field = pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)
+   in fmap ExTup $ field <* reservedOp "," >>= \v -> (v:) <$> field `sepBy1` reservedOp "," <* reservedOp ")"
+
+tunit = reservedOp ")" *> return ExUnit
 
 getOperator :: String
             -> Parser e m (Operator String)
+getOperator "\\" = return $ Operator Unifix (999) (999) "\\"
+getOperator ":" = return $ Operator Infix (-15) (-20) ":"
 getOperator op = do
   stat <- snd <$> ask
   case find (\(Operator _ _ _ n) -> n == op) stat of

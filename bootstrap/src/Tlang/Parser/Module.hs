@@ -1,5 +1,6 @@
 module Tlang.Parser.Module
   ( ParsedModule
+  , ParseModuleType
 
   , parseModule
   , playModule
@@ -11,7 +12,9 @@ where
 import Text.Megaparsec
 
 import Tlang.Parser.Lexer
-import Tlang.Parser.Declaration (declaration)
+import Tlang.Parser.Decl (declaration)
+import Tlang.Parser.Type (ParseType)
+import Tlang.Parser.Decl (ParseDeclType)
 
 import Tlang.AST
 
@@ -19,78 +22,79 @@ import Data.Text (Text)
 import Data.List (find)
 import Data.Void (Void)
 import Control.Monad (void, forM)
+import Control.Monad.Identity (Identity)
 import Control.Applicative (liftA2)
 import Control.Monad.Trans.State (StateT, runStateT, modify)
 import Control.Monad.Trans (lift)
 
-type ParsedModule = Module String String (Declaration Op (TypName Op) (UnTypedName Op)) Op (TypName Op) (UnTypedName Op)
+type ParseModuleType c f = Module (ParseType c f) Symbol (Symbol, Declaration (ParseType c f) Symbol)
+type ParsedModule = ParseModuleType None Identity
 
-modulePath :: ShowErrorComponent e => ParsecT e Text m (ModulePath String)
-modulePath = liftA2 ModulePath init last <$> identifier `sepBy1` symbol "/"
+moduleID :: ShowErrorComponent e => ParsecT e Text m ModuleID
+moduleID = liftA2 ModuleID init last <$> identifier `sepBy1` symbol "/"
 
-item :: ShowErrorComponent e => ParsecT e Text m (Use String ())
-item = identifier <|> operator >>= return . flip Use ()
+item :: ShowErrorComponent e => ParsecT e Text m Symbol
+item = Symbol <$> identifier <|> Op <$> operator
 
-use :: ShowErrorComponent e => ParsecT e Text m (Int, Import String String ())
+use :: ShowErrorComponent e => ParsecT e Text m (Int, Use Symbol)
 use = do
   pos <- stateOffset <$> getParserState
   void $ reserved "use"
-  name <- modulePath
-  qualified <- optional (reserved "as" *> identifier) <?> "qualified name"
-  syms <- optional . parens $ item `sepBy` symbol ","
+  name <- moduleID
+  qualified <- optional (reserved "as" *> (ModuleID [] <$> identifier)) <?> "qualified name"
+  let prefix = maybe (name, name) (name,) qualified
+  items <- optional . parens $ item `sepBy` symbol ","
   void $ reservedOp ";;"
-  return (pos, Import name (maybe [] id syms) qualified)
+  return (pos, Use prefix (maybe [] id items))
 
 parseModule :: (ShowErrorComponent e, Monad m)
-            => [ParsedModule] -> ParsecT e Text (StateT ([Op], [Op]) m) (ParsedModule, [ParsedModule])
-parseModule ms = do
+            => [ParsedModule] -> ModuleSource -> ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParsedModule, [ParsedModule])
+parseModule ms source = do
   whiteSpace
-  path <- reserved "module" *> modulePath <* reservedOp ";;"
+  path <- reserved "module" *> moduleID <* reservedOp ";;"
   deps <- many use >>= \deps -> do
-    forM deps \(pos, Import ps imps quali) -> region (setErrorOffset pos) do
-      syms <- forM imps \(Use sym ()) -> do
-        let msg = "module " <> show ps <> " doesn't contain definition for " <> sym
-                <> " or module " <> show ps <> " doesn't exist"
-        dec <- maybe (fail msg) return $ lookUpModule ps ms >>= lookUpName sym
-        lift (putIntoEnv dec) *> return (Use sym dec)
-      return $ Import ps syms quali
+    forM deps \(pos, Use prefix@(origin, quali) imps) -> region (setErrorOffset pos) do
+      syms <- forM imps \sym -> do
+        let msg = "module " <> show quali <> " doesn't contain definition for " <> show sym
+                <> " or module " <> show origin <> " doesn't exist"
+        dec <- maybe (fail msg) return $ lookUpModule origin ms >>= lookUpName sym
+        lift (putIntoEnv dec) *> return (sym, dec)
+      return $ Use prefix syms
   decls <- many declaration
   eof
-  return (Module path deps decls, ms)
+  return (Module source path deps decls, ms)
   where
-    lookUpName :: String -> ParsedModule -> Maybe (Declaration Op (TypName Op) (UnTypedName Op))
-    lookUpName name m =
-      let predicate (LetD (UnTypedName _ s) _) = s == name
-          predicate (TypD (TypAs (TypName s) _)) = s == name
-          predicate (TypD (TypOpAs (TypName s) _)) = s == name
-          predicate (FixD (Operator _ _ _ s)) = s == name
-          predicate (FnD (UnTypedName _ s) _) = s == name
-          predicate _ = False
-       in find predicate (mDecl m) <|> lookup name (fmap (\(Use s i) -> (s, i)) $ foldl (\ls (Import _ us _) -> us <> ls) [] (mSyms m))
-    lookUpModule :: ModulePath String -> [ParsedModule] -> Maybe ParsedModule
-    lookUpModule path = lookup path . fmap (\m -> (mPath m, m))
-    putIntoEnv :: (Monad m) => Declaration Op (TypName Op) info -> StateT ([Op], [Op]) m ()
+    lookUpName :: Symbol -> ParsedModule -> Maybe (ParseDeclType None Identity)
+    lookUpName name (Module _ _ deps decs) =
+      let predicate (LetD s _) = s == name
+          predicate (TypD (s :== _)) = s == name
+          predicate (FixD (Operator _ _ _ s)) = Op s == name
+          predicate (FnD s _ _) = s == name
+       in find predicate decs <|> foldl (<|>) Nothing (fmap (\(Use _ ls) -> lookup name ls) deps)
+    lookUpModule :: ModuleID -> [ParsedModule] -> Maybe ParsedModule
+    lookUpModule path = find \(Module _ mid _ _) -> mid == path
+    putIntoEnv :: (Monad m) => ParseDeclType None Identity -> StateT ([Operator String], [Operator String]) m ()
     putIntoEnv (FixD op@(Operator _ _ _ s)) = modify \(tys, trs) ->
       if head s == ':' then (op:tys, trs) else (tys, op:trs)
     putIntoEnv _ = pure ()
 
 -- | build up module dependency graph
 buildGraph :: (ShowErrorComponent e)
-           => ParsecT e Text m ([Import String String ()], ModulePath String)
+           => ParsecT e Text m ([Use Symbol], ModuleID)
 buildGraph = do
   whiteSpace
-  path <- reserved "module" *> modulePath <* reservedOp ";;"
+  path <- reserved "module" *> moduleID <* reservedOp ";;"
   deps <- many use
   whiteSpace
   return (snd <$> deps, path)
 
 -- | parse a new module basing on existed module
 runModule :: (ShowErrorComponent e, Monad m)
-          => String -> ([Op], [Op]) -> [ParsedModule] -> Text
-          -> m (Either (ParseErrorBundle Text e) (ParsedModule, [ParsedModule]), ([Op], [Op]))
-runModule source op ms txt = flip runStateT op $ runParserT (parseModule ms) source txt
+          => ModuleSource -> ([Operator String], [Operator String]) -> [ParsedModule] -> Text
+          -> m (Either (ParseErrorBundle Text e) (ParsedModule, [ParsedModule]), ([Operator String], [Operator String]))
+runModule source op ms txt = flip runStateT op $ runParserT (parseModule ms source) source txt
 
-playModule :: ([Op], [Op]) -> [ParsedModule] -> Text -> IO ()
+playModule :: ([Operator String], [Operator String]) -> [ParsedModule] -> Text -> IO ()
 playModule op ms txt =
   let m = runModule @Void "stdin" op ms txt >>= return . fst
    in either errorBundlePretty show <$> m >>= putStrLn

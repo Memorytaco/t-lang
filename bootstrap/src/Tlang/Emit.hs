@@ -10,8 +10,7 @@ Resolve type -> generate LLVM IR -> return the IR Module
 import Tlang.Parser
 import Tlang.Parser.Pratt
 import Tlang.Codegen
-import Tlang.Analysis
-import Tlang.Type.Checker
+import Tlang.Inference
 
 import LLVM.Context (withContext)
 import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
@@ -25,6 +24,7 @@ import LLVM.IRBuilder as IR hiding (ret, function)
 import Data.Char (ord)
 import qualified Data.ByteString.Char8 as C8 (putStrLn)
 import qualified Data.Map as Map
+import Tlang.Test
 
 import Control.Monad.Except
 import Control.Monad.RWS
@@ -34,7 +34,8 @@ type CodegenEnv m = (MonadError String m, MonadState NameTable m, MonadReader Na
 type LLVMEnv m = (MonadError String m, MonadState NameTable m)
 type Codegen m = CodegenT NameTable NameTable String m
 
-genModule :: AST.Module -> NameTable -> [ModuleElement ResolvedName TypAnno] -> IO (Maybe (NameTable, AST.Module))
+genModule :: AST.Module -> NameTable -> [ModuleElement ResolvedName TypAnno]
+          -> IO (Maybe (NameTable, AST.Module))
 genModule m table eles = withContext $ \context -> do
   let run = runRWST . buildLLVM m emptyModuleBuilder
   result <- runExceptT $ run (mapM llvmGen (reverse eles)) () table
@@ -44,7 +45,8 @@ genModule m table eles = withContext $ \context -> do
       moduleLLVMAssembly m >>= C8.putStrLn  -- print out the llvm IR
       return $ Just (ss, mod)
 
-llvmGen :: (LLVMEnv m, MonadFail m) => ModuleElement ResolvedName TypAnno -> LLVM NameTable String m ()
+llvmGen :: (LLVMEnv m, MonadFail m)
+        => ModuleElement ResolvedName TypAnno -> LLVM NameTable String m ()
 
 llvmGen (ModuleFunction name _ Nothing) = do
   case name of

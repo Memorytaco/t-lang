@@ -1,7 +1,8 @@
-module Tlang.Parser.Declaration
+module Tlang.Parser.Decl
   ( declaration
-  , playDef
+  , play
   , getFixity
+  , ParseDeclType
   )
 where
 
@@ -15,52 +16,59 @@ import Data.Text (Text)
 import Control.Monad (void)
 import Control.Monad.Trans.State (StateT, get, modify, evalStateT)
 import Control.Monad.Trans (lift)
+import Control.Monad.Identity (Identity)
 import Data.Void (Void)
 import Data.Bifunctor (first)
+import Control.Applicative (Const (..))
 
-decName :: ShowErrorComponent e => [Op] -> ParsecT e Text m () -> ParsecT e Text m (UnTypedName Op)
-decName r (lookAhead -> end) = do
-  name <- identifier <|> operator
-  typ'maybe <- optional $ reservedOp ":" *> TypeParser.unParser r end (-100)
-  pure $ UnTypedName (maybe TypInfer TypAnno typ'maybe) name
+type ParseDeclType c f = Declaration (TypeParser.ParseType c f) Symbol
 
-defFn :: ShowErrorComponent e => ([Op], [Op]) -> ParsecT e Text m (Declaration Op (TypName Op) (UnTypedName Op))
+defFn :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
 defFn r = do
   void $ reserved "fn"
-  name <- decName (fst r) . void $ reservedOp "{" <|> reservedOp ";;"
-  body'maybe <- optional $ (void $ reservedOp "{") *> lambda
-  void $ reservedOp ";;"
-  return $ FnD name body'maybe
+  name <- Symbol <$> identifier
+  void $ reservedOp ":" <|> fail "fn declaration require type signature"
+  sig <- TypeParser.unParser (fst r) (void . lookAhead . choice $ reservedOp <$> ["{", "=", ";;"]) (-100)
+  next <- choice $ reservedOp <$> ["{", "=", ";;"]
+  case next of
+    ";;" -> return $ FnD name sig FnDefault
+    "{" -> FnDecl <$> lambda <* reservedOp ";;" >>= return . FnD name sig
+    "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" >>= return . FnD name sig
+    _ -> error "impossible in Tlang.Parser.Decl.defFn"
   where
-    lambda = ExprParser.getParser ExprParser.lambda r
+    lambda = ExprParser.getParser ExprParser.bigLambda r
 
-defLet :: ShowErrorComponent e => ([Op], [Op]) -> ParsecT e Text m (Declaration Op (TypName Op) (UnTypedName Op))
+defLet :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
 defLet r = do
   void $ reserved "let"
-  name <- decName (fst r) . void $ reservedOp "="
-  void $ reservedOp "="
-  LetD name <$> ExprParser.unParser r (void $ reservedOp ";;") (-100)
+  name <- Symbol <$> identifier <|> Op <$> operator
+  sig'maybe <- optional $ reservedOp ":" *> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "=" <|> reservedOp ";;") (-100)
+  void $ reservedOp "=" <|> fail "let declaration require a value definition"
+  let expr = ExprParser.unParser r (void $ reservedOp ";;") (-100)
+  case sig'maybe of
+    Just typ -> LetD name . ExAnno . (:@ typ) <$> expr
+    Nothing -> LetD name <$> expr
 
-defTyp :: ShowErrorComponent e => ([Op], [Op]) -> ParsecT e Text m (Declaration Op (TypName Op) (UnTypedName Op))
+defTyp :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
 defTyp r = do
   void $ reserved "data"
   (try norm <|> phantom) <* reservedOp ";;"
   where
-    typName = TypName <$> identifier
+    typName = Symbol <$> identifier
     typOpName = do
       op <- lookAhead operator
       if head op == ':'
-         then TypName <$> operator
+         then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    name = TypAs <$> typName <|> TypOpAs <$> typOpName
-    typVar = typName >>= return . TypAbs
+    name = (:==) <$> (typName <|> typOpName)
+    typVar = typName >>= return . TypAbs . Const
     typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=" <|> lookAhead (reservedOp ";;"))
     typFull = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
-    typVariant :: ShowErrorComponent e => ParsecT e Text m (Type (TypName Op) ())
+    typVariant :: ShowErrorComponent e => ParsecT e Text m (TypeParser.ParseType None Identity)
     typVariant = TypeParser.getParser (TypeParser.dataVariant . lookAhead . void $ reservedOp ";;") (fst r)
     typBody = try typVariant <|> typFull
 
-    phantom = fmap TypD $ name <*> (typVarlist <*> return TypBottom)
+    phantom = fmap TypD $ name <*> (typVarlist <*> return TypBot)
     norm = fmap TypD $ name <*> (typVarlist <*> typBody)
 
 defFixity :: ShowErrorComponent e => ParsecT e Text m (Operator String)
@@ -80,7 +88,7 @@ defFixity = defUnifix <|> defInfix
             <|> reserved "infixr" *> (precedence >>= \bp -> Operator Infix bp (bp-1) <$> operator)
             <|> reserved "infix" *> (precedence >>= \bp -> Operator Infix bp bp <$> operator)
 
-declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Op], [Op]) m) (Declaration Op (TypName Op) (UnTypedName Op))
+declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity)
 declaration = do
   r <- lift get
   defFn r <|> defLet r <|> defTyp r <|> do
@@ -90,14 +98,16 @@ declaration = do
     return $ FixD op
 
 -- | get operator fixity information from source file
-getFixity :: [Declaration Op (TypName Op) info] -> [Operator String]
+getFixity :: [ParseDeclType None Identity] -> [Operator String]
 getFixity = collect . fmap pick
   where
     pick (FixD op) = Just op
     pick _ = Nothing
     collect = foldl (\ls b -> maybe ls (: ls) b) []
 
--- playDef :: (Show a) => (ParsecT Void Text IO (Declaration Op (UnTypedName Op)) -> ParsecT Void Text IO a) -> ([Op], [Op]) -> Text -> IO ()
-playDef deco op txt =
+play :: (Monad f, Monad m)
+     => (ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity) -> ParsecT Void Text (StateT s f) c)
+     -> s -> Text -> f (Either String c)
+play deco op txt =
   let m = flip evalStateT op $ runParserT (deco $ declaration @Void) "stdin" txt
    in first errorBundlePretty <$> m

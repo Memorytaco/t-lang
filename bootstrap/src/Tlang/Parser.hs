@@ -40,17 +40,17 @@ parseSource paths = do
   edges <- forM paths \path -> do
     source <- liftIO $ decodeUtf8 <$> readFile path
     (keys', key) <- first errorBundlePretty <$> runParserT (buildGraph @Void) path source >>= liftEither
-    return (source, key, fmap (\(Import k _ _) -> k) keys')
+    return (source, key, fmap (\(Use (k, _) _) -> k) keys')
   let (graph, getNode, getVertex) = graphFromEdges edges
       bforest = bcc graph
   -- if bforest == [] then return () else fail "Cyclic dependency of module detected"
   let over bs i = do
         let (source, key, keys) = getNode i
-            lookupModule p = find ((== p) . mPath)
+            lookupModule p = find \(Module _ s _ _) -> p == s
         case lookupModule key bs of
           Just _ -> return bs
           Nothing -> do
-            (m, _) <- runModule @Void (show key) (typOperator, []) bs source >>= liftEither . first errorBundlePretty . fst 
+            (m, _) <- runModule @Void (show key) (typOperator, []) bs source >>= liftEither . first errorBundlePretty . fst
             return $ m:bs
   foldM over [] $ reverseTopSort graph
 

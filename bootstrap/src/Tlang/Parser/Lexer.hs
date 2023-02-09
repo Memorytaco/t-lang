@@ -24,7 +24,7 @@ whiteSpace :: TextParser e m => m ()
 whiteSpace = Lex.space space1 (Lex.skipLineComment "//") (Lex.skipBlockCommentNested "/*" "*/")
 
 lexeme :: TextParser e m => m a -> m a
-lexeme = Lex.lexeme whiteSpace 
+lexeme = Lex.lexeme whiteSpace
 
 integer :: (TextParser e m, Num a) => m a
 integer = lexeme Lex.decimal
@@ -34,11 +34,11 @@ symbol = Lex.symbol whiteSpace
 
 reserved, reservedOp :: (TextParser e m) => Text -> m Text
 reserved t = lexeme . try $ string t <* notFollowedBy alphaNumChar
-reservedOp t = lexeme . try $ string t <* notFollowedBy (oneOf ("!#$%&*+,-./:;<=>?@\\^_|~" :: String))
+reservedOp t = lexeme . try $ string t <* notFollowedBy (oneOf ("!#$%&*+-./:;<=>?@\\^|~" :: String))
 
 operator :: (TextParser e m, MonadFail m) => m String
 operator = lexeme $ do
-  let reservedOps = [";;", ":", "|", "[", "]", "{", "}", "(", ")", "()", "[]", "{}"]
+  let reservedOps = [";;", ":", ",", "\\", "|", "[", "]", "{", "}", "(", ")", "()", "[]", "{}", "@", "=>"]
   ops <- some (oneOf ("(){}[]!#$%&*+,-./:;<=>?@\\^_|~" :: String))
   if ops `elem` reservedOps
      then fail $ "unexpected reserved operator " <> show ops
@@ -59,10 +59,10 @@ float :: (TextParser e m, RealFloat a) => m a
 float = lexeme Lex.float
 
 parens, braces, angles, brackets :: (TextParser e m) => m a -> m a
-parens    = between (reservedOp "(") (reservedOp ")")
-braces    = between (reservedOp "{") (reservedOp "}")
+parens    = between (symbol "(") (symbol ")")
+braces    = between (symbol "{") (symbol "}")
 angles    = between (reservedOp "<") (reservedOp ">")
-brackets  = between (reservedOp "[") (reservedOp "]")
+brackets  = between (symbol "[") (symbol "]")
 
 stringLiteral :: TextParser e m => m String
 stringLiteral = lexeme $ char '"' *> manyTill Lex.charLiteral (char '"')

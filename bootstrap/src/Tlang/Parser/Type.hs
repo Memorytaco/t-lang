@@ -1,10 +1,12 @@
 module Tlang.Parser.Type
   ( Parser
   , ExpressionToken
+  , ParseType
 
   , getParser
   , liftParser
   , dataVariant
+  , record
 
   , unParser
   , play -- ^ for development only
@@ -19,11 +21,13 @@ import Tlang.AST
 import Data.Text (Text, pack)
 import Data.List (find)
 import Data.Bifunctor (first)
-import Text.Megaparsec
+import Text.Megaparsec hiding (Label)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT, MonadReader)
-import Control.Applicative (Alternative)
+import Control.Applicative (Alternative, Const (..))
 import Control.Monad (MonadPlus, void)
 import Data.Void (Void)
+import Control.Monad.Identity (Identity)
+import qualified LLVM.AST.Type (Type)
 
 newtype Parser e m a = Parser
   { unWrapParser :: ReaderT [Operator String] (ParsecT e Text m) a
@@ -32,18 +36,20 @@ newtype Parser e m a = Parser
     deriving newtype (Alternative, MonadFail, MonadPlus)
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
-type ExpressionToken = (OperatorClass String (Type (TypName (Operator String)) ()))
+type ParseType c f = Type Label Symbol () (Const Symbol) c f LLVM.AST.Type.Type
+type ExpressionToken = OperatorClass String (ParseType None Identity)
 
 instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) where
-  type Expression ExpressionToken = (Type (TypName (Operator String)) ())
-  next = (OpNorm <$> typNormal <?> "Type Name")
-     <|> (OpRep . Left <$> special <?> "Type Pair Operator")
+  type Expression ExpressionToken = (ParseType None Identity)
+  next = (OpRep . Left <$> recur <?> "Type Pair Operator")
      <|> (OpRep . Right <$> operator <?> "Type Operator")
+     <|> (OpNorm <$> typNormal <?> "Type Name")
     where
-      typNormal = identifier >>= return . TypRef . TypName
+      typNormal = identifier >>= return . TypRef . Symbol
       withSpecial v@(l, r) = reservedOp (pack l) *> pure (Left v)
                          <|> reservedOp (pack r) *> pure (Right v)
       special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("[", "]"), ("<", ">"), ("{", "}")]
+      recur = reserved "rec" *> pure (Left ("rec", "rec")) <|> special
 
   peek = lookAhead next
 
@@ -57,66 +63,80 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
       case l of
         "{" -> record
         "<" -> variant
+        "rec" -> recursive end
         _ -> do ntok <- peek
                 matchPairOperator (Right ("(", ")")) ntok
-                  (next *> return TypUnit) $ pratt (reservedOp (pack r) *> pure ()) (-100)
+                  (next *> return TypUni) $ pratt (reservedOp (pack r) *> pure ()) (-100)
     Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
-    Right s -> getOperator s >>= \op@(Operator assoc _ r _) ->
+    Right s -> getOperator s >>= \(Operator assoc _ r op) ->
       case assoc of
-        Infix -> fail $ "expect prefix or unifix operator but got infix operator " <> show op
-        Postfix -> fail $ "expect prefix or unifix operator but got postfix operator " <> show op
+        Infix -> fail $ "expect prefix or unifix operator but got infix operator " <> op
+        Postfix -> fail $ "expect prefix or unifix operator but got postfix operator " <> op
         _ -> do right <- pratt end r
-                return $ TypApp (TypRef $ TypNameOp op) right
+                return $ TypApp (TypRef $ Op op) right []
 
-  led (lookAhead -> end) left = withOperator (return . TypApp left) \case
-    Right s -> getOperator s >>= \op@(Operator assoc _ r _) ->
+  -- led (lookAhead -> end) left = withOperator (return . TypApp left) \case
+  led (lookAhead -> end) left = withOperator (return . apply left) \case
+    Right s -> getOperator s >>= \(Operator assoc _ r op) ->
       case assoc of
         Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
         Infix -> case s of
                   "." -> case left of
-                    TypRef name -> pratt end r >>= return . TypAll name
+                    TypRef name -> pratt end r >>= return . TypAll (Const name)
                     _ -> fail $ "expect type variable before operator \".\" but got: " <> show left
                   "*" -> pratt end r >>= \case
                     TypTup ls -> return . TypTup $ left: ls
                     right -> return $ TypTup [left, right]
-                  _ -> pratt end r >>= return . TypApp (TypApp (TypRef $ TypNameOp op) left)
-        _ -> return $ TypApp (TypRef $ TypNameOp op) left
+                  "->" -> TypQue left <$> pratt end r
+                  _ -> pratt end r >>= return . TypApp (TypRef $ Op op) left . (:[])
+        _ -> return $ TypApp (TypRef $ Op op) left []
     Left (Left (l, r)) ->
       case l of
         "(" -> do
           ntok <- peek
           matchPairOperator (Right ("(", ")")) ntok
-            (next *> return (TypApp left TypUnit)) $ pratt (reservedOp (pack r) *> pure ()) (-100) >>= return . TypApp left
-        "{" -> record >>= return . TypApp left
-        "<" -> variant >>= return . TypApp left
+            (next *> return (left `apply` TypUni)) $ pratt (reservedOp (pack r) *> pure ()) (-100) >>= return . apply left
+        "{" -> apply left <$> record
+        "<" -> apply left <$> variant
+        "rec" -> apply left <$> recursive end
         _   -> fail $ "Unrecognized " <> l <> ", It could be an internal error, please report to upstream."
     Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
 
+apply (TypApp h1 h2 ls) r = TypApp h1 h2 (ls <> [r])
+apply l r = TypApp l r []
+
+-- | equi-recursive type
+recursive :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None Identity)
+recursive (lookAhead -> end) = do
+  name <- Symbol <$> identifier <* reservedOp "."
+  body <- pratt end (-100)
+  return $ TypEqu (Const name) body
+
 -- | record type parser
-record :: ShowErrorComponent e => Parser e m (Type (TypName (Operator String)) ())
+record :: ShowErrorComponent e => Parser e m (ParseType None Identity)
 record = do
   let recordPair = do
-        name <- fmap TypLabel $ identifier <|> operator
+        name <- fmap Label $ identifier <|> operator
         typ <- reservedOp ":" *> pratt (lookAhead ((reservedOp "}" <|> reservedOp ",") *> pure ())) (-100)
         return (name, typ)
   fields <- sepBy1 recordPair (reservedOp ",") <* reservedOp "}"
   return $ TypRec fields
 
 -- | variant type parser
-variant :: ShowErrorComponent e => Parser e m (Type (TypName (Operator String)) ())
+variant :: ShowErrorComponent e => Parser e m (ParseType None Identity)
 variant = do
   let variantPair = do
-        name <- fmap TypLabel $ identifier <|> operator
+        name <- fmap Label $ identifier <|> operator
         typ <- optional $ reservedOp ":" *> pratt (lookAhead ((reservedOp ">" <|> reservedOp ",") *> pure ())) (-100)
         return (name, typ)
   fields <- sepBy1 variantPair (reservedOp ",") <* reservedOp ">"
   return $ TypSum fields
 
 -- | a specialized version used in type declaration context. see `Tlang.AST.Declaration`.
-dataVariant :: ShowErrorComponent e => Parser e m () -> Parser e m (Type (TypName (Operator String)) ())
+dataVariant :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None Identity)
 dataVariant end = do
   let variantPair = do
-        name <- fmap TypLabel $ identifier <|> operator
+        name <- fmap Label $ identifier <|> operator
         isEnd <- lookAhead . optional $ void (reservedOp "|") <|> end
         typ <- maybe
                  (Just <$> pratt (lookAhead $ void (reservedOp "|") <|> end) (-100))
@@ -139,10 +159,10 @@ getParser :: Parser e m a -> [Operator String] -> ParsecT e Text m a
 getParser = runReaderT . unWrapParser
 
 -- | build a type parser from operator table
-unParser :: ShowErrorComponent e => [Operator String] -> ParsecT e Text m () -> Integer -> ParsecT e Text m (Type (TypName (Operator String)) ())
+unParser :: ShowErrorComponent e => [Operator String] -> ParsecT e Text m () -> Integer -> ParsecT e Text m (ParseType None Identity)
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
 -- | play and test and feel the parser
-play :: Monad m => [Operator String] -> Text -> m (Either String (Type (TypName (Operator String)) ()))
+play :: Monad m => [Operator String] -> Text -> m (Either String (ParseType None Identity))
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
- 
+

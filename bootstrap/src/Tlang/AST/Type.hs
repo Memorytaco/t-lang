@@ -1,97 +1,135 @@
 module Tlang.AST.Type
-  ( TypAnno (..)
-  , Type (..)
+  ( Type (..)
   , TypeF (..)
+  , Kind (..)
+  , KindF (..)
+  , Label (..)
+  , (:==) (..)
 
-  , TypName (..)
-  , KindedName (..)
-  , NamedType (..)
-  , TypeKind (..)
-  , KindVal (..)
-  , (/->)
+  , getMonoType
   )
 where
 
 import Data.Functor.Foldable.TH
+import Data.Functor.Foldable (Recursive)
+import Data.Bifunctor.TH (deriveBifunctor)
+import Data.Bifunctor (first)
 
 import Data.List (intercalate)
 
 -- | type representation
-data Type name rep
-  = TypBottom                               -- ^ empty type or the bottom type
-  | TypUnit                                 -- ^ unit type, represented as **()**
-  | TypRep rep                              -- ^ type representation, the concrete one, will always be with kind '*'
-  | TypRef name                             -- ^ refer to named type or type variable
-  | TypAll name (Type name rep)             -- ^ universal quantified type, using de bruijn indice. this needs help from `name` type
-  | TypAbs name (Type name rep)             -- ^ higher kinded type, naming an incompleted type
-  | TypTup [Type name rep]                  -- ^ builtin tuple
-  | TypRec [(name, (Type name rep))]        -- ^ product type, can be used to encode both tuple and record
-  | TypSum [(name, Maybe (Type name rep))]  -- ^ variant type
-  | TypApp (Type name rep) (Type name rep)  -- ^ type application
-  deriving (Eq)
+data Type label name lit bind c f rep
+  = TypBot                                        -- ^ empty type or the bottom type
+  | TypUni                                        -- ^ unit type, represented as **()**
+  | TypRep rep                                    -- ^ type representation, the concrete one, will always be with kind '*'
+  | TypLit lit                                    -- ^ type level literal, natural number, string and all that
+  | TypRef name                                   -- ^ refer to named type or type variable
+  | TypQue (Type label name lit bind c f rep)                   -- ^ value constructor, "->"
+           (Type label name lit bind c f rep)
+  | TypTup [Type label name lit bind c f rep]                   -- ^ builtin tuple
+  | TypRec [(label, Type label name lit bind c f rep)]          -- ^ product type
+  | TypSum [(label, Maybe (Type label name lit bind c f rep))]  -- ^ variant type, grouped label type
+  | TypPie (c (Type label name lit bind c f rep))   -- ^ type constraint, a predicate
+           (Type label name lit bind c f rep)
+  | TypApp (Type label name lit bind c f rep)       -- ^ type application
+           (Type label name lit bind c f rep)
+           [Type label name lit bind c f rep]
+  | TypEqu (bind (Type label name lit bind c f rep))  -- ^ equi-recursive type
+           (Type label name lit bind c f rep)
+  | TypAll (bind (Type label name lit bind c f rep))  -- ^ universal quantified type, using de bruijn indice. this needs help from `name` type
+           (Type label name lit bind c f rep)
+  | TypAbs (bind (Type label name lit bind c f rep))  -- ^ higher kinded type, naming an incompleted type
+           (Type label name lit bind c f rep)
+  | TypLift (f (Type label name lit bind c f rep))    -- ^ wrap kind information into type, annotation for type
 
--- | named type. assign name to type and allow
--- recursive type and type level lambda.
-data NamedType name t
-  = TypAs name (Type name t)    -- ^ pick a name to encapsulate a type, and turn a unnamed type to named type.
-                                --   other information including variable and kind is in `Type`
-  | TypOpAs name (Type name t)  -- ^ definition for type level operator, which should be prefixed with ":"
-  deriving (Show, Eq)
+getMonoType :: Traversable f
+            => Type label name lit bind c f rep
+            -> ([bind (Type label name lit bind c f rep)], Type label name lit bind c f rep)
+getMonoType (TypAll b1 t) = first (b1:) $ getMonoType t
+getMonoType (TypLift fa) = fmap TypLift . sequence $ getMonoType <$> fa
+getMonoType t = ([], t)
 
--- | Unresolved type name representation, used in parser only.
-data TypName op = TypLabel String | TypName String | TypNameOp op deriving (Eq)
+deriving instance (Functor f, Functor c, Functor bind) => Functor (Type label name lit bind c f)
+deriving instance
+  ( Eq (f (Type label name lit bind c f rep))
+  , Eq (c (Type label name lit bind c f rep))
+  , Eq (bind (Type label name lit bind c f rep))
+  , Eq label, Eq lit, Eq name, Eq rep
+  ) => Eq (Type label name lit bind c f rep)
 
--- | be isomorphic with `TypName`, augmented with kind information.
--- `TypLabel` is transformed into a term level constructor, which is both a type constructor and term constructor
---    depending on the type itself. Note, this kind of constructor may not construct a concrete type.
-data KindedName k s = TermCons k s | TypSym k Bool s | TypBound k s Integer deriving (Show, Eq)
-
--- | type kind representation, any kind, normal kind (*) and higher kind
-data TypeKind k = KindAny                             -- ^ represent any type level thing, literal, value, lifted constructor, etc.
-                | KindType                            -- ^ concrete type, language's builtin type kind.
-                | KindCons k                          -- ^ type kinds other than KindCons and KindType
-                | KindCat (TypeKind k) (TypeKind k)   -- ^ something like "* -> *", means this is a type constructor or something else.
-                deriving (Eq)
-
-infixr 8 /->
-(/->) = KindCat
-
--- | kind symbol used in `TypeKind`, it can hold any thing.
-newtype KindVal = KindVal String deriving (Eq, Ord)
-instance (Show KindVal) where
-  show (KindVal s) = s
-
-instance Show k => Show (TypeKind k) where
-  show (KindAny) = "⊤"
-  show (KindType) = "*"
-  show (KindCons k) = show k
-  show (KindCat a b) = show a <> " -> " <> show b
-
-instance (Show name, Show rep) => Show (Type name rep) where
-  show TypBottom = "⊥"
-  show TypUnit = "()"
+instance
+  ( Show label, Show name, Show rep, Show lit
+  , Show (bind (Type label name lit bind c f rep))
+  , Show (f (Type label name lit bind c f rep))
+  , Show (c (Type label name lit bind c f rep))
+  ) => Show (Type label name lit bind c f rep) where
+  show TypBot = "⊥"
+  show TypUni = "()"
   show (TypRep t) = show t
+  show (TypLit lit) = show lit
   show (TypRef name) = show name
-  show (TypAll name typ) = show name <> ". " <> show typ
-  show (TypAbs t1 t2) = "\\" <> show t1 <> ". " <> show t2
   show (TypTup ts) = "(" <> intercalate ", " (show <$> ts) <> ")"
   show (TypRec ts) =
     let mapper (a, b) = show a <> " = " <> show b
      in "{" <> intercalate ", " (mapper <$> ts) <> "}"
+  show (TypQue from to) =
+    let contra =
+          case from of
+            (TypQue _ _) -> "("<> show from <> ")"
+            (TypLift _) -> "("<> show from <> ")"
+            (TypPie _ _) -> "("<> show from <> ")"
+            (TypEqu _ _) -> "("<> show from <> ")"
+            (TypAll _ _) -> "("<> show from <> ")"
+            (TypAbs _ _) -> "("<> show from <> ")"
+            _ -> show from
+     in contra <> " -> " <> show to
   show (TypSum ts) =
     let mapper (a, b) = show a <> maybe "" ((" = " <>) . show) b
      in "<" <> intercalate ", " (mapper <$> ts) <> ">"
-  show (TypApp t1 t2) = "(" <> show t1 <> " " <> show t2 <> ")"
+  show (TypEqu bind t) = "μ" <> show bind <> ". " <> show t
+  show (TypAll bind t) = "∀" <> show bind <> ". " <> show t
+  show (TypAbs bind t) = "\\" <> show bind <> ". " <> show t
+  show (TypPie constraint t) = show constraint <> " => " <> show t
+  show (TypApp t1 t2 tn) = "(" <> show t1 <> " " <> show t2 <> " " <> show tn <> ")"
+  show (TypLift anno) = show anno
 
-instance Show op => Show (TypName op) where
-  show (TypName s) = s
-  show (TypLabel s) = "@" <> s
-  show (TypNameOp op) = show op
+-- | named type. assign name to type and allow
+-- recursive type and type level lambda also.
+-- no type level literal is supported now.
+data name :== typ = name :== typ  -- ^ pick a name to encapsulate a type, and turn a unnamed type to named type.
+                                  --   other information including variable and kind is in `Type` itself.
+                                  --   definition for type level operator, which should be prefixed with ":"
+  deriving (Show, Eq, Functor)
 
--- | type annotation with full power of the type system
-data TypAnno op
-  = TypInfer                        -- ^ to let compiler fill in the type information
-  | TypAnno (Type (TypName op) ())  -- ^ user annotated type information
-  deriving (Show, Eq)
+$(deriveBifunctor ''(:==))
 
-$(makeBaseFunctor ''Type)
+-- | label for variant and record
+newtype Label = Label String deriving (Eq, Ord)
+instance Show Label where
+  show (Label s) = s
+
+-- | type kind representation, any kind, normal kind (*) and higher kind
+data Kind f name
+  = KindType                      -- ^ concrete type, language's builtin type kind.
+  | KindRef name                  -- ^ type kinds other than KindRef and KindType,
+                                  --   and represent any type level thing, literal, value, lifted constructor, etc.
+  | KindAbs name (Kind f name)    -- ^ quantified kind variable, well, this is...
+  | Kind f name ::> Kind f name   -- ^ something like "* -> *", means this is a type constructor or something else.
+  | KindLift (f (Kind f name))    -- ^ extend functionality
+
+deriving instance (Eq (f (Kind f name)), Eq name) => Eq (Kind f name)
+deriving instance (Functor f) => Functor (Kind f)
+
+instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
+  show (KindType) = "*"
+  show (KindRef name) = show name
+  show (KindAbs v name) = show v <> ". " <> show name
+  show (v@(_ ::> _) ::> a) = "(" <> show v <> ")" <> " -> " <> show a
+  show (a ::> b) = show a <> " -> " <> show b
+  show (KindLift anno) = show anno
+
+infixr 5 ::>
+
+type FoldFunctor f = (Functor f, Traversable f, Foldable f)
+makeBaseFunctor [d| instance (FoldFunctor c, FoldFunctor f, FoldFunctor bind) => Recursive (Type label name lit bind c f rep) |]
+makeBaseFunctor [d| instance (FoldFunctor f) => Recursive (Kind f name) |]

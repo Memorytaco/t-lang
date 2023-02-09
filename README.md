@@ -36,7 +36,7 @@ Then you are free to try `stack run` command.
     - [x] Build Constraint Based type infer system
 - [ ] Build up unsafe communication scheme, to allow direct executable symbol map between t-lang and C
 - [ ] Introduce Sum types
-- [ ] Introduce RankN-Type along with type dispatch mechanism
+- [ ] Part of type system F-Omega
 - [ ] Allow User defined operator
 
 ## Tools

@@ -31,7 +31,7 @@ class (Alternative m, Monad m) => OperatorParser tok m | m -> tok where
         case lbp > rbp of
           False -> return left
           True -> do
-            val <- next >>= led end left 
+            val <- next >>= led end left
             (end *> pure val) <|> led' val
 
   nud :: m () -> tok -> m (Expression tok) -- ^ general dispatch for nud operator
