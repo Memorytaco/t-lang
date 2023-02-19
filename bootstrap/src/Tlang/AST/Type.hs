@@ -6,6 +6,9 @@ module Tlang.AST.Type
   , Label (..)
   , (:==) (..)
 
+  , Bound (..)
+  , Bounds
+
   , getMonoType
   )
 where
@@ -79,6 +82,16 @@ instance
   show (TypPie constraint t) = show constraint <> " => " <> show t
   show (TypApp t1 t2 tn) = "(" <> show t1 <> " " <> show t2 <> " " <> show tn <> ")"
   show (TypLift anno) = show anno
+
+-- | MLF bounded quantifier
+data Bound name typ
+  = name :~ typ -- ^ equality relation
+  | name :> typ -- ^ lower bound or subsume
+  deriving (Show, Eq, Functor, Traversable, Foldable)
+$(deriveBifunctor ''Bound)
+
+-- type Prefixs qual name typ = [Prefix qual name typ]
+type Bounds name typ = [Bound name typ]
 
 -- | named type. assign name to type and allow
 -- recursive type and type level lambda also.

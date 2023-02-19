@@ -20,10 +20,8 @@ import Tlang.Parser.Module (runModule, ParsedModule, buildGraph)
 import Prelude hiding (readFile)
 import Text.Megaparsec
 import Data.Text (Text)
-import Data.Functor.Foldable (Base)
 import Data.Text.Encoding (decodeUtf8)
 import Data.ByteString.Char8 (readFile)
-import System.IO (FilePath)
 import Control.Monad (foldM, forM)
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Except (MonadError, liftEither)
@@ -32,7 +30,7 @@ import Data.Graph (graphFromEdges, bcc, reverseTopSort)
 import Data.List (find)
 import Data.Void (Void)
 
-playParser :: forall e a r. (ShowErrorComponent e, Show a) => ParsecT e Text IO a -> Text -> IO ()
+playParser :: forall e a. (ShowErrorComponent e, Show a) => ParsecT e Text IO a -> Text -> IO ()
 playParser p txt = either errorBundlePretty show <$> runParserT p "stdin" txt >>= putStrLn
 
 parseSource :: (MonadFail m, MonadIO m, MonadError String m) => [FilePath] -> m [ParsedModule]

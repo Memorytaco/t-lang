@@ -19,7 +19,6 @@ import Control.Monad.Trans (lift)
 import Control.Monad.Identity (Identity)
 import Data.Void (Void)
 import Data.Bifunctor (first)
-import Control.Applicative (Const (..))
 
 type ParseDeclType c f = Declaration (TypeParser.ParseType c f) Symbol
 
@@ -61,7 +60,7 @@ defTyp r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> (typName <|> typOpName)
-    typVar = typName >>= return . TypAbs . Const
+    typVar = typName >>= return . TypAbs . (:> TypBot)
     typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=" <|> lookAhead (reservedOp ";;"))
     typFull = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
     typVariant :: ShowErrorComponent e => ParsecT e Text m (TypeParser.ParseType None Identity)

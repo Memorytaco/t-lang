@@ -65,7 +65,6 @@ onConstraint = cata \case
   TypPieF None t -> TypPie (Satisfiable True) t
   TypAbsF r1 r2 -> TypAbs r1 r2
   TypAppF r1 r2 rn -> TypApp r1 r2 rn
-  TypQueF r1 r2 -> TypQue r1 r2
   TypTupF rs -> TypTup rs
   TypRecF rs -> TypRec rs
   TypSumF rs -> TypSum rs
@@ -161,7 +160,6 @@ clean (TypLift (t :@ k)) = TypLift (clean t :@ k)
 clean (TypSum ts) = TypSum $ fmap (fmap clean) <$> ts
 clean (TypRec ts) = TypRec $ fmap clean <$> ts
 clean (TypTup ts) = TypTup $ clean <$> ts
-clean (TypQue a b) = TypQue (clean a) (clean b)
 clean qual@(TypAll _ _) =
   let (prefixs, mono) = getMonoType qual
    in uncurry (flip general) $ clean <$> reduce 0 (prefixs, mono)
@@ -250,10 +248,10 @@ unify (TypEqu _ _) _ = error "equi-recursive type is not supported now"
 unify TypBot t = (, t) <$> ask
 unify t TypBot = (, t) <$> ask
 
-unify (TypQue t1 t2) (TypQue g1 g2) = do
-  (q1, h1) <- unify t1 g1
-  (q2, h2) <- local (const q1) $ unify t2 g2
-  return (q2, TypQue h1 h2)
+-- unify (TypQue t1 t2) (TypQue g1 g2) = do
+--   (q1, h1) <- unify t1 g1
+--   (q2, h2) <- local (const q1) $ unify t2 g2
+--   return (q2, TypQue h1 h2)
 
 -- unify suports structural polymorphism
 -- | for handling unifying of tuple type
@@ -386,20 +384,20 @@ type GlobalEnv = (GammaEnv NormalKind, GammaEnv NormalKind)
 type TypingMonad m =
   RWST (Bounds Integer (NormalType NormalKind), GlobalEnv) () (GammaEnv NormalKind) m
 
-test_project, test_id, test_simple1, test_simple2 :: NormalType NormalKind
-test_project =
-  TypAll (1 :> TypBot)
-  . TypAll (1 :~ TypRec [(Label "text", localRef 1)])
-  $ TypQue (localRef 1) (localRef 2)
+-- test_project, test_id, test_simple1, test_simple2 :: NormalType NormalKind
+-- test_project =
+--   TypAll (1 :> TypBot)
+--   . TypAll (1 :~ TypRec [(Label "text", localRef 1)])
+--   $ TypQue (localRef 1) (localRef 2)
 
-test_a :: NormalType NormalKind -> NormalType NormalKind
-test_a t = TypAll (1:> TypBot)
-         . TypAll (1:> t)
-         $ TypQue (localRef 1) (localRef 2)
+-- test_a :: NormalType NormalKind -> NormalType NormalKind
+-- test_a t = TypAll (1:> TypBot)
+--          . TypAll (1:> t)
+--          $ TypQue (localRef 1) (localRef 2)
 
-test_id = TypAll (1 :> TypBot) $ TypQue (localRef 1) (localRef 1)
-test_simple1 = TypQue (nameRef "hello") (nameRef "world")
-test_simple2 = TypQue (nameRef "hello") (nameRef "hello")
+-- test_id = TypAll (1 :> TypBot) $ TypQue (localRef 1) (localRef 1)
+-- test_simple1 = TypQue (nameRef "hello") (nameRef "world")
+-- test_simple2 = TypQue (nameRef "hello") (nameRef "hello")
 
 test_simple3 :: NormalType NormalKind
 test_simple3 = TypAll (1 :> TypBot) (localRef 1)
@@ -468,7 +466,7 @@ typing (symbol'maybe, tree) = do
             (q2, getMonoType -> (prefix, _)) <-
               runReaderT (scopUnify [1 :> t1, 1 :> t2, 1 :> TypBot]
                                     (localRef 3)
-                                    (TypQue (localRef 2) (localRef 1)))
+                                    (TypApp (opRef "->") (localRef 2) [localRef 1]))
                           q
             return (q2, general (localRef 1) prefix)
       (q1, v1 :@ t1) <- m1
@@ -594,7 +592,6 @@ instance Rule () (NormalType k) where
   rewrite (TypSum lts) s = TypSum $ fmap (flip rewrite s <$>) <$> lts
   rewrite (TypPie ft t) s = TypPie (flip rewrite s <$> ft) $ rewrite t s
   rewrite (TypApp h1 h2 hs) s = TypApp (rewrite h1 s) (rewrite h2 s) $ flip rewrite s <$> hs
-  rewrite (TypQue t1 t2) s = TypQue (rewrite t1 s) (rewrite t2 s)
   rewrite (TypEqu fb t) s = TypEqu (flip rewrite s <$> fb)
                           $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
   rewrite (TypAll fb t) s = TypAll (flip rewrite s <$> fb)

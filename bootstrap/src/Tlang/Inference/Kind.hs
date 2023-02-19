@@ -75,12 +75,12 @@ getTypD _ = []
 -- | traverse into type structure and build the variable index. Also, it detects recursive type depending on whether it is named type.
 toDebruijn
   :: forall v c f r m. (MonadFail m, Traversable c, Traversable f)
-  => (Maybe Symbol :== Type Label Symbol () (Const Symbol) c f r) -- ^ It can lift named or unnamed type into deBruijn representation
+  => (Maybe Symbol :== Type Label Symbol () (Bound Symbol) c f r) -- ^ It can lift named or unnamed type into deBruijn representation
   -> ([Symbol], [Symbol]) -- ^ type environment, contains type name. (global environment, local environment)
   -> m (DeBruijnType c f r)  -- ^ return the standard representation
 toDebruijn (name :== tree) = runReaderT (cata go tree)
   where
-    go :: Base (Type Label Symbol () (Const Symbol) c f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r))
+    go :: Base (Type Label Symbol () (Bound Symbol) c f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r))
        -> ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r)
     go TypBotF = pure TypBot
     go TypUniF = pure TypUni
@@ -97,15 +97,21 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
                        fail $ "type variable " <> show s <> " doesn't occur in scop"
         Just v -> return $ TypRef v
     go (TypEquF _ _) = error "Equi-Recursive type notation is not supported now"
-    go (TypAllF (Const s) mt) = local (second (s:))
-                              $ TypAll (1 :> TypBot) <$> mt
-    go (TypAbsF (Const s) mt) = local (second (s:))
-                              $ TypAbs (1 :> TypBot) <$> mt
+    go (TypAllF bound mt) = handleBound TypAll bound mt
+    go (TypAbsF bound mt) = handleBound TypAbs bound mt
     go (TypTupF rs) = TypTup <$> sequence rs
     go (TypRecF trs) = TypRec <$> forM trs \(field, mt) -> (field,) <$> mt
     go (TypSumF trs) = TypSum <$> forM trs \(field, mt) -> (field,) <$> sequence mt
     go (TypAppF mt1 mt2 mtn) = TypApp <$> mt1 <*> mt2 <*> sequence mtn
     go (TypLiftF fmt) = TypLift <$> sequence fmt
+    handleBound f bound mt =
+      case bound of
+        s :> mr -> do
+          boundType <- mr
+          local (second (s:)) $ f (1 :> boundType) <$> mt
+        s :~ mr -> do
+          boundType <- mr
+          local (second (s:)) $ f (1 :~ boundType) <$> mt
 
 -- | remove meta variable and generalize it.
 generalize :: GraftKind -> NormalKind

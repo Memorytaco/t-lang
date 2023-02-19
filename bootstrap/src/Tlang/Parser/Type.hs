@@ -23,7 +23,7 @@ import Data.List (find)
 import Data.Bifunctor (first)
 import Text.Megaparsec hiding (Label)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT, MonadReader)
-import Control.Applicative (Alternative, Const (..))
+import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)
 import Data.Void (Void)
 import Control.Monad.Identity (Identity)
@@ -36,20 +36,24 @@ newtype Parser e m a = Parser
     deriving newtype (Alternative, MonadFail, MonadPlus)
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
-type ParseType c f = Type Label Symbol () (Const Symbol) c f LLVM.AST.Type.Type
+type ParseType c f = Type Label Symbol () (Bound Symbol) c f LLVM.AST.Type.Type
 type ExpressionToken = OperatorClass String (ParseType None Identity)
 
 instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) where
   type Expression ExpressionToken = (ParseType None Identity)
-  next = (OpRep . Left <$> recur <?> "Type Pair Operator")
+  next = (OpRep . Left <$> syntax <?> "Type Pair Operator")
      <|> (OpRep . Right <$> operator <?> "Type Operator")
      <|> (OpNorm <$> typNormal <?> "Type Name")
     where
       typNormal = identifier >>= return . TypRef . Symbol
       withSpecial v@(l, r) = reservedOp (pack l) *> pure (Left v)
                          <|> reservedOp (pack r) *> pure (Right v)
-      special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("[", "]"), ("<", ">"), ("{", "}")]
-      recur = reserved "rec" *> pure (Left ("rec", "rec")) <|> special
+      special = foldr1 (<|>) $ withSpecial
+            <$> [("(", ")"), ("[", "]"), ("<", ">"), ("{", "}")]
+      syntax  = reserved "forall" *> pure (Left ("forall", "forall"))
+            <|> reserved "rec" *> pure (Left ("rec", "rec"))
+            <|> reservedOp "\\" *> pure (Left ("\\", "\\"))
+            <|> special
 
   peek = lookAhead next
 
@@ -64,6 +68,8 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
         "{" -> record
         "<" -> variant
         "rec" -> recursive end
+        "forall" -> quantified end
+        "\\" -> abstract end
         _ -> do ntok <- peek
                 matchPairOperator (Right ("(", ")")) ntok
                   (next *> return TypUni) $ pratt (reservedOp (pack r) *> pure ()) (-100)
@@ -81,9 +87,6 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
       case assoc of
         Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
         Infix -> case s of
-                  "." -> case left of
-                    TypRef name -> pratt end r >>= return . TypAll (Const name)
-                    _ -> fail $ "expect type variable before operator \".\" but got: " <> show left
                   "*" -> pratt end r >>= \case
                     TypTup ls -> return . TypTup $ left: ls
                     right -> return $ TypTup [left, right]
@@ -99,6 +102,8 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
         "{" -> apply left <$> record
         "<" -> apply left <$> variant
         "rec" -> apply left <$> recursive end
+        "forall" -> apply left <$> quantified end
+        "\\" -> apply left <$> abstract end
         _   -> fail $ "Unrecognized " <> l <> ", It could be an internal error, please report to upstream."
     Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
 
@@ -110,7 +115,28 @@ recursive :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None
 recursive (lookAhead -> end) = do
   name <- Symbol <$> identifier <* reservedOp "."
   body <- pratt end (-100)
-  return $ TypEqu (Const name) body
+  return $ TypEqu (name :> TypBot) body
+
+quantified :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None Identity)
+quantified (lookAhead -> end) = do
+  let name = Symbol <$> identifier
+      boundTyp = pratt (void . lookAhead $ reservedOp ")") (-100)
+      scopBound = do
+        tok <- name
+        op <- reservedOp "~" *> pure (:>) <|> reservedOp "=" *> pure (:~)
+        op tok <$> boundTyp
+      bound = parens scopBound
+          <|> (:> TypBot) <$> name
+  bounds <- bound `someTill` reservedOp "."
+  body <- pratt end (-100)
+  return $ (foldr (.) id $ TypAll <$> bounds) body
+
+abstract :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None Identity)
+abstract (lookAhead -> end) = do
+  let name = Symbol <$> identifier
+  bounds <- ((:> TypBot) <$> name) `someTill` reservedOp "."
+  body <- pratt end (-100)
+  return $ (foldr (.) id $ TypAbs <$> bounds) body
 
 -- | record type parser
 record :: ShowErrorComponent e => Parser e m (ParseType None Identity)

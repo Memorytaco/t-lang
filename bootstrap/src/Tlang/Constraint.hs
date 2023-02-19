@@ -1,9 +1,7 @@
 module Tlang.Constraint
   ( Constraint (..)
   , ConstraintF (..)
-  , Bound (..)
   , (:<>) (..)
-  , Bounds
   )
 where
 
@@ -36,12 +34,6 @@ $(deriveBifunctor ''Constraint)
 
 data a :<> b = a :<> b deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- | an extended MLF relation
-data Bound name typ
-  = name :~ typ -- ^ equality relation
-  | name :> typ -- ^ lower bound or subsume
-  deriving (Show, Eq, Functor, Traversable, Foldable)
-
 -- data Prefix qual name typ
 --   = typ :~ name  -- ^ `name` is rigid bound to `typ`
 --   | typ :< name  -- ^ `name` is an instance of `typ`
@@ -58,10 +50,6 @@ data Bound name typ
 --   = AllOf [(label, typ)]        -- ^ for record
 --   | AnyOf [(label, Maybe typ)]  -- ^ for variant
 
--- type Prefixs qual name typ = [Prefix qual name typ]
-type Bounds name typ = [Bound name typ]
-
 -- $(deriveBifunctor ''Prefix)
 $(deriveBifunctor ''(:<>))
-$(deriveBifunctor ''Bound)
 
