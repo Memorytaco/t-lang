@@ -98,6 +98,7 @@ library
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
     , haskeline
     , libffi
@@ -153,6 +154,7 @@ executable t-lang-exe
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
     , haskeline
     , libffi
@@ -210,6 +212,7 @@ test-suite t-lang-test
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
     , haskeline
     , libffi

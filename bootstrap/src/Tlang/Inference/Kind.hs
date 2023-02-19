@@ -105,7 +105,6 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
     go (TypRecF trs) = TypRec <$> forM trs \(field, mt) -> (field,) <$> mt
     go (TypSumF trs) = TypSum <$> forM trs \(field, mt) -> (field,) <$> sequence mt
     go (TypAppF mt1 mt2 mtn) = TypApp <$> mt1 <*> mt2 <*> sequence mtn
-    go (TypQueF mt1 mt2) = TypQue <$> mt1 <*> mt2
     go (TypLiftF fmt) = TypLift <$> sequence fmt
 
 -- | remove meta variable and generalize it.
@@ -276,7 +275,6 @@ onAnnotate f = cata \case
   TypAppF r1 r2 rn -> TypApp r1 r2 rn
   TypTupF rs -> TypTup rs
   TypRecF rs -> TypRec rs
-  TypQueF r1 r2 -> TypQue r1 r2
   TypSumF rs -> TypSum rs
   TypLiftF (r :@ rk) -> TypLift (r :@ f rk)
 
@@ -451,10 +449,10 @@ genConstraint natural = pass . fmap (, nub) . cata go
     -- and unify the whole constraints at some point.
     -}
     go (TypRefF v@(Left sym)) = lookupSymbol sym >>= \sig -> return . pure $ TypRef v `annotate` sig
-    go (TypQueF mt1 mt2) = do
-      (s1, term1 :@ k1) <- mt1
-      (s2, term2 :@ k2) <- mt2
-      return (s1 <> s2 <> [k1 :<> KindType, k2 :<> KindType], TypQue term1 term2 `annotate` KindType)
+    -- go (TypQueF mt1 mt2) = do
+    --   (s1, term1 :@ k1) <- mt1
+    --   (s2, term2 :@ k2) <- mt2
+    --   return (s1 <> s2 <> [k1 :<> KindType, k2 :<> KindType], TypQue term1 term2 `annotate` KindType)
     go (TypAppF mt1 mt2 mtn) = do
       (s1, term1 :@ k1) <- mt1
       (s2, term2 :@ k2) <- mt2

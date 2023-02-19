@@ -87,7 +87,7 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
                   "*" -> pratt end r >>= \case
                     TypTup ls -> return . TypTup $ left: ls
                     right -> return $ TypTup [left, right]
-                  "->" -> TypQue left <$> pratt end r
+                  "->" -> TypApp (TypRef (Op "->")) left . (:[]) <$> pratt end r
                   _ -> pratt end r >>= return . TypApp (TypRef $ Op op) left . (:[])
         _ -> return $ TypApp (TypRef $ Op op) left []
     Left (Left (l, r)) ->

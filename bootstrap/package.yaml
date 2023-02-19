@@ -35,6 +35,7 @@ dependencies:
 - libffi
 - megaparsec
 - text
+- fgl
 
 ghc-options:
 - -Wall

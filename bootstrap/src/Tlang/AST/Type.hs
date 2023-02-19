@@ -24,8 +24,6 @@ data Type label name lit bind c f rep
   | TypRep rep                                    -- ^ type representation, the concrete one, will always be with kind '*'
   | TypLit lit                                    -- ^ type level literal, natural number, string and all that
   | TypRef name                                   -- ^ refer to named type or type variable
-  | TypQue (Type label name lit bind c f rep)                   -- ^ value constructor, "->"
-           (Type label name lit bind c f rep)
   | TypTup [Type label name lit bind c f rep]                   -- ^ builtin tuple
   | TypRec [(label, Type label name lit bind c f rep)]          -- ^ product type
   | TypSum [(label, Maybe (Type label name lit bind c f rep))]  -- ^ variant type, grouped label type
@@ -72,17 +70,6 @@ instance
   show (TypRec ts) =
     let mapper (a, b) = show a <> " = " <> show b
      in "{" <> intercalate ", " (mapper <$> ts) <> "}"
-  show (TypQue from to) =
-    let contra =
-          case from of
-            (TypQue _ _) -> "("<> show from <> ")"
-            (TypLift _) -> "("<> show from <> ")"
-            (TypPie _ _) -> "("<> show from <> ")"
-            (TypEqu _ _) -> "("<> show from <> ")"
-            (TypAll _ _) -> "("<> show from <> ")"
-            (TypAbs _ _) -> "("<> show from <> ")"
-            _ -> show from
-     in contra <> " -> " <> show to
   show (TypSum ts) =
     let mapper (a, b) = show a <> maybe "" ((" = " <>) . show) b
      in "<" <> intercalate ", " (mapper <$> ts) <> ">"

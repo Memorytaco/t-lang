@@ -214,4 +214,15 @@ packages:
       size: 795
   original:
     hackage: parser-combinators-1.3.0@sha256:edd54ba56cbae8fadbcceebcfef31b2c70a835e92e5eda41151b939c40647281,1570
+- completed:
+    commit: b8c417f470dd6ac25eebacd326c3b2db85e71f27
+    git: https://github.com/haskell/fgl
+    name: fgl
+    pantry-tree:
+      sha256: af0461f303ec946e6e944b8329c9bdd0e450353fb05f6df34249d20ae7b540c9
+      size: 3357
+    version: 5.8.1.1
+  original:
+    commit: b8c417f470dd6ac25eebacd326c3b2db85e71f27
+    git: https://github.com/haskell/fgl
 snapshots: []
