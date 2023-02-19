@@ -18,8 +18,8 @@ import Tlang.Subst (Rule (..), Subst (..))
 import Data.List (intersect, find, filter, lookup, sortBy, partition)
 import Data.Set (fromList)
 import qualified Tlang.Subst as S (Subst (..))
-import Data.Bifunctor (first, second)
-import Control.Monad.Except (MonadError (..))
+import Data.Bifunctor (first, second, bimap)
+import Control.Monad.Except (MonadError (..), runExceptT)
 
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable
@@ -526,13 +526,17 @@ bindCheck = para go
         go _ = return mempty
         catch node m = catchError m (throwError . BEContext node)
 
+-- collect introduced symbols and return its relevant type
 patternTyping
   :: forall k m
   . (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
   => ParsePattern (NormalType k)
   -> m (NormalType k :@ ParsePattern (NormalType k))
 patternTyping pat = do
-  -- vars <- runReaderT (bindCheck pat) mempty
+  vars <- runReaderT (runExceptT $ bindCheck pat) mempty >>= either (fail . show) return
+  let env = fmap localRef <$> zip vars [1..]
+      bounds = replicate (length vars) (1 :> TypBot)
+  modify $ bimap (bounds <>) (env <>)
   cata go pat
   where
     annotate p t = p :@ t
@@ -542,17 +546,14 @@ patternTyping pat = do
       prefixs <- fst <$> get
       modify (first ((1 :> TypBot):)) -- append a new prefix
       return (localRef (toInteger $ length prefixs + 1))
-    newBinding name typ = do
-      envs <- snd <$> get
-      case elem name $ fst <$> envs of
-        True -> fail $ "Redundant name binding: " <> show name
-        False -> modify (second ((name, typ):))
     go PatWildF = annotate PatWild <$> newAnyType
     go PatUnitF = return (PatUnit :@ TypUni)
     go (PatRefF name) = do
-      typ <- newAnyType
-      newBinding name typ
-      return (PatRef name :@ typ)
+      env <- snd <$> get
+      maybe (fail $ "can't find type for symbol " <> show name)
+            (return . (PatRef name :@))
+            $ lookup name env
+      -- return (PatRef name :@ typ)
     go (PatTupF tups) = do
       tupPairs <- sequence tups
       return (PatTup (valOf <$> tupPairs) :@ TypTup (typOf <$> tupPairs))

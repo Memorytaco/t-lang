@@ -88,7 +88,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
 
       withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) *> pure (Left v)
                          <|> (reservedOp (pack r) <|> reserved (pack r)) *> pure (Right v)
-      special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("let", "in"), ("{", "}")]
+      special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("let", "in"), ("{", "}"), ("[", "]")]
       sym = unpack <$> (reservedOp ":" <|> reservedOp "\\")
       typ = string "@()" *> return (ExTyp TypUni)
         <|> string "@(" *> (ExTyp <$> pType (void . lookAhead $ reservedOp ")") (-100) <* reservedOp ")")
@@ -105,7 +105,8 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   nud end = withOperator return \case
     (Left (Left  (l, r))) -> case l of
       "let" -> letExpr (lookAhead end)
-      "{" -> try record <|> ExAbs <$> bigLambda
+      "{" -> record
+      "[" -> ExAbs <$> bigLambda
       _ -> tunit <|> try tup <|> pratt (void . lookAhead $ reservedOp (pack r)) (-100) <* reservedOp (pack r)
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
     (Right s) -> getOperator s >>= \op@(Operator assoc _ r _) ->
@@ -121,7 +122,8 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   led end left = withOperator (handleNorm left) \case
     (Left (Left  (l, r))) -> case l of
       "let" -> letExpr (lookAhead end)
-      "{" -> try record <|> ExAbs <$> bigLambda >>= return . apply left
+      "{" -> record >>= return . apply left
+      "[" -> ExAbs <$> bigLambda >>= return . apply left
       _ -> do right <- tunit <|> try tup <|> pratt (void . lookAhead $ reservedOp (pack r)) (-100) <* reservedOp (pack r)
               return $ apply left right
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
@@ -163,14 +165,14 @@ letExpr end = do
 -- | lambda block parser
 bigLambda :: ShowErrorComponent e => Parser e m (ParseLambdaType None Identity)
 bigLambda = do
-  let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> [",", "=>", "|"] ) (-100)
+  let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> [",", "=", "|"] ) (-100)
       groupPat = fmap PatGrp $ iPattern `sepBy1` reservedOp ","
       seqPat = fmap PatSeq $ groupPat `sepBy1` reservedOp "|"
-      branch = (,) <$> seqPat <*> (reservedOp "=>" *> pratt (void . lookAhead $ reservedOp "}" <|> reservedOp "|" ) (-100))
+      branch = (,) <$> seqPat <*> (reservedOp "=" *> pratt (void . lookAhead $ reservedOp "]" <|> reservedOp "|" ) (-100))
   lambda <-
-    try ((`Lambda` []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "}") (-100))
+    try ((`Lambda` []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "]") (-100))
     <|> Lambda <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
-  void $ reservedOp "}"
+  void $ reservedOp "]"
   return lambda
 smallLambda :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseLambdaType None Identity)
 smallLambda end = do
