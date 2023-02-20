@@ -38,6 +38,7 @@ library
       Tlang.Constraint
       Tlang.Emit
       Tlang.Inference
+      Tlang.Inference.Graph
       Tlang.Inference.Kind
       Tlang.Inference.Type
       Tlang.Inference.TypeGen
