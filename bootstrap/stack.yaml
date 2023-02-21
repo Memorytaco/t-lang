@@ -92,6 +92,17 @@ extra-deps:
   - git: https://github.com/haskell/fgl
     commit: b8c417f470dd6ac25eebacd326c3b2db85e71f27
 
+    # visualize graph
+  - graphviz-2999.20.1.0
+  - colour-2.3.6
+  - dlist-1.0
+  - polyparse-1.13
+  - temporary-1.3
+  - wl-pprint-text-1.2.0.2
+  - random-1.2.1.1
+  - base-compat-0.12.2
+  - splitmix-0.1.0.4
+
 # Override default flag values for local packages and extra-deps
 # flags: {}
 

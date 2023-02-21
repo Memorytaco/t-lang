@@ -36,6 +36,7 @@ dependencies:
 - megaparsec
 - text
 - fgl
+- graphviz
 
 ghc-options:
 - -Wall

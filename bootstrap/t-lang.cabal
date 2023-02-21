@@ -101,6 +101,7 @@ library
     , containers >=0.6.5 && <0.7
     , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0
@@ -157,6 +158,7 @@ executable t-lang-exe
     , containers >=0.6.5 && <0.7
     , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0
@@ -215,6 +217,7 @@ test-suite t-lang-test
     , containers >=0.6.5 && <0.7
     , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0

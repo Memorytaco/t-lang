@@ -2,3 +2,5 @@
 *~
 *.o
 a.out
+*.dot
+*.png
