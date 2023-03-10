@@ -288,4 +288,25 @@ packages:
       size: 1519
   original:
     hackage: splitmix-0.1.0.4
+- completed:
+    hackage: optparse-applicative-0.17.0.0@sha256:0713e54cbb341e5cae979e2ac441eb3a5ff42e303001f432bd58c19e5638bdda,4967
+    pantry-tree:
+      sha256: 3b4398845ee6718fe2303870a5ab75bd190eb712fed2f22caaae30f790c490fd
+      size: 3124
+  original:
+    hackage: optparse-applicative-0.17.0.0
+- completed:
+    hackage: ansi-wl-pprint-0.6.9@sha256:212144ea0623b1170807a4162db05d87f26cf10b334aeadd0edb377aba06a1ce,2425
+    pantry-tree:
+      sha256: 0a2390ba39c3b84f68e382cb25b58cea66d61a89dab818bb5e2a6c12642e2e21
+      size: 472
+  original:
+    hackage: ansi-wl-pprint-0.6.9
+- completed:
+    hackage: ansi-terminal-0.11.4@sha256:410737137c798e23339a08435a5511785ebf1db08700e37debbd7801cf73fc82,3584
+    pantry-tree:
+      sha256: 49bc6ef92292ee8b663a40cf5170af1efaaa4ed84155b65ad41eabf1faf9b18f
+      size: 1462
+  original:
+    hackage: ansi-terminal-0.11.4
 snapshots: []

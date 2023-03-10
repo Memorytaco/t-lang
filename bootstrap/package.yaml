@@ -37,6 +37,7 @@ dependencies:
 - text
 - fgl
 - graphviz
+- optparse-applicative
 
 ghc-options:
 - -Wall

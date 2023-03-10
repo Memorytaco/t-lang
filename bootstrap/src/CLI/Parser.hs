@@ -1,43 +1,33 @@
 module CLI.Parser
-  ( CommandLineOption (..)
-  , command
+  ( Command (..)
+  , commands
+  , getcommand
   )
 where
 
-import Text.Parsec
-import Text.Parsec.String
+import Options.Applicative
 
-data CommandLineOption =
-    REPL
-  | HELP (Maybe String)
-  | COMPILE String (Maybe String)
-  deriving (Show, Eq)
+data Command
+  = C'help (Maybe String)
+  | C'compile String (Maybe String)
+  | C'repl
+  | C'none
+  deriving (Show, Eq, Ord)
 
-help :: Parser CommandLineOption
-help = do
-  _ <- string "help" <|> try (string "--help") <|> string "-h" <?> "Help token"
-  spaces
-  topic <- optionMaybe (try $ many1 anyChar)
-  return $ HELP topic
+-- | help subcommand
+chelp = C'help
+  <$> (optional $ strArgument (metavar "TOPIC" <> help "show info on the topic"))
 
-repl :: Parser CommandLineOption
-repl = do
-  _ <- string "repl" <?> "Repl token"
-  return REPL
+crepl = pure C'repl
 
-identifier :: Parser String
-identifier = do
-  let symbol = alphaNum <|> char '.' <|> char '_' <|> char '-'
-  many1 symbol
+ccompile = C'compile
+  <$> strArgument (metavar "src" <> help "source file")
+  <*> (optional $ strArgument (metavar "dst" <> help "object file"))
 
-compile :: Parser CommandLineOption
-compile = do
-  string "compile" >> spaces
-  outs <- sepBy1 identifier spaces <?> "file list"
-  return $ case outs of
-    [a] -> COMPILE a Nothing
-    [a, b] -> COMPILE a (Just b)
-    (a:b:_) -> COMPILE a (Just b)
+commands =
+  hsubparser $
+      command "help" (info chelp $ progDesc "help with designated topic")
+  <>  command "repl" (info crepl $ progDesc "start read-eval-loop")
+  <>  command "compile" (info ccompile $ progDesc "compile source file")
 
-command :: [String] -> Either ParseError CommandLineOption
-command ags = parse (try help <|> try repl <|> (compile <?> "Compile token")) "commandline" $ foldl1 (\a b -> a <> " " <> b) ags
+getcommand = execParser (info ((commands <|> pure C'none) <**> helper) $ progDesc "compiler and interpreter for the language")

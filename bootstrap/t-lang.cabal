@@ -108,6 +108,7 @@ library
     , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
     , text
@@ -165,6 +166,7 @@ executable t-lang-exe
     , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
     , t-lang
@@ -224,6 +226,7 @@ test-suite t-lang-test
     , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
     , t-lang

@@ -103,6 +103,11 @@ extra-deps:
   - base-compat-0.12.2
   - splitmix-0.1.0.4
 
+    # command line
+  - optparse-applicative-0.17.0.0
+  - ansi-wl-pprint-0.6.9
+  - ansi-terminal-0.11.4
+
 # Override default flag values for local packages and extra-deps
 # flags: {}
 
