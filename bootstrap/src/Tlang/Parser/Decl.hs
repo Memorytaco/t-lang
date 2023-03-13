@@ -27,11 +27,11 @@ defFn r = do
   void $ reserved "fn"
   name <- Symbol <$> identifier
   void $ reservedOp ":" <|> fail "fn declaration require type signature"
-  sig <- TypeParser.unParser (fst r) (void . lookAhead . choice $ reservedOp <$> ["{", "=", ";;"]) (-100)
-  next <- choice $ reservedOp <$> ["{", "=", ";;"]
+  sig <- TypeParser.unParser (fst r) (void . lookAhead . choice $ reservedOp <$> ["[", "=", ";;"]) (-100)
+  next <- choice $ reservedOp <$> ["[", "=", ";;"]
   case next of
     ";;" -> return $ FnD name sig FnDefault
-    "{" -> FnDecl <$> lambda <* reservedOp ";;" >>= return . FnD name sig
+    "[" -> FnDecl <$> lambda <* reservedOp ";;" >>= return . FnD name sig
     "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" >>= return . FnD name sig
     _ -> error "impossible in Tlang.Parser.Decl.defFn"
   where
@@ -48,27 +48,48 @@ defLet r = do
     Just typ -> LetD name . ExAnno . (:@ typ) <$> expr
     Nothing -> LetD name <$> expr
 
-defTyp :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
-defTyp r = do
-  void $ reserved "data"
-  (try norm <|> phantom) <* reservedOp ";;"
+defTypAlias :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defTypAlias r = do
+  void $ reserved "type"
+  aliaId <- name
+  vars <- typVarlist
+  body <- typBody
+  void $ reservedOp ";;"
+  return (TypF . aliaId $ vars body)
   where
-    typName = Symbol <$> identifier
-    typOpName = do
+    typName = Symbol <$> identifier <|> do
       op <- lookAhead operator
       if head op == ':'
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    name = (:==) <$> (typName <|> typOpName)
-    typVar = typName >>= return . TypAbs . (:> TypBot)
-    typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=" <|> lookAhead (reservedOp ";;"))
-    typFull = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
-    typVariant :: ShowErrorComponent e => ParsecT e Text m (TypeParser.ParseType None Identity)
-    typVariant = TypeParser.getParser (TypeParser.dataVariant . lookAhead . void $ reservedOp ";;") (fst r)
-    typBody = try typVariant <|> typFull
+    name = (:==) <$> typName
+    typVar = Symbol <$> identifier >>= return . TypAbs . (:> TypBot)
+    typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=")
+    typBody = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
 
-    phantom = fmap TypD $ name <*> (typVarlist <*> return TypBot)
-    norm = fmap TypD $ name <*> (typVarlist <*> typBody)
+defData :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defData r = do
+  void $ reserved "data"
+  dataId <- name
+  vars <- typVarlist
+  body <- typVariant <|> typRec <|> pure TypBot
+  void $ reservedOp ";;"
+  return (TypD . dataId $ vars body)
+  where
+    typName = Symbol <$> identifier <|> do
+      op <- lookAhead operator
+      if head op == ':'
+         then Op <$> operator
+         else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
+    name = (:==) <$> typName
+    typVar = Symbol <$> identifier >>= return . TypAbs . (:> TypBot)
+    typVarlist = foldr (.) id <$> manyTill typVar (void . lookAhead $ reservedOp "|" <|> reservedOp "{" <|> reservedOp ";;")
+    typRec = reservedOp "{" *> TypeParser.getParser TypeParser.record (fst r)
+    typVariant = TypSum <$> some (reservedOp "|" *> field)
+      where
+        fieldName = fmap Tlang.AST.Label $ identifier <|> operator
+        field = (,) <$> fieldName <*> optional
+          (reservedOp ":" *> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "|" <|> reservedOp ";;") (-100))
 
 defFixity :: ShowErrorComponent e => ParsecT e Text m (Operator String)
 defFixity = defUnifix <|> defInfix
@@ -90,7 +111,7 @@ defFixity = defUnifix <|> defInfix
 declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity)
 declaration = do
   r <- lift get
-  defFn r <|> defLet r <|> defTyp r <|> do
+  defFn r <|> defLet r <|> defTypAlias r <|> defData r <|> do
     op@(Operator _ _ _ s) <- defFixity
     lift . modify $ \(tys, trs) -> if head s == ':' then (op:tys, trs) else (tys, op:trs)
     void $ reservedOp ";;"

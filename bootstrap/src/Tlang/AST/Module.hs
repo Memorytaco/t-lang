@@ -33,6 +33,7 @@ data Use info = Use (ModuleID, ModuleID) [info] deriving (Show, Eq, Functor)
 data Declaration typ name
   = FixD (Operator String)  -- ^ fixity of user defined operator
   | TypD (name :== typ)     -- ^ user defined data type
+  | TypF (name :== typ)     -- ^ type alias, aka, type level function
   | LetD name (Expr typ ((:@) typ) name)  -- ^ toplevel binding, used to declare value and function
   | FnD name typ (FnSymbol typ name)      -- ^ function marked with `fn` keywords, used to communicate between c and host lang
   deriving (Show, Eq)

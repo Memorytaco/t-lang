@@ -14,6 +14,7 @@ import Data.Functor.Foldable
 import Data.Bifunctor (first, second, bimap)
 import Data.List (sortBy, find, union, deleteBy, nub)
 import Control.Monad.Identity (Identity)
+import Data.Coerce (coerce)
 
 -- graphviz
 import Data.GraphViz hiding (DotGraph)
@@ -31,7 +32,7 @@ import qualified Data.Text.IO as Text
 -- play only, delete it later >
 
 data GraphRel
-  = EqualRel  -- exact same structure
+  = EqualRel    -- exact same structure
   | SimilarRel  -- similar relation
   | GraftRel    -- graft instance relation
   | MergeRel    -- merge instance relation
@@ -51,8 +52,8 @@ data GEdge a
 
 -- | Constraint edge
 data GConstraint
-  = CUnify    -- ^ unify constraint edge
-  | CInstance -- ^ instance constraint edge
+  = CUnify        -- ^ unify constraint edge
+  | CInstance Int -- ^ instance constraint edge
   deriving (Show, Eq, Ord)
 
 -- | Used both for instance relation and permission
@@ -76,7 +77,6 @@ data Perm
 -- | label for node
 data GNode typ
   = GNode     -- ^ scheme node, the **G** node, with sort *scheme*
-  -- | GUnify    -- ^ unify node, to replace the unify edge
   | GType typ -- ^ type node, with sort *type*
   deriving (Show, Eq, Ord, Functor)
 
@@ -93,11 +93,13 @@ data GNodeLabel lit label rep name
   | NodeHas label -- type label node, depends on its parent, can have one or no sub graph, arity 1
   | NodeApp -- application node, minimal arity 2
   | NodeAbs -- abstraction node, arity 2
+  | NodeCons name NodeArity
   deriving (Show, Eq)
 
 -- | mark arity info of constructor
 newtype NodeArity = NodeArity [Variance] deriving (Show, Eq)
-data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)
+arityOf :: NodeArity -> [Variance]
+arityOf = coerce
 
 instance (Labellable name, Show label) => Labellable (GNodeLabel lit label rep name) where
   toLabelValue NodeUni = StrLabel "()"
@@ -125,7 +127,7 @@ instance Show a => Labellable (GEdge a) where
   toLabelValue (GBind perm ix (Just name)) = StrLabel . pack $ show ix <> ":" <> show name
   toLabelValue (GBind perm ix Nothing)  = StrLabel . pack $ show ix
   toLabelValue (GOperate CUnify) = StrLabel "**Unify**"
-  toLabelValue (GOperate CInstance) = StrLabel "**Instance**"
+  toLabelValue (GOperate (CInstance i)) = StrLabel . pack $ show i <> " |>"
 
 runToGraph
   :: (MonadFail m, Eq name, Traversable f, Traversable c)
@@ -402,7 +404,7 @@ sReach g n1 n2 = elem n2 . dfs [n1] $ elfilter isStructureEdge g
 -- | first order term unification, operates on function nodes, return the proper unified node
 (==?)
   :: ( MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name), [Node]) m, MonadFail m
-     , Eq name, Eq label, Eq rep, Eq lit, Ord label
+     , Eq name, Eq rep, Eq lit, Ord label
      )
   => Node -> Node -> m Node
 (==?) n1 n2

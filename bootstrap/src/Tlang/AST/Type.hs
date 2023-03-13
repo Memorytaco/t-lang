@@ -6,6 +6,8 @@ module Tlang.AST.Type
   , Label (..)
   , (:==) (..)
 
+  , Variance (..)
+
   , Bound (..)
   , Bounds
 
@@ -90,8 +92,11 @@ data Bound name typ
   deriving (Show, Eq, Functor, Traversable, Foldable)
 $(deriveBifunctor ''Bound)
 
--- type Prefixs qual name typ = [Prefix qual name typ]
+-- | type Prefixs qual name typ = [Prefix qual name typ]
 type Bounds name typ = [Bound name typ]
+
+-- | type variance
+data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)
 
 -- | named type. assign name to type and allow
 -- recursive type and type level lambda also.
