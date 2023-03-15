@@ -12,7 +12,7 @@ import Tlang.AST.Expr as Expr
 import Tlang.AST.Module as Module
 import Tlang.AST.Type as Type
 import Tlang.AST.Operator as Operator
-
+import Data.GraphViz
 
 -- | a place holder for every parametric data type
 data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)
@@ -28,3 +28,8 @@ instance Ord Symbol where
   compare (Op s1) (Symbol s2) = compare s1 s2
   compare (Symbol s1) (Op s2) = compare s1 s2
   compare (Op s1) (Op s2) = compare s1 s2
+
+instance Labellable Symbol where
+  toLabelValue (Symbol name) = toLabelValue name
+  toLabelValue (Op name) = toLabelValue name
+

@@ -13,6 +13,7 @@ This module build up abstraction of record type and sum type.
 import Tlang.Type.Primitive
 import Tlang.Type.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
 import qualified LLVM.AST.Type as AST (Type (..))
+import Data.Maybe (fromMaybe)
 
 data ConcreteType t f where
   -- | We have BaseType contained, and it is a concrete type
@@ -48,7 +49,7 @@ instance
 
 instance (Show a) => Show (SeqT a) where
   show (SeqVector a i) = "<" <> show a <> " x " <> show i <> ">"
-  show (SeqArray a i) = "[" <> show a <> " x " <> show (maybe 0 id i) <> "]"
+  show (SeqArray a i) = "[" <> show a <> " x " <> show (fromMaybe 0 i) <> "]"
 
 instance LLVMTypeClass a => LLVMTypeClass (SeqT a) where
   classOf (SeqVector a _) = classOf a
@@ -58,5 +59,5 @@ instance (LLVMTypeClass a, LLVMTypeEncode a) => LLVMTypeEncode (SeqT a) where
   encode v@(SeqVector a i) = case classOf v of
                                Aggregate -> AST.ArrayType (fromInteger i) $ encode a
                                Primitive -> AST.VectorType (fromInteger i) $ encode a
-  encode (SeqArray a i) = AST.ArrayType (fromInteger $ maybe 0 id i) $ encode a
+  encode (SeqArray a i) = AST.ArrayType (fromInteger $ fromMaybe 0 i) $ encode a
 

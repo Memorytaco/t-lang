@@ -12,14 +12,15 @@ where
 import Text.Megaparsec
 
 import Tlang.Parser.Lexer
-import Tlang.Parser.Decl (declaration)
 import Tlang.Parser.Type (ParseType)
-import Tlang.Parser.Decl (ParseDeclType)
+import Tlang.Parser.Decl (ParseDeclType, declaration)
 
 import Tlang.AST
 
+import Data.Functor (($>), (<&>))
 import Data.Text (Text)
 import Data.List (find)
+import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import Control.Monad (void, forM)
 import Control.Monad.Identity (Identity)
@@ -45,7 +46,7 @@ use = do
   let prefix = maybe (name, name) (name,) qualified
   items <- optional . parens $ item `sepBy` symbol ","
   void $ reservedOp ";;"
-  return (pos, Use prefix (maybe [] id items))
+  return (pos, Use prefix $ fromMaybe [] items)
 
 parseModule :: (ShowErrorComponent e, Monad m)
             => [ParsedModule] -> ModuleSource -> ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParsedModule, [ParsedModule])
@@ -58,7 +59,7 @@ parseModule ms source = do
         let msg = "module " <> show quali <> " doesn't contain definition for " <> show sym
                 <> " or module " <> show origin <> " doesn't exist"
         dec <- maybe (fail msg) return $ lookUpModule origin ms >>= lookUpName sym
-        lift (putIntoEnv dec) *> return (sym, dec)
+        lift (putIntoEnv dec) $> (sym, dec)
       return $ Use prefix syms
   decls <- many declaration
   eof
@@ -96,5 +97,5 @@ runModule source op ms txt = flip runStateT op $ runParserT (parseModule ms sour
 
 playModule :: ([Operator String], [Operator String]) -> [ParsedModule] -> Text -> IO ()
 playModule op ms txt =
-  let m = runModule @Void "stdin" op ms txt >>= return . fst
-   in either errorBundlePretty show <$> m >>= putStrLn
+  let m = runModule @Void "stdin" op ms txt <&> fst
+   in m >>= putStrLn . either errorBundlePretty show

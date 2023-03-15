@@ -22,11 +22,12 @@ import Tlang.AST
 
 import Text.Megaparsec
 import Text.Megaparsec.Char (char, string)
-import Data.Text (Text, pack, unpack)
-import Control.Monad.Reader (ReaderT (..), ask, MonadReader, runReaderT)
+import Control.Monad.Reader (ReaderT (..), ask, asks, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)
 import Control.Monad.Identity (Identity)
+import Data.Functor (($>), (<&>))
+import Data.Text (Text, pack, unpack)
 import Data.List (find)
 import Data.Void (Void)
 import Data.Bifunctor (first)
@@ -82,17 +83,17 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
       literal = try floating <|> nat <|> str
 
       name = ExRef . Symbol <$> identifier
-      vlabel = char '`' *> identifier >>= return . flip ExVar Nothing . Symbol
-      field = char '.' *> identifier >>= return . ExSel . Symbol
+      vlabel = char '`' *> identifier <&> flip ExVar Nothing . Symbol
+      field = char '.' *> identifier <&> ExSel . Symbol
       variable = name <|> vlabel <|> field
 
-      withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) *> pure (Left v)
-                         <|> (reservedOp (pack r) <|> reserved (pack r)) *> pure (Right v)
+      withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) $> Left v
+                         <|> (reservedOp (pack r) <|> reserved (pack r)) $> Right v
       special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("let", "in"), ("{", "}"), ("[", "]")]
-      sym = unpack <$> (reservedOp ":" <|> reservedOp "\\")
-      typ = string "@()" *> return (ExTyp TypUni)
+      sym = reservedOp ":" <|> reservedOp "\\" <&> unpack
+      typ = string "@()" $> ExTyp TypUni
         <|> string "@(" *> (ExTyp <$> pType (void . lookAhead $ reservedOp ")") (-100) <* reservedOp ")")
-        <|> string "@{" *> (ExTyp <$> (fst <$> ask >>= liftParser . TypParser.getParser TypParser.record))
+        <|> string "@{" *> (asks fst >>= liftParser . TypParser.getParser TypParser.record <&> ExTyp)
         <|> string "@" *> (ExTyp . TypRef . Symbol <$> identifier)
 
   peek = lookAhead next
@@ -100,7 +101,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   getPower = \case
     (OpNorm _) -> return (999, 999)
     (OpRep (Left _)) -> return (999, 999)
-    (OpRep (Right op)) -> getOperator op >>= return . getBindPower
+    (OpRep (Right op)) -> getOperator op <&> getBindPower
 
   nud end = withOperator return \case
     (Left (Left  (l, r))) -> case l of
@@ -122,8 +123,8 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   led end left = withOperator (handleNorm left) \case
     (Left (Left  (l, r))) -> case l of
       "let" -> letExpr (lookAhead end)
-      "{" -> record >>= return . apply left
-      "[" -> ExAbs <$> bigLambda >>= return . apply left
+      "{" -> record <&> apply left
+      "[" -> bigLambda <&> apply left . ExAbs
       _ -> do right <- tunit <|> try tup <|> pratt (void . lookAhead $ reservedOp (pack r)) (-100) <* reservedOp (pack r)
               return $ apply left right
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
@@ -132,7 +133,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
         Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
         Infix -> case s of
             ":" -> ExAnno . (left :@) <$> pType end (-100)
-            _ -> pratt end r >>= return . ExApp (ExRef $ Op s) left . (:[])
+            _ -> pratt end r <&> ExApp (ExRef $ Op s) left . (:[])
         _ -> case s of
             "\\" -> apply left . ExAbs <$> smallLambda end
             _ -> return $ ExApp (ExRef $ Op s) left []
@@ -185,7 +186,7 @@ record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType None Ide
 record = do
   let rprefix :: ShowErrorComponent e => Parser e m String -> Parser e m String
       rprefix m = optional (oneOf ['&', '.']) >>= maybe m (\a -> (a:) <$> m)
-      rlabel = (try $ Symbol <$> rprefix identifier) <|> Op <$> operator
+      rlabel = try (Symbol <$> rprefix identifier) <|> Op <$> operator
       field = (,) <$> (rlabel <* reservedOp "=") <*> pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
       -- rowof = RowOf <$> (reservedOp "..." *> pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100))
   ExRec <$> field `sepBy1` reservedOp "," <* reservedOp "}"
@@ -194,14 +195,14 @@ tup =
   let field = pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)
    in fmap ExTup $ field <* reservedOp "," >>= \v -> (v:) <$> field `sepBy1` reservedOp "," <* reservedOp ")"
 
-tunit = reservedOp ")" *> return ExUnit
+tunit = reservedOp ")" $> ExUnit
 
 getOperator :: String
             -> Parser e m (Operator String)
-getOperator "\\" = return $ Operator Unifix (999) (999) "\\"
+getOperator "\\" = return $ Operator Unifix 999 999 "\\"
 getOperator ":" = return $ Operator Infix (-15) (-20) ":"
 getOperator op = do
-  stat <- snd <$> ask
+  stat <- asks snd
   case find (\(Operator _ _ _ n) -> n == op) stat of
     Just a -> return a
     Nothing -> fail $ "Operator " <> show op <> " is undefined in term level."

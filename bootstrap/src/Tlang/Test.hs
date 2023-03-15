@@ -40,7 +40,7 @@ playUnify env l r = do
       putStrLn $ "right: " <> show rt2
       (t1, t2) <- (,) <$> runReaderT (localKind rt1) (env <> defaultEnv)
                       <*> runReaderT (localKind rt2) (env <> defaultEnv)
-      show . fmap clean <$> runReaderT (unify t1 t2) [] >>= putStrLn
+      runReaderT (unify t1 t2) [] >>= print . fmap clean
       -- show <$> runReaderT (unify t1 t2) [] >>= putStrLn
 
 playInfer

@@ -16,7 +16,6 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as Lex
 import Data.Text (Text)
-import qualified Data.Text as Text
 
 type TextParser e m = (ShowErrorComponent e, MonadParsec e Text m)
 
@@ -48,10 +47,10 @@ identifier :: (TextParser e m, MonadFail m) => m String
 identifier = lexeme $ do
   name <- do
     c <- char '_' <|> letterChar <?> "identifier prefix"
-    cs <- (many $ char '_' <|> alphaNumChar) <?> "identifier suffix"
+    cs <- many (char '_' <|> alphaNumChar) <?> "identifier suffix"
     return (c : cs)
   let reservedNames = ["fn", "let", "in", "data", "module" ]
-  if not (name `elem` reservedNames)
+  if name `notElem` reservedNames
      then return name
      else fail $ "unexpected reserved name " <> name
 

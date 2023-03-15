@@ -11,14 +11,15 @@ import Tlang.Parser.Lexer
 import qualified Tlang.Parser.Expr as ExprParser
 import qualified Tlang.Parser.Type as TypeParser
 
-import Text.Megaparsec
-import Data.Text (Text)
 import Control.Monad (void)
 import Control.Monad.Trans.State (StateT, get, modify, evalStateT)
 import Control.Monad.Trans (lift)
 import Control.Monad.Identity (Identity)
-import Data.Void (Void)
 import Data.Bifunctor (first)
+import Data.Functor ((<&>), ($>))
+import Data.Text (Text)
+import Data.Void (Void)
+import Text.Megaparsec
 
 type ParseDeclType c f = Declaration (TypeParser.ParseType c f) Symbol
 
@@ -31,8 +32,8 @@ defFn r = do
   next <- choice $ reservedOp <$> ["[", "=", ";;"]
   case next of
     ";;" -> return $ FnD name sig FnDefault
-    "[" -> FnDecl <$> lambda <* reservedOp ";;" >>= return . FnD name sig
-    "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" >>= return . FnD name sig
+    "[" -> FnDecl <$> lambda <* reservedOp ";;" <&> FnD name sig
+    "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" <&> FnD name sig
     _ -> error "impossible in Tlang.Parser.Decl.defFn"
   where
     lambda = ExprParser.getParser ExprParser.bigLambda r
@@ -63,7 +64,7 @@ defTypAlias r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = Symbol <$> identifier >>= return . TypAbs . (:> TypBot)
+    typVar = identifier <&> TypAbs . (:> TypBot) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=")
     typBody = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
 
@@ -82,7 +83,7 @@ defData r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = Symbol <$> identifier >>= return . TypAbs . (:> TypBot)
+    typVar = identifier <&> TypAbs . (:> TypBot) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void . lookAhead $ reservedOp "|" <|> reservedOp "{" <|> reservedOp ";;")
     typRec = reservedOp "{" *> TypeParser.getParser TypeParser.record (fst r)
     typVariant = TypSum <$> some (reservedOp "|" *> field)

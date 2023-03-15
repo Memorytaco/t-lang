@@ -1,4 +1,25 @@
 module Tlang.Inference.Type
+  ( localKind
+  , onConstraint
+  , cookExpr
+  , cookPattern
+  , cookLambda
+  , nameRef
+  , opRef
+  , localRef
+  , sortKey
+
+  , clean
+  , scopUnify
+  , unify
+  , typing
+  , runTyping
+  , bindCheck
+
+  , NormalConstraint
+  , NormalType
+  , PatternError
+  )
 where
 
 {-
@@ -8,23 +29,23 @@ This module resolves type for expression, function definition or declaration.
 -}
 
 import Tlang.AST
+import Tlang.Subst (Rule (..), Subst (..))
 
+import Control.Monad.Except (MonadError (..), runExceptT)
 import Control.Monad.State
-
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.RWS (RWST (..))
-import Control.Monad.Reader (MonadReader (..), ReaderT (..))
-import Tlang.Subst (Rule (..), Subst (..))
-import Data.List (intersect, find, filter, lookup, sortBy, partition)
+import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
+import Data.Functor ((<&>))
+import Data.List (sortBy)
 import Data.Set (fromList)
-import qualified Tlang.Subst as S (Subst (..))
-import Data.Bifunctor (first, second, bimap)
-import Control.Monad.Except (MonadError (..), runExceptT)
+import Data.Bifunctor (first, bimap)
 
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable
 
 import qualified LLVM.AST.Type
+import qualified Tlang.Subst as S (Subst (..))
 
 import Tlang.Parser.Type (ParseType)
 import Tlang.Parser.Expr (ParseExpr, ParseExprType, ParseLambda, ParseLambdaType)
@@ -87,7 +108,7 @@ cookExpr = cata go
       ftyp <- fst <$> runReaderT (kinding (ntyp, 0)) env
       return . ExTyp $ onConstraint ftyp
     go (ExTupF lm) = ExTup <$> sequence lm
-    go (ExRecF es) = fmap ExRec . sequence $ fmap sequence es
+    go (ExRecF es) = ExRec <$> mapM sequence es
     go (ExAbsF (cookLambda -> lm)) = ExAbs <$> lm
     go (ExAppF mv1 mv2 mvn) = ExApp <$> mv1 <*> mv2 <*> sequence mvn
     go (ExLetF pat mv1 mv2) = ExLet <$> cookPattern pat <*> mv1 <*> mv2
@@ -105,7 +126,7 @@ cookPattern = cata go
     go (PatSymF name) = return $ PatSym name
     go (PatLitF lit) = return $ PatLit lit
     go (PatTupF lm) = PatTup <$> sequence lm
-    go (PatRecF es) = fmap PatRec . sequence $ fmap sequence es
+    go (PatRecF es) = PatRec <$> mapM sequence es
     go (PatSumF m1 lm) = PatSum <$> m1 <*> sequence lm
     go (PatViewF name mp) = PatView name <$> mp
     go (PatBindF name mp) = PatBind name <$> mp
@@ -127,6 +148,7 @@ localRef :: b -> Type label (Either a b) lit bind c f rep
 localRef = TypRef . Right
 
 -- | convert well formed type into underlying type system
+resolve :: a
 resolve = undefined
 
 -- | [p3, p2, p1], index starts from 1
@@ -144,11 +166,12 @@ updatePrefix ix u ls
   | length ls < fromInteger ix = error $ "exceeding index of " <> show ix
   | ix <= 0 = error "negative or zero index"
   | otherwise =
-    let (h, v:hs) = splitAt (length ls - fromInteger ix) ls
-     in h <> (u v:hs)
+    case splitAt (length ls - fromInteger ix) ls of
+      (h, v:hs) -> h <> (u v:hs)
+      _ -> error "index overflow"
 
-shift :: (Integral reserve, Integral ix) => reserve -> ix -> NormalType k -> NormalType k
-shift (toInteger -> reserve) (toInteger -> i) t
+shift :: Integer -> Integer -> NormalType k -> NormalType k
+shift reserve i t
   | reserve < 0 = error "invalid reserved number"
   | otherwise =
     let list = foldr (.) id $ S.Cons () . TypRef . Right <$> [1..reserve]
@@ -170,7 +193,7 @@ clean qual@(TypAll _ _) =
     reduce reserve ((_ :~ t):ts, typeMono) =
       let nts = (\(ix, ft) -> substitute ix (shift reserve ix t) <$> ft) <$> zip [1..] ts
        in reduce reserve (nts, substitute (toInteger $ length ts + 1)
-                                          (shift reserve (length ts + 1) t) typeMono)
+                                          (shift reserve (toInteger $ length ts + 1) t) typeMono)
     reduce reserve (pre@(_ :> _):ts, typeMono) =
       let (pres, ntype) = reduce (reserve + 1) (ts, typeMono)
        in (pre:pres, ntype)
@@ -193,9 +216,8 @@ abstractof (TypLift (t1 :@ _)) (TypLift (t2 :@ _)) = abstractof t1 t2
 abstractof t1 (TypLift (t2 :@ _)) = abstractof t1 t2
 abstractof (TypLift (t1 :@ _)) t2 = abstractof t1 t2
 
-abstractof (TypRef (Right n1)) (TypRef (Right n2)) = do
-  return ()
 -- TODO: finish the checking
+abstractof (TypRef (Right _n1)) (TypRef (Right _n2)) = error "TODO: finish the checking"
 abstractof _ _ = return ()
 
 sortKey :: Ord key => [(key, val)] -> [(key, val)]
@@ -210,7 +232,7 @@ substitute ix t =
 
 -- | add binding to a monotype
 general :: NormalType k -> Bounds Integer (NormalType k) -> NormalType k
-general mono qs = foldr (.) id (TypAll <$> qs) $ mono
+general mono qs = foldr ($) mono (TypAll <$> qs)
 
 -- | split bounds
 split :: Int -> Bounds Integer (NormalType k) -> (Bounds Integer (NormalType k), Bounds Integer (NormalType k))
@@ -245,8 +267,8 @@ unify (TypEqu _ _) (TypEqu _ _) = error "equi-recursive type is not supported no
 unify _ (TypEqu _ _) = error "equi-recursive type is not supported now"
 unify (TypEqu _ _) _ = error "equi-recursive type is not supported now"
 
-unify TypBot t = (, t) <$> ask
-unify t TypBot = (, t) <$> ask
+unify TypBot t = asks (, t)
+unify t TypBot = asks (, t)
 
 -- unify (TypQue t1 t2) (TypQue g1 g2) = do
 --   (q1, h1) <- unify t1 g1
@@ -256,14 +278,14 @@ unify t TypBot = (, t) <$> ask
 -- unify suports structural polymorphism
 -- | for handling unifying of tuple type
 unify t1@(TypTup ts1) t2@(TypTup ts2) =
-  case length ts1 == length ts2 of
-    False -> fail $ "Tuple doesn't match, left: " <> show t1 <> ", right: " <> show t2
-    True -> do
+  if length ts1 /= length ts2
+    then fail $ "Tuple doesn't match, left: " <> show t1 <> ", right: " <> show t2
+    else do
       let tupUnify mr (l, r) = do
             (q1, ts) <- mr
             (q2, t) <- local (const q1) $ unify l r
             return (q2, ts <> [t])
-      (q1, ts3) <- foldl tupUnify ((,[]) <$> ask) (zip ts1 ts2)
+      (q1, ts3) <- foldl tupUnify (asks (,[])) (zip ts1 ts2)
       return (q1, TypTup ts3)
 -- | for handling unifying of record type
 unify t1@(TypRec ls1) t2@(TypRec ls2) = do
@@ -271,11 +293,11 @@ unify t1@(TypRec ls1) t2@(TypRec ls2) = do
   then fail $ "Record labels don't match, left: " <> show t1 <> ", right: " <> show t2
   else do
     let sort = sortBy \(a, _) (b, _) -> compare a b
-        recUnify mr ((l1, lt1), (l2, lt2)) = do
+        recUnify mr ((l1, lt1), (_l2, lt2)) = do
           (q, ts) <- mr
           (q2, t3) <- local (const q) $ unify lt1 lt2
           return (q2, ts <> [(l1, t3)])
-    (q1, ts) <- foldl recUnify ((, []) <$> ask) (sort ls1 `zip` sort ls2)
+    (q1, ts) <- foldl recUnify (asks (, [])) (sort ls1 `zip` sort ls2)
     return (q1, TypRec ts)
 -- | for handling unifying of sum type
 unify t1@(TypSum ls1) t2@(TypSum ls2) =
@@ -283,7 +305,7 @@ unify t1@(TypSum ls1) t2@(TypSum ls2) =
   then fail $ "Variant labels don't match, left: " <> show t1 <> ", right: " <> show t2
   else do
     let sort = sortBy \(a, _) (b, _) -> compare a b
-        sumUnify mr ((l1, Just lt1), (l2, Just lt2)) = do
+        sumUnify mr ((l1, Just lt1), (_l2, Just lt2)) = do
           (q, ts) <- mr
           (q2, t3) <- local (const q) $ unify lt1 lt2
           return (q2, ts <> [(l1, Just t3)])
@@ -291,14 +313,14 @@ unify t1@(TypSum ls1) t2@(TypSum ls2) =
           (q, ts) <- mr
           return (q, ts <> [(l1, Nothing)])
         sumUnify _ (l, r) = fail $ "Variant Field mismatch! left: " <> show l <> ", right: " <> show r
-    (q1, ts) <- foldl sumUnify ((, []) <$> ask) (sort ls1 `zip` sort ls2)
+    (q1, ts) <- foldl sumUnify (asks (, [])) (sort ls1 `zip` sort ls2)
     return (q1, TypSum ts)
 
 unify (TypRef (Right n1)) (TypRef (Right n2))
-  | n1 == n2 = (,localRef n1) <$> ask
+  | n1 == n2 = asks (,localRef n1)
   | otherwise = do
-    p1 <- lookupPrefix n1 <$> ask
-    p2 <- lookupPrefix n2 <$> ask
+    p1 <- asks $ lookupPrefix n1
+    p2 <- asks $ lookupPrefix n2
     -- TODO, add abstraction check
     case (p1, p2) of
       (_ :> t1, _ :> t2) -> do
@@ -317,7 +339,7 @@ unify (TypRef (Right n1)) (TypRef (Right n2))
         return . (,localRef n1) $ updatePrefix (min n1 n2) (const $ 1 :~ localRef (abs $ n2 - n1)) q2
 
 unify (TypRef (Right n1)) t2 =
-  lookupPrefix n1 <$> ask >>= \case
+  asks (lookupPrefix n1) >>= \case
     -- TODO: add abstraction check
     (_ :> t) -> do
       (q1, shift 0 (-n1) -> t1) <- unify (shift 0 n1 t) t2
@@ -345,15 +367,15 @@ unify (TypApp h1 h2 hs) (TypApp g1 g2 gs)
 unify t1@(TypAll _ _) t2@(TypAll _ _) = do
   let (q1, mono1) = getMonoType t1
       (q2, mono2) = getMonoType t2
-      t = shift 0 (length q2) mono1
+      t = shift 0 (toInteger $ length q2) mono1
   q0 <- ask
-  (q3, t3) <- local (const $ q0 <> q1 <> q2) $ unify t (shift (length q2) (length q1) mono2)
-  return $ ((\f -> f t3) . foldr (.) id . fmap TypAll) <$> splitAt (length q0) q3
+  (q3, t3) <- local (const $ q0 <> q1 <> q2) $ unify t (shift (toInteger $ length q2) (toInteger $ length q1) mono2)
+  return $ (\f -> f t3) . foldr (.) id . fmap TypAll <$> splitAt (length q0) q3
 unify t1@(TypAll _ _) t2 = do
   let (q1, mono1) = getMonoType t1
   q0 <- ask
-  (q3, t3) <- local (const $ q0 <> q1) $ unify mono1 (shift 0 (length q1) t2)
-  return $ ((\f -> f t3) . foldr (.) id . fmap TypAll) <$> splitAt (length q0) q3
+  (q3, t3) <- local (const $ q0 <> q1) $ unify mono1 (shift 0 (toInteger $ length q1) t2)
+  return $ (\f -> f t3) . foldr (.) id . fmap TypAll <$> splitAt (length q0) q3
 unify t1 t2@(TypAll _ _) = unify t2 t1
 
 -- | for type operator, we may need HOU to handle it to make it compatible with type containment.
@@ -361,7 +383,7 @@ unify t1 t2@(TypAll _ _) = unify t2 t1
 -- TODO: how to deal with unification problem of type operator
 -- we are going to strip off the bounds and take it as it is a quanitified type
 unify t1@(TypAbs _ _) t2@(TypAbs _ _)
-  | t1 == t2 = (,t1) <$> ask
+  | t1 == t2 = asks (,t1)
   | otherwise = fail $ "Type Operator mismatch!! left: " <> show t1 <> ", right: " <> show t2
 
 -- | left with all simple one, compare and return. no type containment is needed.
@@ -371,7 +393,7 @@ unify t1@(TypAbs _ _) t2@(TypAbs _ _)
 unify a b =
   if a /= b
      then fail $ "Type mismatch!! left: " <> show a <> ", right: " <> show b
-     else (,a) <$> ask
+     else asks (,a)
 
 -- | type environment, Γ. for inference.
 -- \a -> \b -> \c -> ...
@@ -384,24 +406,6 @@ type GlobalEnv = (GammaEnv NormalKind, GammaEnv NormalKind)
 type TypingMonad m =
   RWST (Bounds Integer (NormalType NormalKind), GlobalEnv) () (GammaEnv NormalKind) m
 
--- test_project, test_id, test_simple1, test_simple2 :: NormalType NormalKind
--- test_project =
---   TypAll (1 :> TypBot)
---   . TypAll (1 :~ TypRec [(Label "text", localRef 1)])
---   $ TypQue (localRef 1) (localRef 2)
-
--- test_a :: NormalType NormalKind -> NormalType NormalKind
--- test_a t = TypAll (1:> TypBot)
---          . TypAll (1:> t)
---          $ TypQue (localRef 1) (localRef 2)
-
--- test_id = TypAll (1 :> TypBot) $ TypQue (localRef 1) (localRef 1)
--- test_simple1 = TypQue (nameRef "hello") (nameRef "world")
--- test_simple2 = TypQue (nameRef "hello") (nameRef "hello")
-
-test_simple3 :: NormalType NormalKind
-test_simple3 = TypAll (1 :> TypBot) (localRef 1)
-
 data PatternError c a
   = DuplicateBinding a
   | BEContext c (PatternError c a)
@@ -413,15 +417,21 @@ instance (Show a, Show c) => Show (PatternError c a) where
   show = cata \case
     DuplicateBindingF a -> "Duplicate binding of " <> show a
     BEContextF c r -> r <> "\n" <> "in " <> show c
-runTyping e r s = runRWST (typing e) ([], r) s
+
+runTyping :: MonadFail m
+          => (Maybe Symbol, ParseExpr (NormalType NormalKind))
+          -> GlobalEnv
+          -> GammaEnv NormalKind
+          -> m (ParseExpr (NormalType NormalKind), GammaEnv NormalKind, ())
+runTyping e r = runRWST (typing e) ([], r)
 
 -- | infer type of expreission
 typing
   :: forall m. (Monad m, MonadFail m)
   => (Maybe Symbol, ParseExpr (NormalType NormalKind))
   -> TypingMonad m (ParseExpr (NormalType NormalKind))
-typing (symbol'maybe, tree) = do
-  (prefix, val :@ t) <- cata go tree
+typing (_symbol'maybe, tree) = do
+  (_prefix, val :@ _t) <- cata go tree
   return val
   where
     annotate val typ = ExAnno (val :@ typ) :@ typ
@@ -430,39 +440,39 @@ typing (symbol'maybe, tree) = do
        => Base (ParseExpr (NormalType NormalKind))
                (TypingMonad m a)
        -> TypingMonad m a
-    go ExUnitF = (, ExUnit :@ TypUni) . fst <$> ask
+    go ExUnitF = asks $ (, ExUnit :@ TypUni) . fst
     go (ExLitF lit) =
       let typ = case lit of
                   LitInt _ -> nameRef "i8"
                   LitNumber _ -> nameRef "float"
                   LitString _ -> nameRef "str"
-       in (, ExLit lit `annotate` typ) . fst <$> ask
+       in ask <&> (, ExLit lit `annotate` typ) . fst
     go (ExRefF name) = do
-      res'maybe <- lookup name <$> get
+      res'maybe <- gets $ lookup name
       case res'maybe of
-        Just t -> (,ExRef name `annotate` t) . fst <$> ask
+        Just t -> asks $ (,ExRef name `annotate` t) . fst
         Nothing -> fail $ "Undefined name of " <> show name
     go (ExVarF _ _) = error "Sorry, structural polymorphism is not supported now."
     go (ExSelF _) = error "Sorry, structural polymorphism is not supported now."
-    go (ExTypF typ) = error "Sorry, type application is not implemented now"
+    go (ExTypF _typ) = error "Sorry, type application is not implemented now"
     go (ExTupF ems) = do
       let through mr mn = do
             (q1, ts, vs) <- mr
-            (q2, v :@ t) <- local (first $ const q1) $ mn
+            (q2, v :@ t) <- local (first $ const q1) mn
             return (q2, ts <> [t], vs <> [v])
-      (q, ts, vs) <- foldl through ((,[],[]) . fst <$> ask) ems
+      (q, ts, vs) <- foldl through (asks $ (,[],[]) . fst) ems
       return (q, ExTup vs `annotate` TypTup ts)
     go (ExRecF ems) = do
       let through mr mn = do
             (q1, ts, vs) <- mr
             (label, (q2, v :@ t)) <- local (first $ const q1) $ sequence mn
             return (q2, ts <> [(Label case label of Symbol s -> s; Op s -> s,t)], vs <> [(label, v)])
-      (q, ts, vs) <- foldl through ((,[],[]) . fst <$> ask) ems
+      (q, ts, vs) <- foldl through (asks $ (,[],[]) . fst) ems
       return (q, ExRec vs `annotate` TypRec ts)
-    go (ExAbsF lambda) = error "lambda is not implemented yet"
+    go (ExAbsF _lambda) = error "lambda is not implemented yet"
     go (ExAppF m1 m2 mn) = do
       let reduction t1 t2 = do
-            q <- fst <$> ask
+            q <- asks fst
             (q2, getMonoType -> (prefix, _)) <-
               runReaderT (scopUnify [1 :> t1, 1 :> t2, 1 :> TypBot]
                                     (localRef 3)
@@ -470,26 +480,26 @@ typing (symbol'maybe, tree) = do
                           q
             return (q2, general (localRef 1) prefix)
       (q1, v1 :@ t1) <- m1
-      (q2, v2 :@ t2) <- local (first $ const q1) $ m2
+      (q2, v2 :@ t2) <- local (first $ const q1) m2
       (q3, t3) <- local (first $ const q2) $ reduction t1 t2
       let through mr me = do
             (q, t, es) <- mr
-            (qq, e :@ te) <- local (first $ const q) $ me
+            (qq, e :@ te) <- local (first $ const q) me
             (qqq, tt) <- local (first $ const qq) $ reduction t te
             return (qqq, tt, es <> [e])
-      (q2, t4, vs) <- foldl through (return (q3, t3, [])) mn
-      return (q2, ExApp v1 v2 vs `annotate` t4)
+      (q4, t4, vs) <- foldl through (return (q3, t3, [])) mn
+      return (q4, ExApp v1 v2 vs `annotate` t4)
     go (ExLetF pat m1 m2) = do
       stat <- get
-      rlen <- length . fst <$> ask
+      rlen <- asks $ length . fst
       (npat :@ nt, (prefixs, stat1)) <- runStateT (patternTyping pat) mempty
       modify (<> stat1) -- add new bindings
-      (q1, v1 :@ t1) <- local (first $ (<> prefixs)) $ m1
-      (q3, t3) <- runReaderT (unify nt t1) q1
+      (q1, v1 :@ t1) <- local (first (<> prefixs)) m1
+      (q3, _t3) <- runReaderT (unify nt t1) q1
       let (origin, bounds) = splitAt rlen q3
       -- generalize all binding introduced by pattern
       put (stat <> fmap (flip general bounds <$>) stat1)
-      (q2, v2 :@ (clean -> t2)) <- local (first $ const origin) $ m2
+      (q2, v2 :@ (clean -> t2)) <- local (first $ const origin) m2
       return (q2, ExLet npat v1 v2 `annotate` t2)
     go (ExAnnoF fmr) = do
       ((s1, e :@ t) :@ anno) <- sequence fmr
@@ -497,7 +507,7 @@ typing (symbol'maybe, tree) = do
       return (take (length s1) s2, ExAnno (e :@ t) `annotate` TypAll (1 :> anno) (localRef 1))
 
 -- collect names introduced by pattern, and do checking
-bindCheck :: (Monad m, MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k)) Symbol) m)
+bindCheck :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k)) Symbol) m)
           => ParsePattern (NormalType k) -> m [Symbol]
 bindCheck = para go
   where go :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k)) Symbol) m)
@@ -516,7 +526,7 @@ bindCheck = para go
           $ foldM (\names (snd -> (_, mr)) -> mappend names <$> local (<> names) mr) mempty ms
         go (PatSumF (n1, hm) ms) = catch n1 hm >>= \names ->
           catch (PatSum n1 $ fst <$> ms)
-          $ foldM (\names (_, mr) -> mappend names <$> local (<> names) mr)
+          $ foldM (\es (_, mr) -> mappend es <$> local (<> es) mr)
             names ms
         go (PatBindF name (node, mr)) = catch node $ (name:) <$> local (name:) mr
         go (PatViewF _ (node, mr)) = catch node mr
@@ -541,13 +551,13 @@ patternTyping pat = do
     valOf (v :@ _) = v
     typOf (_ :@ t) = t
     newAnyType = do
-      prefixs <- fst <$> get
+      prefixs <- gets fst
       modify (first ((1 :> TypBot):)) -- append a new prefix
       return (localRef (toInteger $ length prefixs + 1))
     go PatWildF = annotate PatWild <$> newAnyType
     go PatUnitF = return (PatUnit :@ TypUni)
     go (PatRefF name) = do
-      env <- snd <$> get
+      env <- gets snd
       maybe (fail $ "can't find type for symbol " <> show name)
             (return . (PatRef name :@))
             $ lookup name env
@@ -555,25 +565,27 @@ patternTyping pat = do
     go (PatTupF tups) = do
       tupPairs <- sequence tups
       return (PatTup (valOf <$> tupPairs) :@ TypTup (typOf <$> tupPairs))
-    go (PatAnnoF (mp :@ typ)) = second (PatAnno . (:@ typ)) <$> mp
     go (PatRecF recs) = do
       rs <- mapM sequence recs
       return (PatRec (fmap valOf <$> rs) :@ TypRec ((\(l, typOf -> t) -> (case l of Symbol s -> Label s; Op s -> Label s, t)) <$> rs))
-    go (PatSymF sym) = error "We need to lookup type definition to fetch full type for the variant label, not implemented yet"
+    go (PatSymF _sym) = error "We need to lookup type definition to fetch full type for the variant label, not implemented yet"
     go (PatAnnoF (mp :@ t1)) = do
       p :@ t2 <- mp
-      q1 <- fst <$> get
+      q1 <- gets fst
       (q2, t3) <- runReaderT (unify t2 t1) q1
       modify (first $ const q2)
       return (p :@ t3)
-    go _ = error $ "sorry, feature is not implemented"
+    go _ = error "sorry, feature is not implemented"
 
-lambdaTyping (Lambda branch branchs) = do
+lambdaTyping :: (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
+             => Lambda typ anno name -> m b
+lambdaTyping (Lambda _branch _branchs) = do
+  void $ gPatternTyping undefined
   undefined
   where
     gPatternTyping (Pattern p) = patternTyping p
-    gPatternTyping (PatGrp ms) = do undefined
-    gPatternTyping (PatSeq ms) = do undefined
+    gPatternTyping (PatGrp _ms) = do undefined
+    gPatternTyping (PatSeq _ms) = do undefined
 
 instance Rule () (NormalType k) where
   rewrite TypBot _ = TypBot
@@ -588,7 +600,7 @@ instance Rule () (NormalType k) where
   rewrite t (Assoc _ (_ :! n) (S.Cons _ _ s)) = rewrite t $ Assoc () (() :! (n - 1)) s
   rewrite t (Assoc _ s1 s2) = rewrite t s1 `rewrite` s2
   rewrite (TypTup ts) s = TypTup $ flip rewrite s <$> ts
-  rewrite (TypRec lts) s = TypRec $ fmap (flip rewrite s) <$> lts
+  rewrite (TypRec lts) s = TypRec $ fmap (`rewrite` s) <$> lts
   rewrite (TypSum lts) s = TypSum $ fmap (flip rewrite s <$>) <$> lts
   rewrite (TypPie ft t) s = TypPie (flip rewrite s <$> ft) $ rewrite t s
   rewrite (TypApp h1 h2 hs) s = TypApp (rewrite h1 s) (rewrite h2 s) $ flip rewrite s <$> hs
@@ -599,6 +611,8 @@ instance Rule () (NormalType k) where
   rewrite (TypAbs fb t) s = TypAbs (flip rewrite s <$> fb)
                           $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
   rewrite (TypLift ft) s = TypLift (flip rewrite s <$> ft)
+  lmap = error "need to use another calculus"
+  normalize = error "need to use another calculus"
 
 -- builtIn :: [KindedType TypAs k]
 -- builtIn = TypAs . (\s -> TypSym s KindType False) <$>

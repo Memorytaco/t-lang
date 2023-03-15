@@ -31,13 +31,13 @@ import Data.List (find)
 import Data.Void (Void)
 
 playParser :: forall e a. (ShowErrorComponent e, Show a) => ParsecT e Text IO a -> Text -> IO ()
-playParser p txt = either errorBundlePretty show <$> runParserT p "stdin" txt >>= putStrLn
+playParser p txt = runParserT p "stdin" txt >>= putStrLn . either errorBundlePretty show
 
 parseSource :: (MonadFail m, MonadIO m, MonadError String m) => [FilePath] -> m [ParsedModule]
 parseSource paths = do
   edges <- forM paths \path -> do
     source <- liftIO $ decodeUtf8 <$> readFile path
-    (keys', key) <- first errorBundlePretty <$> runParserT (buildGraph @Void) path source >>= liftEither
+    (keys', key) <- runParserT (buildGraph @Void) path source >>= liftEither . first errorBundlePretty
     return (source, key, fmap (\(Use (k, _) _) -> k) keys')
   let (graph, getNode, getVertex) = graphFromEdges edges
       bforest = bcc graph

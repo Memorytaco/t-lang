@@ -9,7 +9,7 @@ module Tlang.Parser.Type
   , record
 
   , unParser
-  , play -- ^ for development only
+  , play -- | for development only
   )
 where
 
@@ -21,6 +21,7 @@ import Tlang.AST
 import Data.Text (Text, pack)
 import Data.List (find)
 import Data.Bifunctor (first)
+import Data.Functor (($>), (<&>))
 import Text.Megaparsec hiding (Label)
 import Control.Monad.Reader (ReaderT (..), ask, runReaderT, MonadReader)
 import Control.Applicative (Alternative)
@@ -45,14 +46,14 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
      <|> (OpRep . Right <$> operator <?> "Type Operator")
      <|> (OpNorm <$> typNormal <?> "Type Name")
     where
-      typNormal = identifier >>= return . TypRef . Symbol
-      withSpecial v@(l, r) = reservedOp (pack l) *> pure (Left v)
-                         <|> reservedOp (pack r) *> pure (Right v)
+      typNormal = identifier <&> TypRef . Symbol
+      withSpecial v@(l, r) = reservedOp (pack l) $> Left v
+                         <|> reservedOp (pack r) $> Right v
       special = foldr1 (<|>) $ withSpecial
             <$> [("(", ")"), ("[", "]"), ("<", ">"), ("{", "}")]
-      syntax  = reserved "forall" *> pure (Left ("forall", "forall"))
-            <|> reserved "rec" *> pure (Left ("rec", "rec"))
-            <|> reservedOp "\\" *> pure (Left ("\\", "\\"))
+      syntax  = reserved "forall" $> Left ("forall", "forall")
+            <|> reserved "rec" $> Left ("rec", "rec")
+            <|> reservedOp "\\" $> Left ("\\", "\\")
             <|> special
 
   peek = lookAhead next
@@ -60,7 +61,7 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
   getPower = \case
     (OpNorm _) -> return (999, 999)
     (OpRep (Left _)) -> return (999, 999)
-    (OpRep (Right op)) -> getOperator op >>= return . getBindPower
+    (OpRep (Right op)) -> getOperator op <&> getBindPower
 
   nud end = withOperator return \case
     Left (Left (l, r)) -> do
@@ -72,7 +73,7 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
         "\\" -> abstract end
         _ -> do ntok <- peek
                 matchPairOperator (Right ("(", ")")) ntok
-                  (next *> return TypUni) $ pratt (reservedOp (pack r) *> pure ()) (-100)
+                  (next $> TypUni) $ pratt (void $ reservedOp (pack r)) (-100)
     Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
     Right s -> getOperator s >>= \(Operator assoc _ r op) ->
       case assoc of
@@ -91,14 +92,14 @@ instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) whe
                     TypTup ls -> return . TypTup $ left: ls
                     right -> return $ TypTup [left, right]
                   "->" -> TypApp (TypRef (Op "->")) left . (:[]) <$> pratt end r
-                  _ -> pratt end r >>= return . TypApp (TypRef $ Op op) left . (:[])
+                  _ -> pratt end r <&> TypApp (TypRef $ Op op) left . (:[])
         _ -> return $ TypApp (TypRef $ Op op) left []
     Left (Left (l, r)) ->
       case l of
         "(" -> do
           ntok <- peek
           matchPairOperator (Right ("(", ")")) ntok
-            (next *> return (left `apply` TypUni)) $ pratt (reservedOp (pack r) *> pure ()) (-100) >>= return . apply left
+            (next $> left `apply` TypUni) $ pratt (void $ reservedOp (pack r)) (-100) <&> apply left
         "{" -> apply left <$> record
         "<" -> apply left <$> variant
         "rec" -> apply left <$> recursive end
@@ -123,27 +124,27 @@ quantified (lookAhead -> end) = do
       boundTyp = pratt (void . lookAhead $ reservedOp ")") (-100)
       scopBound = do
         tok <- name
-        op <- reservedOp "~" *> pure (:>) <|> reservedOp "=" *> pure (:~)
+        op <- reservedOp "~" $> (:>) <|> reservedOp "=" $> (:~)
         op tok <$> boundTyp
       bound = parens scopBound
           <|> (:> TypBot) <$> name
   bounds <- bound `someTill` reservedOp "."
   body <- pratt end (-100)
-  return $ (foldr (.) id $ TypAll <$> bounds) body
+  return $ foldr ($) body (TypAll <$> bounds)
 
 abstract :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType None Identity)
 abstract (lookAhead -> end) = do
   let name = Symbol <$> identifier
   bounds <- ((:> TypBot) <$> name) `someTill` reservedOp "."
   body <- pratt end (-100)
-  return $ (foldr (.) id $ TypAbs <$> bounds) body
+  return $ foldr ($) body (TypAbs <$> bounds)
 
 -- | record type parser
 record :: ShowErrorComponent e => Parser e m (ParseType None Identity)
 record = do
   let recordPair = do
         name <- fmap Label $ identifier <|> operator
-        typ <- reservedOp ":" *> pratt (lookAhead ((reservedOp "}" <|> reservedOp ",") *> pure ())) (-100)
+        typ <- reservedOp ":" *> pratt (lookAhead ((reservedOp "}" <|> reservedOp ",") $> ())) (-100)
         return (name, typ)
   fields <- sepBy1 recordPair (reservedOp ",") <* reservedOp "}"
   return $ TypRec fields
@@ -153,7 +154,7 @@ variant :: ShowErrorComponent e => Parser e m (ParseType None Identity)
 variant = do
   let variantPair = do
         name <- fmap Label $ identifier <|> operator
-        typ <- optional $ reservedOp ":" *> pratt (lookAhead ((reservedOp ">" <|> reservedOp ",") *> pure ())) (-100)
+        typ <- optional $ reservedOp ":" *> pratt (lookAhead ((reservedOp ">" <|> reservedOp ",") $> ())) (-100)
         return (name, typ)
   fields <- sepBy1 variantPair (reservedOp ",") <* reservedOp ">"
   return $ TypSum fields

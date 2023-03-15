@@ -13,21 +13,22 @@ where
 
 import Tlang.AST
 import Tlang.Constraint
-import Data.Functor.Foldable hiding (ListF (..))
+import Tlang.Subst
+import Tlang.Parser.Type (ParseType)
+
 import qualified Data.Functor.Foldable as F (ListF (..))
-import Control.Monad (forM, forM_, when, join)
+import Control.Monad
 import Control.Monad.Identity (Identity (..))
-import Control.Monad.State (MonadState (..), modify, runStateT, runState, StateT)
-import Control.Monad.Reader (MonadReader (..), ReaderT (..))
+import Control.Monad.State (MonadState (..), modify, gets, runStateT, runState, StateT, execState)
+import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.Except (MonadError (..), ExceptT, runExcept, lift)
 import Control.Applicative (Const (..))
-import Data.List (union, find, nub)
-import Tlang.Subst
 import Control.Monad.Trans.RWS (evalRWS, RWS, RWST (..), tell, pass)
-import Tlang.Parser.Type (ParseType)
-import Data.Maybe (fromJust)
-
 import Data.Bifunctor
+import Data.Functor (($>), (<&>))
+import Data.Functor.Foldable hiding (ListF (..))
+import Data.List (union, find, nub)
+import Data.Maybe (fromJust)
 
 -- | indexed type variable.
 -- we keep original symbol name for error message and recovery from deBruijn notation
@@ -62,7 +63,7 @@ assignNames = cata go
           name <- freshName
           (first (:@ name) typ:) <$> ms
         freshName :: m GraftKind
-        freshName = modify (+1) >> KindLift . Graft . MetaVar <$> get
+        freshName = modify (+1) *> get <&> KindLift . Graft . MetaVar
 
 getTypD (TypD t) = [t]
 getTypD _ = []
@@ -87,12 +88,12 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
     go (TypLitF _) = pure $ TypLit ()
     go (TypRepF r) = pure $ TypRep r
     go (TypRefF s) = do
-      ix'maybe <- lookup s . flip zip [1..] . snd <$> ask
-      genv <- fst <$> ask
-      case (Right <$> ix'maybe) of
+      ix'maybe <- asks $ lookup s . flip zip [1..] . snd
+      genv <- asks fst
+      case Right <$> ix'maybe of
         Nothing -> case (s `elem` genv, name == Just s) of
-                     (_, True) -> return (TypRef $ Left s)
-                     (True, _) -> return (TypRef $ Left s)
+                     (_, True) -> return . TypRef $ Left s
+                     (True, _) -> return . TypRef $ Left s
                      (False, False) ->
                        fail $ "type variable " <> show s <> " doesn't occur in scop"
         Just v -> return $ TypRef v
@@ -126,17 +127,17 @@ generalize kind = fst $ evalRWS monad 0 []
         KindLiftF (UnGraft mk) -> mk
         KindAbsF _ mk -> mk
         mk1 ::>$ mk2 -> mk1 >> mk2
-      index :: [(Integer, Integer)] <- flip zip [1..] <$> get
+      index :: [(Integer, Integer)] <- gets $ flip zip [1..]
       typeRoh :: NormalKind <- flip cata kind \case
         KindTypeF -> return KindType
         KindLiftF (Graft (MetaVar var)) -> do
           level <- ask
           case lookup var index of
             Just i -> return $ KindRef (i + level)
-            Nothing -> error $ "can't find index of variable"
+            Nothing -> error "can't find index of variable"
         KindLiftF (UnGraft mk) -> mk
         KindRefF i -> return $ KindRef i
-        KindAbsF _ mk -> local (+1) $ mk >>= return . KindAbs 1
+        KindAbsF _ mk -> local (+1) $ mk <&> KindAbs 1
         mk1 ::>$ mk2 -> (::>) <$> mk1 <*> mk2
       return $ quantify (length index) typeRoh
       where
@@ -159,7 +160,7 @@ expand seed = flip runState seed . cata \case
   KindRefF i -> pure $ KindRef i
   KindAbsF _ mk -> do
     k <- mk
-    v <- modify (+1) >> KindLift . Graft . MetaVar <$> get
+    v <- modify (+1) >> gets (KindLift . Graft . MetaVar)
     return $ rewrite k (Cons () v (() :! 0))
   mk1 ::>$ mk2 -> (::>) <$> mk1 <*> mk2
   KindLiftF (Identity mk) -> mk
@@ -172,13 +173,13 @@ instGraft (ix :-> k)  = cata \case
   mk1 ::>$ mk2 -> (::>) <$> mk1 <*> mk2
   KindLiftF (UnGraft mk) -> mk
   KindLiftF (Graft v) ->
-    case v == ix of
-      False -> return $ KindLift (Graft v)
-      True -> do
-        seed <- get
-        let (gk, seed2) = expand seed k
-        put seed2
-        return gk
+    if v == ix
+    then do
+      seed <- get
+      let (gk, seed2) = expand seed k
+      put seed2
+      return gk
+    else return $ KindLift (Graft v)
 
 instGraft' :: MonadState Integer m => (GraftKind :-> NormalKind) -> GraftKind -> m GraftKind
 instGraft' (KindLift (Graft v) :-> k) = instGraft (v :-> k)
@@ -200,7 +201,7 @@ data KindUnifyError
   deriving (Show, Eq)
 
 unify :: forall m. Monad m => [GraftKind :<> GraftKind] -> ExceptT KindUnifyError m [MetaVar Kind Integer :-> GraftKind]
-unify = (>>= checkOccurrence) . fmap unifySubst . refold shrink rollup
+unify = checkOccurrence . unifySubst <=< refold shrink rollup
   where
     rollup [] = F.Nil
     rollup ((a1 ::> b1) :<> (a2 ::> b2) :xs) = rollup $ [a1 :<> a2, b1 :<> b2] <> xs
@@ -233,7 +234,7 @@ unify = (>>= checkOccurrence) . fmap unifySubst . refold shrink rollup
       return $ a <> ls
 
     unifySubst :: [MetaVar Kind Integer :-> GraftKind] -> [MetaVar Kind Integer :-> GraftKind]
-    unifySubst sust = snd $ runState (go sust) []
+    unifySubst sust = execState (go sust) []
       where
         go :: MonadState [MetaVar Kind Integer :-> GraftKind] m1
            => [MetaVar Kind Integer :-> GraftKind] -> m1 [MetaVar Kind Integer :-> GraftKind]
@@ -249,7 +250,7 @@ unify = (>>= checkOccurrence) . fmap unifySubst . refold shrink rollup
     -- checkOccurrence :: [MetaVar Kind Integer :-> GraftKind] -> m [MetaVar Kind Integer :-> GraftKind]
     checkOccurrence vs =
       let (as, bs) = foldl folder ([], []) vs
-       in mapM (check as) bs >> return vs
+       in mapM_ (check as) bs $> vs
       where folder (as, bs) (a :-> b) = (a:as, b:bs)
             check vars = cata \case
               KindTypeF -> return ()
@@ -312,8 +313,8 @@ infer :: forall c r m. (Traversable c, MonadFail m, MonadState (GroundEnv c r) m
       => (GraftKind :@ Symbol :== DeBruijnType c Identity r) -> Integer
       -> m (Integer, DeBruijnType c ((:@) NormalKind) r)
 infer (name :@ sig :== tree) i = do
-  env <- let mp = fmap \(a :== b) -> a in first (name :@ sig :) . bimap mp mp <$> get
-  lenv <- fst <$> get
+  env <- let mp = fmap \(a :== b) -> a in gets $ bimap ((name :@ sig :) . mp) mp
+  lenv <- gets fst
 
   let lookupSym a = find (\(b :@ _ :== _) -> a == b)
       gen t i = runRWST (genConstraint (pure . runIdentity) t) env ([], i)
@@ -324,20 +325,20 @@ infer (name :@ sig :== tree) i = do
         let (_ :== rtyp) = fromJust $ lookupSym nm lenv
         (nexts, nnix) <- do
           ((cs, typ :@ k), (_, nix), inits) <- lift $ gen rtyp ix
-          case inits == [] || inits == [nm :@ nsig] of
-            False -> do
-              modify \(syms, typs, ls) -> (nm:syms, (nm :@ nsig :== typ):typs, nsig :<> k : cs <> ls)
-              syms <- (\(syms, _, _) -> filter (\(sym :@ _) -> not $ sym `elem` syms) $ inits `union` xs) <$> get
-              return (syms, nix)
-            True -> do
-              update <- fmap generalize . graft <$> unify' (nsig :<> k :cs)
-              -- this symbol is already solved, no more constraints added, but we need to update
-              -- existed constraint using `instGraft`.
-              modify \(syms, typs, ls) -> (nm:syms, typs, ls)
-              lift . modify $ fmap ((nm :@ update nsig :== (onAnnotate update) typ):)
-              (constraints, nnix) <- (\(_,_,a) -> a) <$> get >>= flip runStateT nix . instConst' (nsig :-> update nsig)
-              modify \(a,b,_) -> (a, b, constraints)
-              return (xs, nnix)
+          if null inits || inits == [nm :@ nsig]
+          then do
+            update <- fmap generalize . graft <$> unify' (nsig :<> k :cs)
+            -- this symbol is already solved, no more constraints added, but we need to update
+            -- existed constraint using `instGraft`.
+            modify \(syms, typs, ls) -> (nm:syms, typs, ls)
+            lift . modify $ fmap (nm :@ update nsig :== onAnnotate update typ :)
+            (constraints, nnix) <- gets (\(_,_,a) -> a) >>= flip runStateT nix . instConst' (nsig :-> update nsig)
+            modify \(a,b,_) -> (a, b, constraints)
+            return (xs, nnix)
+          else do
+            modify \(syms, typs, ls) -> (nm:syms, (nm :@ nsig :== typ):typs, nsig :<> k : cs <> ls)
+            syms <- gets (\(syms, _, _) -> filter (\(sym :@ _) -> sym `notElem` syms) $ inits `union` xs)
+            return (syms, nix)
         loopGen nexts nnix
 
   ((cs, typ :@ k), (_, ni), inits) <- gen tree i
@@ -347,9 +348,9 @@ infer (name :@ sig :== tree) i = do
   let update = generalize . graft unifier
   -- error $ show typ <> " ===== " <> show unifier <> "  ...   " <> show (constraints <> [sig :<> k])
   forM_ ((name :@ sig :== typ) :typs) \(sym :@ ssig :== rtyp) -> do
-    modify $ fmap ((:) (sym :@ update ssig :== (onAnnotate update) typ))
-  modify . first $ filter (\(s :@ _ :== _) -> not $ s `elem` syms)
-  return (nix, (onAnnotate update) typ)
+    modify $ fmap (sym :@ update ssig :== onAnnotate update typ :)
+  modify . first $ filter (\(s :@ _ :== _) -> s `notElem` syms)
+  return (nix, onAnnotate update typ)
 
   where
     unify' :: MonadFail n => [GraftKind :<> GraftKind] -> n [MetaVar Kind Integer :-> GraftKind]
@@ -381,18 +382,18 @@ genConstraint
   -- allow to choose whatever effect we would like to handle different shape of `TypLift`
   => (f (AnnotatedType c r) -> ConstraintMonad m (AnnotatedType c r))
   -> DeBruijnType c f r -- ^ the unsolved type term
-  -> ConstraintMonad m ([GraftKind :<> GraftKind], (AnnotatedType c r))
+  -> ConstraintMonad m ([GraftKind :<> GraftKind], AnnotatedType c r)
 genConstraint natural = pass . fmap (, nub) . cata go
   where
     -- | new meta kind variable
     freshName :: MonadState (Context, Integer) mf => mf GraftKind
-    freshName = modify (fmap (+1)) >> KindLift . Graft . MetaVar . snd <$> get
+    freshName = modify (fmap (+1)) >> get <&> KindLift . Graft . MetaVar . snd
     -- | a synonym to annotate type term
     annotate term typ = TypLift (term :@ typ) :@ typ
     -- | create a local term environment for type abstraction
     stack :: ConstraintMonad m a -> GraftKind -> ConstraintMonad m a
     stack ma v = do
-      s1 <- fst <$> get
+      s1 <- gets fst
       modify (first (v:)) >> ma <* modify (first $ const s1)
     {- collect kind signature constraint from type constraint
     -- stripConstraint = cata \case
@@ -411,7 +412,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
       (lenv, renv) <- ask
       case find (\(s :@ _) -> s == sym) renv of
         Just (_ :@ nk) -> do
-          ix <- snd <$> get
+          ix <- gets snd
           let (gk, ni) = expand ix nk
           modify (second $ const ni)
           return gk
@@ -428,23 +429,23 @@ genConstraint natural = pass . fmap (, nub) . cata go
     go (TypLitF ()) = return . pure $ TypLit () `annotate` KindType  -- FIXME: add kind literal
     go (TypAbsF nm mt) = do
       n <- freshName
-      (s, name) <- sequence . fmap (fmap \(t :@ _) -> t) <$> stack (sequence nm) n
+      (s, name) <- mapM (fmap \(t :@ _) -> t) <$> stack (sequence nm) n
       (subst, term :@ k) <- stack mt n
       return (s <> subst, TypAbs name term `annotate` (n ::> k))
     go (TypAllF nm mt) = do
       n <- freshName
-      (s, name) <- sequence . fmap (fmap \(t :@ _) -> t) <$> stack (sequence nm) n
+      (s, name) <- mapM (fmap \(t :@ _) -> t) <$> stack (sequence nm) n
       (subst, term :@ k) <- stack mt n
       return (s <> (k :<> KindType : subst), TypAll name term `annotate` KindType)
     go (TypEquF _ _) = error "Equi-Recursive type is not supported now"
     go (TypPieF cm mt) = do
       n <- freshName
-      (s, c) <- sequence . fmap (fmap \(t :@ _) -> t) <$> stack (sequence cm) n
+      (s, c) <- mapM (fmap \(t :@ _) -> t) <$> stack (sequence cm) n
       (subst, term :@ k) <- stack mt n
       return (s <> (k :<> KindType : subst), TypPie c term `annotate` KindType)
     -- go (TypRefF v@(Graft (_ :@ k))) = return . pure $ TypRef v `annotate` k
     go (TypRefF v@(Right i)) = do
-      item <- ((!! fromInteger (i - 1))) . fst <$> get
+      item <- gets $ (!! fromInteger (i - 1)) . fst
       return . pure $ TypRef v `annotate` item
 
     {- single recursive type is explicitly marked since it doesn't complicate the kind inference process.
@@ -472,7 +473,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
       (s, rs) <- foldl (\(ss, ts) (l, (s, term :@ k)) -> (ss <> (k :<> KindType : s), ts <> [(l,term)])) mempty <$> mapM sequence rm
       return (s, TypRec rs :@ KindType)
     go (TypSumF rm) = do
-      (s, rs) <- foldl collectField mempty <$> forM rm (sequence . fmap sequence)
+      (s, rs) <- foldl collectField mempty <$> forM rm (mapM sequence)
       return (s, TypSum rs :@ KindType)
         where
           collectField (ss, ts) (l, Nothing) = (ss, ts <> [(l, Nothing)])

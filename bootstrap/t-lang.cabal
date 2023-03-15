@@ -27,6 +27,7 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
+      Driver.Graph
       Tlang
       Tlang.AST
       Tlang.AST.Expr
@@ -39,6 +40,9 @@ library
       Tlang.Emit
       Tlang.Inference
       Tlang.Inference.Graph
+      Tlang.Inference.Graph.Dot
+      Tlang.Inference.Graph.Operator
+      Tlang.Inference.Graph.Type
       Tlang.Inference.Kind
       Tlang.Inference.Type
       Tlang.Inference.TypeGen

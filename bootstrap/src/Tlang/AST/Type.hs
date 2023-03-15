@@ -49,7 +49,7 @@ getMonoType :: Traversable f
             => Type label name lit bind c f rep
             -> ([bind (Type label name lit bind c f rep)], Type label name lit bind c f rep)
 getMonoType (TypAll b1 t) = first (b1:) $ getMonoType t
-getMonoType (TypLift fa) = fmap TypLift . sequence $ getMonoType <$> fa
+getMonoType (TypLift fa) = TypLift <$> mapM getMonoType fa
 getMonoType t = ([], t)
 
 deriving instance (Functor f, Functor c, Functor bind) => Functor (Type label name lit bind c f)
@@ -126,7 +126,7 @@ deriving instance (Eq (f (Kind f name)), Eq name) => Eq (Kind f name)
 deriving instance (Functor f) => Functor (Kind f)
 
 instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
-  show (KindType) = "*"
+  show KindType = "*"
   show (KindRef name) = show name
   show (KindAbs v name) = show v <> ". " <> show name
   show (v@(_ ::> _) ::> a) = "(" <> show v <> ")" <> " -> " <> show a

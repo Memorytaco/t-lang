@@ -3,6 +3,8 @@ module Tlang.Type
   , module Concrete
 
   , Type (..)
+  , DataRep (..)
+  , Concrete
   )
 where
 
@@ -10,17 +12,13 @@ import Control.Applicative (Const)
 
 import Tlang.Type.Primitive as Primitive
 import Tlang.Type.Concrete as Concrete
-import Tlang.Type.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
 import Tlang.AST
-import qualified LLVM.AST as T
-import qualified LLVM.AST.AddrSpace as T
-import qualified LLVM.AST.Type as T
 
 type Concrete name c f = ConcreteType SeqT (Type Label name () (Const Symbol) c f)
 
 -- | transfer from `Type` to runtime `DataRep`, the core tech to support
 -- polymorphic type
-data DataRep 
+data DataRep = DataRep
 
 -- instance (Show nam, LLVMTypeEncode t) => LLVMTypeEncode (Type k nam t) where
 --   encode (OQuantified name _) = error $ "UnExpected quantified variable " <> show name

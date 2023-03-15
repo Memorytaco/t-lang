@@ -17,11 +17,12 @@ import Tlang.AST
 
 import Text.Megaparsec
 import Text.Megaparsec.Char (char)
-import Data.Text (Text, pack, unpack)
-import Control.Monad.Reader (ReaderT (..), ask, MonadReader, runReaderT)
+import Control.Monad.Reader (ReaderT (..), ask, asks, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)
 import Control.Monad.Identity (Identity)
+import Data.Text (Text, pack, unpack)
+import Data.Functor (($>), (<&>))
 import Data.List (find)
 import Data.Void (Void)
 import Data.Bifunctor (first)
@@ -50,15 +51,15 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
      <|> try (OpRep . Right <$> (try operator <|> syms) <?> "Pattern Operator")
      <|> (OpRep . Left  <$> special <?> "Pair Operator")
     where
-      variable = char '?' *> identifier >>= return . PatRef . Symbol
-      vlabel = identifier >>= return . PatSym . Symbol
-      wild = symbol "_" *> return PatWild <* notFollowedBy identifier
+      variable = char '?' *> identifier <&> PatRef . Symbol
+      vlabel = identifier <&> PatSym . Symbol
+      wild = symbol "_" $> PatWild <* notFollowedBy identifier
       num = try floating <|> nat
-      nat = integer >>= return . PatLit . LitInt
-      floating = float >>= return . PatLit . LitNumber
-      str = stringLiteral >>= return . PatLit . LitString
-      withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) *> pure (Left v)
-                         <|> (reservedOp (pack r) <|> reserved (pack r)) *> pure (Right v)
+      nat = integer <&> PatLit . LitInt
+      floating = float <&> PatLit . LitNumber
+      str = stringLiteral <&> PatLit . LitString
+      withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) $> Left v
+                         <|> (reservedOp (pack r) <|> reserved (pack r)) $> Right v
       special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("{", "}")]
       syms = fmap unpack . foldl1 (<|>) $ reservedOp <$> [":", "@"]
 
@@ -67,7 +68,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
   getPower = \case
     (OpNorm _) -> return (999, 999)
     (OpRep (Left _)) -> return (999, 999)
-    (OpRep (Right op)) -> getOperator op >>= return . getBindPower
+    (OpRep (Right op)) -> getOperator op <&> getBindPower
 
   nud end = withOperator return \case
     (Left (Left  (l, r))) -> case l of
@@ -93,13 +94,13 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
           "@" -> case left of
               PatWild -> PatBind (Symbol "_") <$> pratt end r
               PatRef name -> PatBind name <$> pratt end r
-              _ -> fail $ "expect plain identifier on the left of '@' for binder syntax"
+              _ -> fail "expect plain identifier on the left of '@' for binder syntax"
           "->" -> case left of
               PatRef name -> PatView name <$> pratt end r
-              _ -> fail $ "view pattern projector should be a single function"
+              _ -> fail "view pattern projector should be a single function"
           ":" -> case left of
               PatAnno _ -> fail $ "Can't annotate again for pattern, " <> show left
-              PatSym _ -> fail $ "Can't annotate symbol for polymorphic variant"
+              PatSym _ -> fail "Can't annotate symbol for polymorphic variant"
               _ -> do env <- ask
                       let typParser e = liftParser . TypParser.unParser (fst env) (getParser e env)
                       PatAnno . (left :@) <$> typParser (lookAhead end) (-100)
@@ -113,7 +114,7 @@ patternSum left right =
     PatRef _ -> return $ PatSum left [right]
     PatSym _ -> return $ PatSum left [right]
     PatSum v vs -> return $ PatSum v (vs <> [right])
-    _ -> fail $ "expect sum pattern, but it is not"
+    _ -> fail "expect sum pattern, but it is not"
 
 record :: ShowErrorComponent e => Parser e m (ParsePatternType None Identity)
 record = do
@@ -130,7 +131,7 @@ tuple = do
   p1 <- pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100) <* reservedOp ","
   ps <- sepBy1 (pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)) (reservedOp ",") <* reservedOp ")"
   return $ PatTup (p1: ps)
-patUnit = reservedOp ")" *> return PatUnit
+patUnit = reservedOp ")" $> PatUnit
 
 getOperator :: String
             -> Parser e m (Operator String)
@@ -138,7 +139,7 @@ getOperator "@" = return $ Operator Infix 999 999 "@"
 getOperator "->" = return $ Operator Infix (-10) (-15) "->"
 getOperator ":" = return $ Operator Infix (-15) (-20) ":"
 getOperator op = do
-  stat <- snd <$> ask
+  stat <- asks snd
   case find (\(Operator _ _ _ n) -> n == op) stat of
     Just a -> return a
     Nothing -> fail $ "Operator " <> show op <> " is undefined in term level."

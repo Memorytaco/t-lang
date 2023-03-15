@@ -54,7 +54,7 @@ data NumType = IntegerT IntegerLength
              | FloatT FloatLength
              deriving (Eq)
 
-data BitType = Bit Integer deriving (Eq)
+newtype BitType = Bit Integer deriving (Eq)
 
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
@@ -93,7 +93,7 @@ instance LLVMTypeEncode BitType where
 instance LLVMTypeEncode ScalaType where
   encode (NumT t) = encode t
   encode (DataT t) = encode t
-instance (LLVMTypeEncode a, LLVMTypeEncode (t ((BaseType t a)))) => LLVMTypeEncode (BaseType t a) where
+instance (LLVMTypeEncode a, LLVMTypeEncode (t (BaseType t a))) => LLVMTypeEncode (BaseType t a) where
   encode (Scala t) = encode t
   encode (Ptr t addr'maybe) =
     case addr'maybe of
