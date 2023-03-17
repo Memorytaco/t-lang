@@ -45,7 +45,6 @@ jobs:
 
     - name: Cache and Restore Haskell Dependency
       uses: actions/cache@v3
-      name: Cache .stack-work
       with:
         path: bootstrap/.stack-work
         key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
