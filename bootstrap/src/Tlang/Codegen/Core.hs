@@ -16,15 +16,18 @@ operation into assembly like instructions.
 
 -}
 
-import LLVM.AST
+import LLVM.AST hiding (Type)
 import LLVM.IRBuilder
+import Data.Kind (Type)
 
 import Control.Monad.RWS
 import Control.Monad.Except (MonadError (..))
 
+type CodegenT :: Type -> Type -> Type -> (Type -> Type) -> Type -> Type
 newtype CodegenT r s e m a = CodegenT { runCodegenT :: IRBuilderT m a }
   deriving (Functor, Applicative, Monad, MonadIRBuilder, MonadError e, MonadState s, MonadReader r)
 
+type LLVM :: Type -> Type -> (Type -> Type) -> Type -> Type
 newtype LLVM s e m a = LLVM (ModuleBuilderT m a)
   deriving (Functor, Applicative, Monad, MonadModuleBuilder, MonadTrans, MonadError e, MonadState s, MonadFail)
 
@@ -37,7 +40,7 @@ runLLVM :: MonadError e m => LLVM s e m a -> ModuleBuilderState -> m (a, [Defini
 runLLVM (LLVM m) = flip runModuleBuilderT m
 
 buildLLVM :: MonadError e m => Module -> ModuleBuilderState -> LLVM s e m a -> m (a, Module)
-buildLLVM mod s ma = do
+buildLLVM m s ma = do
   (a, defs) <- runLLVM ma s
-  return (a, mod { moduleDefinitions = moduleDefinitions mod <> defs })
+  return (a, m { moduleDefinitions = moduleDefinitions m <> defs })
 

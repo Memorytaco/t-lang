@@ -1,44 +1,45 @@
 module Tlang.AST.Module
   ( Module (..)
-  , ModuleNameSpace (..)
-  , ModuleElement (..)
-
-  , getLangModEleNamePair
-  , getLangModEleBlock
+  , ModuleID (..)
+  , ModuleSource
+  , Declaration (..)
+  , FnSymbol (..)
+  , Use (..)
   )
 where
 
-import Tlang.Parser.Pratt
-import Tlang.AST.Expression
+import Tlang.AST.Expr
+import Tlang.AST.Type
+import Tlang.AST.Operator
+
+import Data.List (intercalate)
 
 -- | language module definition
-data Module deps defs = Module ModuleNameSpace deps defs deriving (Show, Eq)
+data Module typ name info
+  = Module ModuleSource ModuleID [Use info] [Declaration typ name]
+  deriving (Show, Eq, Functor)
 
-newtype ModuleNameSpace = ModuleNameSpace { getModuleNameSpace :: String } deriving (Eq, Ord)
-instance Show ModuleNameSpace where
-  show (ModuleNameSpace n) = n
+type ModuleSource = String
 
+data ModuleID = ModuleID [String] String deriving (Eq, Ord)
+instance Show ModuleID where
+  show (ModuleID prefix name) = intercalate "/" $ prefix <> [name]
 
--- toplevel definition in a module
-data ModuleElement name anno
-  = ModuleFunction name (Maybe anno) (Maybe (LambdaBlock name))
-  | ModuleBinding  name (Maybe anno) (Expr (Operator String) name) -- name binding: for global constant or function alias
-  | ModuleOperator (Operator String) -- for user defined operator
-  | ModuleType     name anno  -- TODO, the definition here is not completed
-  | ModuleUnsafe   name anno  -- TODO, the definition here is not completed
+-- | A use statement to import symbol name.
+-- Use (origin name, current name) [symbol list]
+data Use info = Use (ModuleID, ModuleID) [info] deriving (Show, Eq, Functor)
+
+-- | toplevel definition in a module
+data Declaration typ name
+  = FixD (Operator String)  -- ^ fixity of user defined operator
+  | TypD (name :== typ)     -- ^ user defined data type
+  | TypF (name :== typ)     -- ^ type alias, aka, type level function
+  | LetD name (Expr typ ((:@) typ) name)  -- ^ toplevel binding, used to declare value and function
+  | FnD name typ (FnSymbol typ name)      -- ^ function marked with `fn` keywords, used to communicate between c and host lang
   deriving (Show, Eq)
 
-
-getLangModEleNamePair :: ModuleElement name anno -> (name, Maybe anno)
-getLangModEleNamePair (ModuleFunction name anno _) = (name, anno)
-getLangModEleNamePair (ModuleBinding name anno _) = (name, anno)
-getLangModEleNamePair (ModuleType name anno) = (name, Just anno)
-getLangModEleNamePair (ModuleUnsafe name anno) = (name, Just anno)
-
-getLangModEleBlock :: ModuleElement name anno -> Maybe (LambdaBlock name)
-getLangModEleBlock (ModuleFunction _ _ block) = block
-getLangModEleBlock _ = Nothing
-getLangModEleExpr :: ModuleElement name anno -> Maybe (Expr (Operator String) name)
-getLangModEleExpr (ModuleBinding _ _ v) = Just v
-getLangModEleExpr _ = Nothing
-
+data FnSymbol typ name
+  = FnDefault       -- ^ default setting using declared name
+  | FnSymbol String -- ^ external symbol name
+  | FnDecl (Lambda typ ((:@) typ) name) -- ^ export a function out
+  deriving (Show, Eq)

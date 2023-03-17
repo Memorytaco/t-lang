@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.0.
+-- This file has been generated from package.yaml by hpack version 0.35.1.
 --
 -- see: https://github.com/sol/hpack
 
@@ -27,25 +27,40 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
+      Driver
+      Driver.Graph
+      Driver.Inference
       Tlang
-      Tlang.Analysis
-      Tlang.Analysis.Stage1
       Tlang.AST
-      Tlang.AST.Expression
+      Tlang.AST.Expr
       Tlang.AST.Module
-      Tlang.AST.Name
+      Tlang.AST.Operator
       Tlang.AST.Type
       Tlang.Codegen
       Tlang.Codegen.Core
+      Tlang.Constraint
       Tlang.Emit
+      Tlang.Inference
+      Tlang.Inference.Graph
+      Tlang.Inference.Graph.Dot
+      Tlang.Inference.Graph.Operator
+      Tlang.Inference.Graph.Type
+      Tlang.Inference.Kind
+      Tlang.Inference.Type
+      Tlang.Inference.TypeGen
       Tlang.JIT
-      Tlang.Lexer.Lexer
       Tlang.Parser
+      Tlang.Parser.Class
+      Tlang.Parser.Decl
+      Tlang.Parser.Expr
+      Tlang.Parser.Lexer
+      Tlang.Parser.Module
+      Tlang.Parser.Pattern
       Tlang.Parser.Pratt
+      Tlang.Parser.Type
+      Tlang.Subst
       Tlang.Syntax
       Tlang.Type
-      Tlang.Type.Checker
-      Tlang.Type.Checker.Constraint
       Tlang.Type.Class
       Tlang.Type.Concrete
       Tlang.Type.Primitive
@@ -55,8 +70,8 @@ library
       src
   default-extensions:
       TupleSections
-      GeneralizedNewtypeDeriving
       OverloadedLabels
+      OverloadedStrings
       BlockArguments
       TupleSections
       TypeOperators
@@ -70,6 +85,12 @@ library
       GADTs
       UndecidableInstances
       DataKinds
+      FunctionalDependencies
+      GeneralizedNewtypeDeriving
+      TypeApplications
+      DerivingStrategies
+      PolyKinds
+      StandaloneKindSignatures
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -83,15 +104,19 @@ library
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0
-    , llvm-hs-pure ==9.0.0
+    , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
+    , text
     , transformers >=0.5.6.2
   default-language: Haskell2010
 
@@ -103,8 +128,8 @@ executable t-lang-exe
       app
   default-extensions:
       TupleSections
-      GeneralizedNewtypeDeriving
       OverloadedLabels
+      OverloadedStrings
       BlockArguments
       TupleSections
       TypeOperators
@@ -118,6 +143,12 @@ executable t-lang-exe
       GADTs
       UndecidableInstances
       DataKinds
+      FunctionalDependencies
+      GeneralizedNewtypeDeriving
+      TypeApplications
+      DerivingStrategies
+      PolyKinds
+      StandaloneKindSignatures
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -131,16 +162,20 @@ executable t-lang-exe
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0
-    , llvm-hs-pure ==9.0.0
+    , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
     , t-lang
+    , text
     , transformers >=0.5.6.2
   default-language: Haskell2010
 
@@ -153,8 +188,8 @@ test-suite t-lang-test
       test
   default-extensions:
       TupleSections
-      GeneralizedNewtypeDeriving
       OverloadedLabels
+      OverloadedStrings
       BlockArguments
       TupleSections
       TypeOperators
@@ -168,6 +203,12 @@ test-suite t-lang-test
       GADTs
       UndecidableInstances
       DataKinds
+      FunctionalDependencies
+      GeneralizedNewtypeDeriving
+      TypeApplications
+      DerivingStrategies
+      PolyKinds
+      StandaloneKindSignatures
       TemplateHaskell
       KindSignatures
       TypeFamilies
@@ -181,15 +222,19 @@ test-suite t-lang-test
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , fgl
     , free >=5.1.9
+    , graphviz
     , haskeline
     , libffi
     , llvm-hs >=9.0.0
-    , llvm-hs-pure ==9.0.0
+    , llvm-hs-pure >=9.0.0
     , megaparsec
     , mtl
+    , optparse-applicative
     , parsec
     , recursion-schemes
     , t-lang
+    , text
     , transformers >=0.5.6.2
   default-language: Haskell2010

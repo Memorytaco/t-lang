@@ -1,2 +1,6 @@
 .stack-work/
 *~
+*.o
+a.out
+*.dot
+*.png

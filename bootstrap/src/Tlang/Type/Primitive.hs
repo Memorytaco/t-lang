@@ -17,7 +17,7 @@ Language primitive types, the fundamental building blocks of type.
 
 -}
 
-import Tlang.Type.Class (LLVMTypeEncode (..), TypeEquality (..), LLVMTypeClass (..), TypeClass (..))
+import Tlang.Type.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
 
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 import LLVM.AST.AddrSpace (AddrSpace (..))
@@ -25,34 +25,42 @@ import LLVM.AST.AddrSpace (AddrSpace (..))
 import Data.List (intercalate)
 import Data.Char (toLower)
 
+import Data.Functor.Foldable.TH
+import Data.Functor.Foldable (Recursive)
+
 data BaseType t a where
   -- | see `PrimScalaType`
   Scala   :: ScalaType -> BaseType t a
   -- | pointer type
   Ptr     :: BaseType t a -> Maybe Integer -> BaseType t a
-  -- | raw sequential type, array
+  -- | raw sequential type, array or vector
   Seq     :: t (BaseType t a) -> BaseType t a
-  -- ^ Aggregate type
+  -- | Aggregate type
   Struct  :: [BaseType t a] -> Bool -> BaseType t a
   Extend  :: a -> BaseType t a
 
+deriving instance Functor t => Functor (BaseType t)
+deriving instance (Eq a, Eq (t (BaseType t a))) => Eq (BaseType t a)
+deriving instance Foldable t => Foldable (BaseType t)
+deriving instance Traversable t => Traversable (BaseType t)
+
 -- | Primitive scala type, the very basic type building block.
 data ScalaType
-  = NumT NumType -- ^Number type for floating and integer, all are signed. for arithmetic operation only.
-  | DataT BitType  -- ^Data type used to represent hold user defined data like interpret [u8 x 4] as u32
+  = NumT NumType    -- ^ Number type for floating and integer, all are signed. for arithmetic operation only.
+  | DataT BitType   -- ^ Data type used to represent hold user defined data like interpret [u8 x 4] as u32
   deriving (Eq)
 
 data NumType = IntegerT IntegerLength
              | FloatT FloatLength
              deriving (Eq)
 
-data BitType = Bit Integer deriving (Eq)
+newtype BitType = Bit Integer deriving (Eq)
 
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
 
 instance (Show a, Show (t (BaseType t a))) => Show (BaseType t a) where
-  show (Scala t) = show t
+  show (Scala t) = show t <> "#"
   show (Ptr t _) = show t <> "*"
   show (Seq t) = show t
   show (Struct ts True) = "<{" <> intercalate ", " (show <$> ts) <> "}>"
@@ -85,7 +93,7 @@ instance LLVMTypeEncode BitType where
 instance LLVMTypeEncode ScalaType where
   encode (NumT t) = encode t
   encode (DataT t) = encode t
-instance (LLVMTypeEncode a, LLVMTypeEncode (t ((BaseType t a)))) => LLVMTypeEncode (BaseType t a) where
+instance (LLVMTypeEncode a, LLVMTypeEncode (t (BaseType t a))) => LLVMTypeEncode (BaseType t a) where
   encode (Scala t) = encode t
   encode (Ptr t addr'maybe) =
     case addr'maybe of
@@ -101,29 +109,6 @@ instance (LLVMTypeClass (t (BaseType t a)), LLVMTypeClass a) => LLVMTypeClass (B
   classOf (Seq t) = classOf t
   classOf (Struct _ _) = Aggregate
   classOf (Extend t) = classOf t
-
-instance
-  ( TypeEquality a a, TypeEquality a (BaseType t a)
-  , TypeEquality (t (BaseType t a)) (t (BaseType t a))
-  ) => TypeEquality (BaseType t a) (BaseType t a) where
-    (Extend a) ==? (Extend b) = a ==? b
-    a ==? (Extend b) = b ==? a
-    (Extend a) ==? b = a ==? b
-    (Scala a) ==? (Scala b) = a == b
-    (Scala _) ==? _ = False
-    (Ptr a _) ==? (Ptr b _) = a ==? b
-    (Ptr _ _) ==? _ = False
-    (Seq a) ==? (Seq b) = a ==? b
-    (Seq _) ==? _ = False
-    (Struct as _) ==? (Struct bs _) = and $ [length as == length bs] <> fmap (uncurry (==?)) (zip as bs)
-    (Struct _ _) ==? _ = False
-
-instance
-  ( TypeEquality a a, TypeEquality a (BaseType t a)
-  , TypeEquality (t (BaseType t a)) (BaseType t a)
-  , TypeEquality (t (BaseType t a)) (t (BaseType t a))
-  ) => Eq (BaseType t a) where
-  (==) = (==?)
 
 bool :: BaseType t a
 bool = Scala . DataT $ Bit 1
@@ -160,3 +145,7 @@ typeSpace (Bit i) = 2 ^ i
 
 ptr :: BaseType t a -> BaseType t a
 ptr = flip Ptr Nothing
+
+type FoldFunctor f = (Functor f, Traversable f, Foldable f)
+makeBaseFunctor [d| instance (FoldFunctor t) => Recursive (BaseType t a) |]
+
