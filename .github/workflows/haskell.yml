@@ -1,30 +1,42 @@
-name: Haskell CI
+name: Compiler Bootstrap CI
 
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+on: push
 
 permissions:
   contents: read
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
 
     steps:
     - uses: actions/checkout@v3
-    - uses: actions/setup-haskell@v1
-      with:
-        ghc-version: '8.10.3'
-        cabal-version: '3.2'
 
-    - name: Cache
+    - name: Setup Haskell Stack
+      uses: haskell/actions/setup@v2
+      with:
+        stack-setup-ghc: true
+        enable-stack: true
+        stack-version: 'latest'
+
+    - name: Cache LLVM ToolSet
+      id: cache-llvm
+      uses: actions/cache@v3
+      with:
+        path: |
+          ./llvm
+        key: llvm-9
+
+    - name: LLVM Environment
+      uses: KyleMayes/install-llvm-action@v1
+      with:
+        version: "9.0"
+        cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
+    - name: Cache Haskell Dependency
       uses: actions/cache@v3
       env:
-        cache-name: cache-cabal
+        cache-name: cache-haskell
       with:
         path: ~/.cabal
         key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
@@ -33,11 +45,7 @@ jobs:
           ${{ runner.os }}-build-
           ${{ runner.os }}-
 
-    - name: Install dependencies
-      run: |
-        cabal update
-        cabal build --only-dependencies --enable-tests --enable-benchmarks
     - name: Build
-      run: cabal build --enable-tests --enable-benchmarks all
-    - name: Run tests
-      run: cabal test all
+      run: |
+        cd bootstrap
+        stack build
