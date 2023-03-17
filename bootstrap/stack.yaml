@@ -109,7 +109,9 @@ extra-deps:
   - ansi-terminal-0.11.4
 
 # Override default flag values for local packages and extra-deps
-# flags: {}
+flags:
+  llvm-hs:
+    shared-llvm: false
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

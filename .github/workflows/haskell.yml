@@ -12,7 +12,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
-    - name: Cache and Restore ~/.stack
+    - name: Cache and Restore Haskell Dependency
       uses: actions/cache@v3
       with:
         path: ~/.stack
@@ -43,7 +43,7 @@ jobs:
         version: "9.0"
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
-    - name: Cache and Restore Haskell Dependency
+    - name: Cache and Restore Local builds
       uses: actions/cache@v3
       with:
         path: bootstrap/.stack-work
