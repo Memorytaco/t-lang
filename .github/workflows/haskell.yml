@@ -38,14 +38,11 @@ jobs:
       env:
         cache-name: cache-haskell
       with:
-        path: ~/.cabal
-        key: ${{ runner.os }}-build-${{ env.cache-name }}-${{ hashFiles('**/*.cabal') }}-${{ hashFiles('**/cabal.project') }}
-        restore-keys: |
-          ${{ runner.os }}-build-${{ env.cache-name }}-
-          ${{ runner.os }}-build-
-          ${{ runner.os }}-
+        path: ~/.stack
+        key: stack-key
 
     - name: Build
       run: |
         cd bootstrap
+        echo "allow-newer: true" > ~/.stack/config.yaml # FIXME: rebuild project dependency
         stack build
