@@ -4,7 +4,7 @@ module Tlang.Inference.Graph.Dot
   )
 where
 
-{- | module which handle visualizing graphic type based on dot.
+{- module which handle visualizing graphic type based on dot.
 -}
 
 import Tlang.AST

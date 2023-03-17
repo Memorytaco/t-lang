@@ -6,7 +6,7 @@ module Driver.Graph
   )
 where
 
-{- | play with graphic type and get information from data
+{- play with graphic type and get information from data
 -}
 
 import qualified Tlang.Parser.Type as PT

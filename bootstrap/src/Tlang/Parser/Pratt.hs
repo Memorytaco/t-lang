@@ -3,17 +3,18 @@ module Tlang.Parser.Pratt
   )
 where
 
--- |
+import Control.Applicative
+import Data.Kind (Type)
+import Data.Functor (($>), (<&>))
+
+-- | basic layout
+--
 -- - topparser
 -- - nud parser
 -- - led parser
 -- - dispatch parser
 -- - optional end parser
 -- - token parser
-
-import Control.Applicative
-import Data.Kind (Type)
-import Data.Functor (($>), (<&>))
 
 -- | adherence definition for pratt parser
 class (Alternative m, Monad m) => OperatorParser tok m | m -> tok where

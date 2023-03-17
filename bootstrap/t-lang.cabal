@@ -27,7 +27,9 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
+      Driver
       Driver.Graph
+      Driver.Inference
       Tlang
       Tlang.AST
       Tlang.AST.Expr
@@ -58,7 +60,6 @@ library
       Tlang.Parser.Type
       Tlang.Subst
       Tlang.Syntax
-      Tlang.Test
       Tlang.Type
       Tlang.Type.Class
       Tlang.Type.Concrete

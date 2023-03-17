@@ -1,7 +1,10 @@
-module Tlang.Test
-
+module Driver.Inference
+  ( defaultEnv
+  , playUnify
+  , playInfer
+  , playBind
+  )
 where
-
 
 import Tlang.Inference.Type (unify, localKind, runTyping, cookExpr, cookPattern, NormalType, clean, bindCheck)
 import Tlang.Inference.Kind (NormalKind)
