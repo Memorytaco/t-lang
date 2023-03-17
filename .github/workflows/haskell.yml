@@ -12,12 +12,21 @@ jobs:
     steps:
     - uses: actions/checkout@v3
 
+    - name: Cache and Restore ~/.stack
+      uses: actions/cache@v3
+      with:
+        path: ~/.stack
+        key: ${{ runner.os }}-stack-global-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-stack-global-
+
     - name: Setup Haskell Stack
       uses: haskell/actions/setup@v2
       with:
         stack-setup-ghc: true
         enable-stack: true
         stack-version: 'latest'
+        cabal-version: '3.4.0.0'
 
     - name: Cache LLVM ToolSet
       id: cache-llvm
@@ -26,6 +35,7 @@ jobs:
         path: |
           ./llvm
         key: llvm-9
+        restore-keys: llvm-9
 
     - name: LLVM Environment
       uses: KyleMayes/install-llvm-action@v1
@@ -33,14 +43,21 @@ jobs:
         version: "9.0"
         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
-    - name: Cache Haskell Dependency
+    - name: Cache and Restore Haskell Dependency
       uses: actions/cache@v3
-      env:
-        cache-name: cache-haskell
+      name: Cache .stack-work
       with:
-        path: ~/.stack
-        key: stack-key
+        path: bootstrap/.stack-work
+        key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
+        restore-keys: |
+          ${{ runner.os }}-stack-work-
 
+    - name: Test llvm toolset
+      run: |
+        echo -n "llvm-config version:"
+        echo `llvm-config --version`
+        echo -n "available link flags: "
+        echo `llvm-config --link-shared --libs all`
     - name: Build
       run: |
         cd bootstrap
