@@ -52,14 +52,13 @@ extra-deps:
   - primitive-0.7.4.0@sha256:89b88a3e08493b7727fa4089b0692bfbdf7e1e666ef54635f458644eb8358764,2857
   - base-orphans-0.8.7@sha256:58d5514b688ec037f53b9d60097b9d87f6b3847da68f65124987d67222c3a334,3175
 
-#   - git: https://github.com/llvm-hs/llvm-hs
-#     commit: 5cf5911f98ee429bf646a88f5af63ef44705006c
-#     subdirs:
-#       - llvm-hs
-#       - llvm-hs-pure
-
-  - llvm-hs-9.0.1@sha256:ee6ec2eb8cba4daf2a43586388a87dbfd6a2ec6d81d1f9965896ac187acad286,8700
+  # - git: https://github.com/llvm-hs/llvm-hs
+  #   commit: 0dc3447062d693c3076231f970726d18e05cb620
+  #   subdirs:
+  #     - llvm-hs
+  #     - llvm-hs-pure
   - llvm-hs-pure-9.0.0@sha256:134779f40086a366279f678e670b610d7a7618b28dd43f65894078fd20e04629,2945
+  - llvm-hs-9.0.1@sha256:ee6ec2eb8cba4daf2a43586388a87dbfd6a2ec6d81d1f9965896ac187acad286,8700
 
   - recursion-schemes-5.2.2.2@sha256:8c004c36be481a1893526875bf5fc8e86b43152c64ee87ae59970084fa5fdcd0,3911
     # recursion scheme
@@ -111,7 +110,7 @@ extra-deps:
 # Override default flag values for local packages and extra-deps
 flags:
   llvm-hs:
-    shared-llvm: false
+    shared-llvm: true
 
 # Extra package databases containing global packages
 # extra-package-dbs: []

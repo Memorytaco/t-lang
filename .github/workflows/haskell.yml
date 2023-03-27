@@ -20,14 +20,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-stack-global-
 
-    - name: Setup Haskell Stack
-      uses: haskell/actions/setup@v2
-      with:
-        stack-setup-ghc: true
-        enable-stack: true
-        stack-version: 'latest'
-        cabal-version: '3.4.0.0'
-
     - name: Cache LLVM ToolSet
       id: cache-llvm
       uses: actions/cache@v3
@@ -36,6 +28,14 @@ jobs:
           ./llvm
         key: llvm-9
         restore-keys: llvm-9
+
+    - name: Setup Haskell Stack
+      uses: haskell/actions/setup@v2
+      with:
+        stack-setup-ghc: true
+        enable-stack: true
+        stack-version: 'latest'
+        cabal-version: '3.4.0.0'
 
     - name: LLVM Environment
       uses: KyleMayes/install-llvm-action@v1
