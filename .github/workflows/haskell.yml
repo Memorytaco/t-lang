@@ -20,14 +20,14 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-stack-global-
 
-    - name: Cache LLVM ToolSet
-      id: cache-llvm
-      uses: actions/cache@v3
-      with:
-        path: |
-          ./llvm
-        key: llvm-9
-        restore-keys: llvm-9
+#     - name: Cache LLVM ToolSet
+#       id: cache-llvm
+#       uses: actions/cache@v3
+#       with:
+#         path: |
+#           ./llvm
+#         key: llvm-9
+#         restore-keys: llvm-9
 
     - name: Setup Haskell Stack
       uses: haskell/actions/setup@v2
@@ -37,11 +37,19 @@ jobs:
         stack-version: 'latest'
         cabal-version: '3.4.0.0'
 
+#     - name: LLVM Environment
+#       uses: KyleMayes/install-llvm-action@v1
+#       with:
+#         version: "9.0"
+#         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+
     - name: LLVM Environment
-      uses: KyleMayes/install-llvm-action@v1
-      with:
-        version: "9.0"
-        cached: ${{ steps.cache-llvm.outputs.cache-hit }}
+      run: |
+        curl https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-9 main"
+        sudo apt-get update
+        sudo apt-get -y install llvm-9-dev
+      shell: bash
 
     - name: Cache and Restore Local builds
       uses: actions/cache@v3
