@@ -20,15 +20,6 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-stack-global-
 
-#     - name: Cache LLVM ToolSet
-#       id: cache-llvm
-#       uses: actions/cache@v3
-#       with:
-#         path: |
-#           ./llvm
-#         key: llvm-9
-#         restore-keys: llvm-9
-
     - name: Setup Haskell Stack
       uses: haskell/actions/setup@v2
       with:
@@ -36,12 +27,6 @@ jobs:
         enable-stack: true
         stack-version: 'latest'
         cabal-version: '3.4.0.0'
-
-#     - name: LLVM Environment
-#       uses: KyleMayes/install-llvm-action@v1
-#       with:
-#         version: "9.0"
-#         cached: ${{ steps.cache-llvm.outputs.cache-hit }}
 
     - name: LLVM Environment
       run: |
@@ -59,14 +44,9 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-stack-work-
 
-    - name: Test llvm toolset
-      run: |
-        echo -n "llvm-config version:"
-        echo `llvm-config --version`
-        echo -n "available link flags: "
-        echo `llvm-config --link-shared --libs all`
     - name: Build
       run: |
         cd bootstrap
         echo "allow-newer: true" > ~/.stack/config.yaml # FIXME: rebuild project dependency
         stack build
+        cd ..
