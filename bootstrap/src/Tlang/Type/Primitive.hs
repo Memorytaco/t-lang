@@ -97,8 +97,8 @@ instance (LLVMTypeEncode a, LLVMTypeEncode (t (BaseType t a))) => LLVMTypeEncode
   encode (Scala t) = encode t
   encode (Ptr t addr'maybe) =
     case addr'maybe of
-      Nothing -> PointerType (encode t) $ AddrSpace 0
-      Just space  -> PointerType (encode t) . AddrSpace $ fromInteger space
+      Nothing -> undefined
+      Just space  -> undefined
   encode (Seq t) = encode t
   encode (Struct ts packed) = StructureType packed $ encode <$> ts  -- FIXME: structure type with non elements is confusing
   encode (Extend t) = encode t
