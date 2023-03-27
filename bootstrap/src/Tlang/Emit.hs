@@ -55,13 +55,13 @@ lambdaGen = error "not implemented"
 -- Expression Generation
 -- exprgen :: CodegenEnv m
 --         => Expr (Operator String) ResolvedName -> Codegen m (Either [Operand] Operand)
-exprgen (ExLit cVal) = case cVal of
-    LitInt num -> return . Right $ IR.int32 num
-    LitNumber num -> return . Right $ IR.double num
-    LitString str -> do
-      let val = IR.array $ fmap (AST.Int 8 . fromIntegral . ord) str ++ [AST.Int 8 0]
-      storage <- IR.alloca (typeOf val) Nothing 1
-      IR.store storage 0 val
-      Right <$> IR.bitcast storage (AST.ptr AST.i8)
+exprgen (ExLit cVal) = undefined
+    -- LitInt num -> return . Right $ IR.int32 num
+    -- LitNumber num -> return . Right $ IR.double num
+    -- LitString str -> do
+    --   let val = IR.array $ fmap (AST.Int 8 . fromIntegral . ord) str ++ [AST.Int 8 0]
+    --   storage <- IR.alloca (typeOf val) Nothing 1
+    --   IR.store storage 0 val
+    --   Right <$> IR.bitcast storage (AST.ptr AST.i8)
       -- Right <$> IR.load storage 0
 

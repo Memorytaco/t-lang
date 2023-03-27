@@ -8,9 +8,9 @@ module Tlang.Codegen
 
   , getvar
   , putvar
-  , getGlobal
-  , getLocal
-  , function
+  -- , getGlobal
+  -- , getLocal
+  -- , function
   , ret
   )
 where
@@ -48,25 +48,25 @@ putvar :: MonadState NameTable m => String -> Operand -> CodegenT r NameTable e 
 putvar s v = modify ((s,v) :)
 
 -- | access global name as reference
-getGlobal :: Monad m => String -> Type -> CodegenT r s e m Operand
-getGlobal (mkName -> name) typ = return . ConstantOperand $ GlobalReference typ name
+-- getGlobal :: Monad m => String -> Type -> CodegenT r s e m Operand
+-- getGlobal (mkName -> name) typ = return . ConstantOperand $ GlobalReference typ name
 -- | access local name as reference
-getLocal :: Monad m => String -> Type -> CodegenT r s e m Operand
-getLocal (mkName -> name) typ = return $ LocalReference typ name
+-- getLocal :: Monad m => String -> Type -> CodegenT r s e m Operand
+-- getLocal (mkName -> name) typ = return $ LocalReference typ name
 
 -- | generate an end block with optional value
 ret :: Monad m => Maybe Operand -> CodegenT r s e m ()
 ret val = emitTerm $ Ret val []
 
 -- | emit a function definition
-function :: Monad m => String -> Type -> [(Type, String)] -> [BasicBlock] -> LLVM s e m Operand
-function (mkName -> name) retty pairs blocks = do
-  let def = GlobalDefinition functionDefaults
-          { name = name
-          , parameters = ((\(ty, nm) -> Parameter ty (mkName nm) []) <$> pairs, False)
-          , returnType  = retty
-          , basicBlocks = blocks
-          }
-      funty = ptr $ FunctionType retty (fst <$> pairs) False
-  emitDefn def
-  return $ ConstantOperand $ GlobalReference funty name
+-- function :: Monad m => String -> Type -> [(Type, String)] -> [BasicBlock] -> LLVM s e m Operand
+-- function (mkName -> name) retty pairs blocks = do
+--   let def = GlobalDefinition functionDefaults
+--           { name = name
+--           , parameters = ((\(ty, nm) -> Parameter ty (mkName nm) []) <$> pairs, False)
+--           , returnType  = retty
+--           , basicBlocks = blocks
+--           }
+--       funty = ptr $ FunctionType retty (fst <$> pairs) False
+--   emitDefn def
+--   return $ ConstantOperand $ GlobalReference funty name
