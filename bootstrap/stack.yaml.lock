@@ -68,19 +68,31 @@ packages:
   original:
     hackage: base-orphans-0.8.7@sha256:58d5514b688ec037f53b9d60097b9d87f6b3847da68f65124987d67222c3a334,3175
 - completed:
-    hackage: llvm-hs-9.0.1@sha256:ee6ec2eb8cba4daf2a43586388a87dbfd6a2ec6d81d1f9965896ac187acad286,8700
+    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+    git: https://github.com/llvm-hs/llvm-hs
+    name: llvm-hs
     pantry-tree:
-      sha256: 537616dec1351bd9f7905182f82f132359cf3058ebbb059c03b4edcef04b2689
-      size: 13599
+      sha256: 7a64da9e0bc8d080e9b4941044fb4585eea96fb0472e07822a8e364e9b7a91ae
+      size: 12716
+    subdir: llvm-hs
+    version: 15.0.0
   original:
-    hackage: llvm-hs-9.0.1@sha256:ee6ec2eb8cba4daf2a43586388a87dbfd6a2ec6d81d1f9965896ac187acad286,8700
+    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+    git: https://github.com/llvm-hs/llvm-hs
+    subdir: llvm-hs
 - completed:
-    hackage: llvm-hs-pure-9.0.0@sha256:134779f40086a366279f678e670b610d7a7618b28dd43f65894078fd20e04629,2945
+    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+    git: https://github.com/llvm-hs/llvm-hs
+    name: llvm-hs-pure
     pantry-tree:
-      sha256: f1a83aa959b69b72342997fc4fdc352086bc3b9f306cfb6a4c8bbc850d36b4fb
-      size: 2600
+      sha256: 0eb9ec2745a283b7f8a417331510797e7f00a3359db13b04b50f32c75d8c5f52
+      size: 2712
+    subdir: llvm-hs-pure
+    version: 15.0.0
   original:
-    hackage: llvm-hs-pure-9.0.0@sha256:134779f40086a366279f678e670b610d7a7618b28dd43f65894078fd20e04629,2945
+    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+    git: https://github.com/llvm-hs/llvm-hs
+    subdir: llvm-hs-pure
 - completed:
     hackage: recursion-schemes-5.2.2.2@sha256:8c004c36be481a1893526875bf5fc8e86b43152c64ee87ae59970084fa5fdcd0,3911
     pantry-tree:

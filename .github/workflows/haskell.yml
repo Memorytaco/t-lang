@@ -7,7 +7,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v3
@@ -46,9 +46,9 @@ jobs:
     - name: LLVM Environment
       run: |
         curl https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        sudo add-apt-repository "deb http://apt.llvm.org/bionic/ llvm-toolchain-bionic-9 main"
+        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main"
         sudo apt-get update
-        sudo apt-get -y install llvm-9-dev
+        sudo apt-get -y install llvm-15-dev
       shell: bash
 
     - name: Cache and Restore Local builds
