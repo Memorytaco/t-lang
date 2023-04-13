@@ -1,3 +1,14 @@
+{-| * Graphic representation and inference for MLF type system
+
+   This module contains all main methods for inference of MLF type system.
+
+   ** Supporting Module
+
+   We use fgl as underlying data structure to operate on graphic representation of
+   MLF grpahic types. Please see `Tlang.Inference.Graph.Operation` for lowlevel
+   operations of MLF constraint.
+-}
+
 module Tlang.Inference.Graph
   ( GraphRel (..)
   , GEdge (..)
@@ -18,28 +29,32 @@ module Tlang.Inference.Graph
 
   , (~=~)
   , expandat
+  , runExpansion
   , interiorC, interiorS, interiorI
   , permission
   )
 where
 
+
+
 import Tlang.AST
 
 import Control.Monad
-import Control.Monad.Reader (MonadReader (..), runReaderT, asks)
-import Control.Monad.State (MonadState (..), modify, runStateT, gets)
+import Control.Monad.Reader (MonadReader (..), asks)
+import Control.Monad.State (MonadState (..), modify, gets)
 import Control.Monad.Identity (Identity)
 import Control.Monad.RWS (RWST (..))
-import Data.Functor ((<&>), ($>))
+import Data.Functor ((<&>))
 import Data.Functor.Foldable
 import Data.Bifunctor (first, second, bimap)
-import Data.List (sortBy, find, union, deleteBy, nub)
+import Data.List (sortBy, union, nub, intersect)
 import Data.Graph.Inductive hiding (edges, nodes)
 import qualified Data.Graph.Inductive as I
 import Data.Coerce (coerce)
+import Data.Maybe (fromJust)
 
 import Tlang.Inference.Graph.Type
-import Tlang.Inference.Graph.Operator
+import Tlang.Inference.Graph.Operation
 
 arityOf :: NodeArity -> [Variance]
 arityOf = coerce
@@ -142,6 +157,9 @@ toGraph = cata go
 
 -- | simplify, forall (a <> g). a == g
 -- FIXME: complete the ruleset
+simplify :: Node
+         -> Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
+         -> Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
 simplify r g =
   case cleanable g of
     [] -> g
@@ -193,18 +211,14 @@ restore schema root = do
           labelNodes <- getStructure root >>= \subs -> mapM nodeLabel subs
           pairs <- forM labelNodes \(node, nlabel) ->
             case nlabel of
-              GType (NodeHas label) -> do
-                typ <- getLabelMaybe node
-                return (label, typ)
+              GType (NodeHas l) -> getLabelMaybe node <&> (l,)
               _ -> fail "Expect a Label node, but have none!"
           return (TypSum pairs)
         GType NodeRec -> do
           labelNodes <- getStructure root >>= mapM nodeLabel
           pairs <- forM labelNodes \(node, nlabel) ->
             case nlabel of
-              GType (NodeHas label) -> do
-                typ <- getLabel node
-                return (label, typ)
+              GType (NodeHas l) -> getLabel node <&> (l,)
               _ -> fail "Expect a Label node, but have none!"
           return (TypRec pairs)
         GType NodeTup -> do
@@ -230,10 +244,10 @@ restore schema root = do
       return $ generalize body  -- return the final type
   where
     -- | generate new name using index and one schema
-    newName schema = do
+    newName decorate = do
       ix <- gets snd
       modify (fmap (+1))
-      return (schema ix)
+      return (decorate ix)
     -- | return information of bound node of a binder
     -- (Node, (Perm, name))
     getInBounds node = do
@@ -430,27 +444,119 @@ augGraph root = do
       return b
 
 {- | # utility for type inference
+--
 --  used to solve graphic constraint
 -}
 
--- | expand a type scheme under a gen node
-expandat = undefined
+runExpansion
+  :: (Eq rep, Eq lit, Eq name, Eq label, MonadFail m)
+  => Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
+  -> (Node, Node) -> Node
+  -> m ((Node, [(Node, Node)]), Gr (GNode (GNodeLabel lit label rep name)) (GEdge name))
+runExpansion r a b = do
+  (res, stat, ()) <- runRWST (expandat a b) r r
+  return (res, stat)
 
-interiorC, interiorS
+-- | expand a type scheme under a gen node
+expandat
+  :: forall m lit label rep name
+  .  ( MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
+     , MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
+     , Eq rep, Eq lit, Eq name, Eq label, MonadFail m)
+  => (Node, Node) -> Node -> m (Node, [(Node, Node)])
+expandat (rootG, scheme) target = do
+  preAssert
+  binds <- dupScheme
+  return (fromJust $ lookup scheme binds, binds)
+  where
+    directS g = nub . fmap fst . filter (isStructureEdge . snd) . lsuc g
+    dupScheme :: m [(Node, Node)]
+    dupScheme = do
+      labof <- lab'' <$> (ask :: m (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)))
+      oNodes :: [Node] <- do
+        n1 <- interiorS rootG
+        nds <- union n1 <$> frontierS rootG
+        intersect <$> interiorI scheme <*> return nds
+      nNodes <- gets $ newNodes (length oNodes)
+      let nBinds = zip oNodes nNodes
+          oBinds = zip nNodes oNodes
+      -- insert new generated nodes
+      modify $ insNodes (second labof <$> oBinds)
+      -- insert edges between copied nodes
+      do fullEdges <- asks $ -- get all edges between copied nodes
+           filter (\(from, to, isConstraintEdge -> l) -> from `elem` oNodes && to `elem` oNodes && not l) . labEdges
+         modify . insEdges $ (\(from, to, l) -> let toNew = fromJust . flip lookup nBinds in (toNew from, toNew to, l)) <$> fullEdges
+      -- change frontierS nodes into bottom nodes
+      do fS <- intersect <$> frontierS rootG <*> pure oNodes
+         modify . insNodes $ (, GType NodeBot) . fromJust . flip lookup nBinds <$> fS
+         modify . insEdges $ fS >>= -- add unify constraint between two nodes
+           (\o -> let n = fromJust $ lookup o nBinds in [(o, n, GOperate CUnify), (n, o, GOperate CUnify)])
+      -- add binding edges to new rootG
+      let nRoot = fromJust $ lookup scheme nBinds
+      do nx <- gets $ length . flip bEdgeOut target
+         modify $ insEdge (nRoot, target, GBind Flexible (nx + 1) Nothing)
+      -- add MLF expansion
+      do oEdges <- asks $ filter (\(from, _, _) -> from `elem` oNodes) . flip bEdgeIn rootG
+         modify . insEdges $ fmap (\(from, _, l) -> (fromJust $ lookup from nBinds, nRoot, l)) oEdges
+      return nBinds
+    preAssert :: m ()
+    preAssert = do
+      labof <- asks lab''
+      directOf <- asks directS
+      -- type scheme should be a direct child of node G (rootG)
+      if scheme `elem` directOf rootG then return () else fail "Invalid type scheme to be expanded"
+      -- the target node should be a node G again
+      if labof target == GNode then return () else fail "Invalid expansion root"
+
+-- | get **constraint interior node** including it self.
+interiorC
   :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
   => Node -> m [Node]
-interiorC root = do
-  go root
-  undefined
+interiorC root = go [root] []
   where
-    go root = do
-      g <- ask
-      let nodes = fmap fst . filter (isBindEdge . snd) $ lpre g root
-      undefined
+    go [] visited = return visited
+    go roots visited = do
+      next <- asks with
+      let nexts = nub $ next =<< roots
+          rets = roots `union` visited
+      go (filter (`notElem` rets) nexts) rets
+      where
+        with g = nub . fmap fst . filter (isBindEdge . snd) . lpre g
 
-interiorS = undefined
+-- | get **structural interior node**
+interiorS
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  => Node -> m [Node]
+interiorS root = do
+  cs <- interiorC root
+  ss <- interiorI root
+  return (nub $ intersect cs ss)
 
-interiorI = undefined
+-- | get reachable structure node
+interiorI
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  => Node -> m [Node]
+interiorI root = go [root] []
+  where
+    go [] xs = return xs
+    go roots visited = do
+      next <- asks with
+      let nexts = nub $ next =<< roots
+          rets = roots `union` visited
+      go (filter (`notElem` rets) nexts) rets
+      where
+        with g = nub . fmap fst . filter (isStructureEdge . snd) . lsuc g
+
+-- | get **structural frontier node**
+frontierS
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  => Node -> m [Node]
+frontierS root = do
+  interiors <- interiorS root
+  next <- asks with
+  return . filter (`notElem` interiors) . nub $ next =<< interiors
+  where
+    with g = nub . fmap fst . filter (isStructureEdge . snd) . lsuc g
 
 permission :: MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
            => Node -> Node -> m Perm

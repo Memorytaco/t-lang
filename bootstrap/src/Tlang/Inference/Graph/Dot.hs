@@ -4,12 +4,12 @@ module Tlang.Inference.Graph.Dot
   )
 where
 
-{- module which handle visualizing graphic type based on dot.
+{- this module handles visualizing graphic type based on dot.
 -}
 
 import Tlang.AST
 import Tlang.Inference.Graph.Type
-import Tlang.Inference.Graph.Operator
+import Tlang.Inference.Graph.Operation
 
 import Data.Graph.Inductive
 import Data.GraphViz hiding (DotGraph)

@@ -79,7 +79,7 @@ data GNodeLabel lit label rep name
   | NodeHas label -- type label node, depends on its parent, can have one or no sub graph, arity 1
   | NodeApp -- application node, minimal arity 2
   | NodeAbs -- abstraction node, arity 2
-  | NodeCons name NodeArity
+  -- | NodeCons name NodeArity
   deriving (Show, Eq)
 
 -- | mark arity info of constructor
@@ -91,7 +91,7 @@ instance (Labellable name, Show label) => Labellable (GNodeLabel lit label rep n
   toLabelValue (NodeRep _) = StrLabel "&"
   toLabelValue (NodeLit _) = StrLabel "$"
   toLabelValue (NodeRef name) = toLabelValue name
-  toLabelValue (NodeCons name _) = toLabelValue name
+  -- toLabelValue (NodeCons name _) = toLabelValue name
   toLabelValue NodeSum = StrLabel "<>"
   toLabelValue NodeRec = StrLabel "{}"
   toLabelValue NodeTup = StrLabel "*"

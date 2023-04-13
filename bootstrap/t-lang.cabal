@@ -30,8 +30,13 @@ library
       Driver
       Driver.Graph
       Driver.Inference
+      Driver.Parser
+      Interface.Config
+      Interface.Parser
+      Interface.Shell
       Tlang
       Tlang.AST
+      Tlang.AST.Decl
       Tlang.AST.Expr
       Tlang.AST.Module
       Tlang.AST.Operator
@@ -43,7 +48,7 @@ library
       Tlang.Inference
       Tlang.Inference.Graph
       Tlang.Inference.Graph.Dot
-      Tlang.Inference.Graph.Operator
+      Tlang.Inference.Graph.Operation
       Tlang.Inference.Graph.Type
       Tlang.Inference.Kind
       Tlang.Inference.Type
@@ -104,6 +109,7 @@ library
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , exceptions
     , fgl
     , free >=5.1.9
     , graphviz
@@ -162,6 +168,7 @@ executable t-lang-exe
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , exceptions
     , fgl
     , free >=5.1.9
     , graphviz
@@ -222,6 +229,7 @@ test-suite t-lang-test
     , bifunctors
     , bytestring
     , containers >=0.6.5 && <0.7
+    , exceptions
     , fgl
     , free >=5.1.9
     , graphviz

@@ -1,8 +1,9 @@
-module Tlang.Inference.Graph.Operator
+module Tlang.Inference.Graph.Operation
   ( sOut, sIn
-  , isStructureEdge, isBindEdge
+  , isStructureEdge, isBindEdge, isConstraintEdge
   , sEdgeOut, sEdgeIn, bEdgeOut, bEdgeIn
   , sReach
+  , lab''
   )
 where
 
@@ -27,9 +28,13 @@ sEdgeIn g node = filter (\(_,_,e) -> isStructureEdge e) $ inn g node
 bEdgeOut g node = filter (\(_,_,e) -> isBindEdge e) $ out g node
 bEdgeIn g node = filter (\(_,_,e) -> isBindEdge e) $ inn g node
 
-isStructureEdge, isBindEdge :: GEdge a -> Bool
+isStructureEdge, isBindEdge, isConstraintEdge :: GEdge a -> Bool
 isStructureEdge (GSub _) = True
 isStructureEdge _ = False
 isBindEdge (GBind {}) = True
 isBindEdge _ = False
+isConstraintEdge (GOperate _) = True
+isConstraintEdge _ = False
 
+lab'' :: Graph gr => gr a b -> Node -> a
+lab'' g = lab' . context g

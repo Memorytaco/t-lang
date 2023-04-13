@@ -11,6 +11,7 @@ where
 import Tlang.AST.Expr
 import Tlang.AST.Type
 import Tlang.AST.Operator
+import Tlang.AST.Decl
 
 import Data.List (intercalate)
 
@@ -43,3 +44,24 @@ data FnSymbol typ name
   | FnSymbol String -- ^ external symbol name
   | FnDecl (Lambda typ ((:@) typ) name) -- ^ export a function out
   deriving (Show, Eq)
+
+-- | module path fragment
+newtype Frag
+  = Frag String
+  deriving (Show, Eq)
+
+-- | All possible declaration geners
+data DeclKind
+  = DeclData  -- data definition
+  | DeclLexi  -- lexical declaration
+  | DeclType  -- type definition
+  | DeclBind  -- value definition
+  | DeclExtl  -- external value declaration
+  deriving (Show, Eq)
+
+data Mod marker info decls =
+  Mod { mmName :: ([Frag], String)  -- Module name
+      , mmUses :: [Use info]        -- Module imports, including lexical items
+      , mmDecl :: [decls]           -- Module declarations
+      , mmLexi :: [Operator String] -- Module lexical operators
+      }

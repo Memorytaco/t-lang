@@ -48,13 +48,17 @@ infixl 1 &
 ;;
 
 let & : forall a b. a -> (a -> b) -> b =
-[ ?val, ?f = f val
-]
+[ ?val, ?f = f val ]
 ;;
 
 data optional a
 | none
 | some: a
+;;
+
+data maybe a
+| nothing
+| just: a
 ;;
 
 data either a b
@@ -67,7 +71,10 @@ data ref a
 | ref: a
 ;;
 
+type ptr a = #[ pointer #64 ]
+;;
+
 data list a
-| cons: a * list a
 | nil
+| cons: a * list a
 ;;

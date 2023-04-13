@@ -38,6 +38,7 @@ dependencies:
 - fgl
 - graphviz
 - optparse-applicative
+- exceptions
 
 ghc-options:
 - -Wall
