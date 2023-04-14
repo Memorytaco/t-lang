@@ -63,6 +63,7 @@ library
       Tlang.Parser.Pattern
       Tlang.Parser.Pratt
       Tlang.Parser.Type
+      Tlang.Rep
       Tlang.Rep.Class
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
