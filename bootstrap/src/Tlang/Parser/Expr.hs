@@ -171,8 +171,8 @@ bigLambda = do
       seqPat = fmap PatSeq $ groupPat `sepBy1` reservedOp "|"
       branch = (,) <$> seqPat <*> (reservedOp "=" *> pratt (void . lookAhead $ reservedOp "]" <|> reservedOp "|" ) (-100))
   lambda <-
-    try ((`Lambda` []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "]") (-100))
-    <|> Lambda <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
+    try ((flip (Lambda []) []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "]") (-100))
+    <|> Lambda [] <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
   void $ reservedOp "]"
   return lambda
 smallLambda :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseLambdaType None Identity)
@@ -180,7 +180,7 @@ smallLambda end = do
   let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> ["=>", ","] ) (-100)
       seqPat = fmap PatSeq $ iPattern <* reservedOp "," >>= \v -> (v:) <$> iPattern `sepBy1` reservedOp ","
       branch = (,) <$> ((try seqPat <|> iPattern) <* reservedOp "=>") <*> pratt (lookAhead $ end <|> void (reservedOp ",")) (-100)
-  Lambda <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
+  Lambda [] <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
 
 record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType None Identity)
 record = do

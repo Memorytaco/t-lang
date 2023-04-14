@@ -132,8 +132,9 @@ cookPattern = cata go
     go (PatBindF name mp) = PatBind name <$> mp
     go (PatAnnoF (mp :@ typ)) = fmap PatAnno $ (:@) <$> mp <*> localKind typ
 
+-- FIXME: handle the type declaration
 cookLambda :: forall c m. CookEnv c m => ParseLambdaType None Identity -> m (ParseLambda (NormalType NormalKind))
-cookLambda (Lambda b1 bs) = Lambda <$> cookBranch b1 <*> forM bs cookBranch
+cookLambda (Lambda _ b1 bs) = Lambda [] <$> cookBranch b1 <*> forM bs cookBranch
   where
     cookGpattern = cata \case
       PatternF pat -> Pattern <$> cookPattern pat
@@ -579,7 +580,7 @@ patternTyping pat = do
 
 lambdaTyping :: (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
              => Lambda typ anno name -> m b
-lambdaTyping (Lambda _branch _branchs) = do
+lambdaTyping (Lambda _ _branch _branchs) = do
   void $ gPatternTyping undefined
   undefined
   where

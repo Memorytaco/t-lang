@@ -23,9 +23,9 @@ import Text.Megaparsec
 
 type ParseDeclType c f = Declaration (TypeParser.ParseType c f) Symbol
 
-defFn :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
-defFn r = do
-  void $ reserved "fn"
+defForeign :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defForeign r = do
+  void $ reserved "foreign"
   name <- Symbol <$> identifier
   void $ reservedOp ":" <|> fail "fn declaration require type signature"
   sig <- TypeParser.unParser (fst r) (void . lookAhead . choice $ reservedOp <$> ["[", "=", ";;"]) (-100)
@@ -34,7 +34,7 @@ defFn r = do
     ";;" -> return $ FnD name sig FnDefault
     "[" -> FnDecl <$> lambda <* reservedOp ";;" <&> FnD name sig
     "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" <&> FnD name sig
-    _ -> error "impossible in Tlang.Parser.Decl.defFn"
+    _ -> error "impossible in Tlang.Parser.Decl.defForeign"
   where
     lambda = ExprParser.getParser ExprParser.bigLambda r
 
@@ -112,7 +112,7 @@ defFixity = defUnifix <|> defInfix
 declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity)
 declaration = do
   r <- lift get
-  defFn r <|> defLet r <|> defTypAlias r <|> defData r <|> do
+  defForeign r <|> defLet r <|> defTypAlias r <|> defData r <|> do
     op@(Operator _ _ _ s) <- defFixity
     lift . modify $ \(tys, trs) -> if head s == ':' then (op:tys, trs) else (tys, op:trs)
     void $ reservedOp ";;"

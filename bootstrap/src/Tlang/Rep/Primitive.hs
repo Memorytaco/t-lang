@@ -1,5 +1,10 @@
-module Tlang.Type.Primitive
-  ( BaseType (..)
+{- | * Language primitive types
+
+    it is the fundamental building blocks of native type.
+-}
+
+module Tlang.Rep.Primitive
+  ( PrimitiveT (..)
 
   , ptr
   , bit
@@ -7,17 +12,11 @@ module Tlang.Type.Primitive
   , float, double
   , int8, int16, int32, int64, int128, char, short, int, long, longlong
   , uint8, uint16, uint32, uint64, byte, uchar
-  , typeSpace
+  , valueSpace
   )
 where
 
-{-
-
-Language primitive types, the fundamental building blocks of type.
-
--}
-
-import Tlang.Type.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
+import Tlang.Rep.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
 
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 import LLVM.AST.AddrSpace (AddrSpace (..))
@@ -28,28 +27,33 @@ import Data.Char (toLower)
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 
-data BaseType t a where
+-- | primitive type, as the type name suggests.
+-- we use it to do a direct translation between host type and llvm IR type.
+data PrimitiveT seq a where
   -- | see `PrimScalaType`
-  Scala   :: ScalaType -> BaseType t a
+  Scala   :: ScalaType -> PrimitiveT seq a
   -- | pointer type
-  Ptr     :: BaseType t a -> Maybe Integer -> BaseType t a
+  Ptr     :: PrimitiveT seq a -> Maybe Integer -> PrimitiveT seq a
   -- | raw sequential type, array or vector
-  Seq     :: t (BaseType t a) -> BaseType t a
+  Seq     :: seq (PrimitiveT seq a) -> PrimitiveT seq a
   -- | Aggregate type
-  Struct  :: [BaseType t a] -> Bool -> BaseType t a
-  Extend  :: a -> BaseType t a
+  Struct  :: [PrimitiveT seq a] -> Bool -> PrimitiveT seq a
+  -- | Allow other elements to be merged into primitive type
+  Embed  :: a -> PrimitiveT seq a
 
-deriving instance Functor t => Functor (BaseType t)
-deriving instance (Eq a, Eq (t (BaseType t a))) => Eq (BaseType t a)
-deriving instance Foldable t => Foldable (BaseType t)
-deriving instance Traversable t => Traversable (BaseType t)
+deriving instance Functor t => Functor (PrimitiveT t)
+deriving instance (Eq a, Eq (t (PrimitiveT t a))) => Eq (PrimitiveT t a)
+deriving instance Foldable t => Foldable (PrimitiveT t)
+deriving instance Traversable t => Traversable (PrimitiveT t)
 
 -- | Primitive scala type, the very basic type building block.
 data ScalaType
   = NumT NumType    -- ^ Number type for floating and integer, all are signed. for arithmetic operation only.
-  | DataT BitType   -- ^ Data type used to represent hold user defined data like interpret [u8 x 4] as u32
+  | DataT BitType   -- ^ Data type is used to represent user defined data, like interpreting memory chunk [u8 x 4] as u32.
+                    -- it can also treat 16 bits as u16 and it is endian sensitive.
   deriving (Eq)
 
+-- | Basic definition number type
 data NumType = IntegerT IntegerLength
              | FloatT FloatLength
              deriving (Eq)
@@ -59,14 +63,14 @@ newtype BitType = Bit Integer deriving (Eq)
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
 
-instance (Show a, Show (t (BaseType t a))) => Show (BaseType t a) where
+instance (Show a, Show (t (PrimitiveT t a))) => Show (PrimitiveT t a) where
   show (Scala t) = show t <> "#"
   show (Ptr t _) = show t <> "*"
   show (Seq t) = show t
   show (Struct ts True) = "<{" <> intercalate ", " (show <$> ts) <> "}>"
   show (Struct ts False) = "{" <> intercalate ", " (show <$> ts) <> "}"
-  -- show (Extend a) = "{|" <> show a <> "|}"
-  show (Extend a) = show a
+  -- show (Embed a) = "{|" <> show a <> "|}"
+  show (Embed a) = show a
 
 instance Show ScalaType where
   show (NumT t) = show t
@@ -93,34 +97,35 @@ instance LLVMTypeEncode BitType where
 instance LLVMTypeEncode ScalaType where
   encode (NumT t) = encode t
   encode (DataT t) = encode t
-instance (LLVMTypeEncode a, LLVMTypeEncode (t (BaseType t a))) => LLVMTypeEncode (BaseType t a) where
+instance (LLVMTypeEncode a, LLVMTypeEncode (t (PrimitiveT t a))) => LLVMTypeEncode (PrimitiveT t a) where
   encode (Scala t) = encode t
-  encode (Ptr t addr'maybe) =
+  encode (Ptr _ addr'maybe) =
     case addr'maybe of
-      Nothing -> undefined
-      Just space  -> undefined
+      Nothing -> PointerType $ AddrSpace 0
+      Just space  -> PointerType $ AddrSpace (fromInteger space)
   encode (Seq t) = encode t
-  encode (Struct ts packed) = StructureType packed $ encode <$> ts  -- FIXME: structure type with non elements is confusing
-  encode (Extend t) = encode t
+  -- struct with 0 elements is valid in llvm IR, so we simply keep it.
+  encode (Struct ts packed) = StructureType packed $ encode <$> ts
+  encode (Embed t) = encode t
 
-instance (LLVMTypeClass (t (BaseType t a)), LLVMTypeClass a) => LLVMTypeClass (BaseType t a) where
+instance (LLVMTypeClass (t (PrimitiveT t a)), LLVMTypeClass a) => LLVMTypeClass (PrimitiveT t a) where
   classOf (Scala _) = Primitive
   classOf (Ptr _ _) = Primitive
   classOf (Seq t) = classOf t
   classOf (Struct _ _) = Aggregate
-  classOf (Extend t) = classOf t
+  classOf (Embed t) = classOf t
 
-bool :: BaseType t a
+bool :: PrimitiveT t a
 bool = Scala . DataT $ Bit 1
 
-double, float :: BaseType t a
+double, float :: PrimitiveT t a
 double = Scala . NumT $ FloatT F64
 float = Scala . NumT $ FloatT F32
 
-bit :: Integer -> BaseType t a
+bit :: Integer -> PrimitiveT t a
 bit = Scala . DataT . Bit
 
-int8, int16, int32, int64, int128, char, short, int, long, longlong :: BaseType t a
+int8, int16, int32, int64, int128, char, short, int, long, longlong :: PrimitiveT t a
 int8 = Scala . NumT $ IntegerT I8
 int16 = Scala . NumT $ IntegerT I16
 int32 = Scala . NumT $ IntegerT I32
@@ -132,7 +137,7 @@ int = int32
 long = int64
 longlong = int128
 
-uint8, uint16, uint32, uint64, byte, uchar :: BaseType t a
+uint8, uint16, uint32, uint64, byte, uchar :: PrimitiveT t a
 uint8 = Scala . DataT $ Bit 8
 uint16 = Scala . DataT $ Bit 16
 uint32 = Scala . DataT $ Bit 32
@@ -140,12 +145,12 @@ uint64 = Scala . DataT $ Bit 64
 byte = uint8
 uchar = byte
 
-typeSpace :: BitType -> Integer
-typeSpace (Bit i) = 2 ^ i
+-- | to show number of enumerations this bit type can hold
+valueSpace :: BitType -> Integer
+valueSpace (Bit i) = 2 ^ i
 
-ptr :: BaseType t a -> BaseType t a
+ptr :: PrimitiveT t a -> PrimitiveT t a
 ptr = flip Ptr Nothing
 
 type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance (FoldFunctor t) => Recursive (BaseType t a) |]
-
+makeBaseFunctor [d| instance (FoldFunctor t) => Recursive (PrimitiveT t a) |]

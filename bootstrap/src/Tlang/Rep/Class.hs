@@ -1,7 +1,6 @@
-module Tlang.Type.Class
+module Tlang.Rep.Class
   ( TypeMangle (..)
   , LLVMTypeEncode (..)
-  , TypeEquality (..)
 
   , LLVMTypeClass (..)
   , TypeClass (..)
@@ -11,7 +10,6 @@ module Tlang.Type.Class
 where
 
 import qualified LLVM.AST.Type as T (Type)
-import LLVM.AST.AddrSpace (AddrSpace (..))
 
 -- | TODO: find proper error of type encod
 data TypeMangleError = TypeMangleError deriving (Show, Eq)
@@ -25,10 +23,7 @@ class TypeMangle a where
 class LLVMTypeEncode a where
   encode :: a -> T.Type
 
+-- | used to help choosing vector or list in llvm IR
 data TypeClass = Primitive | Aggregate deriving (Show, Eq)
-
 class LLVMTypeClass a where
   classOf :: a -> TypeClass
-
-class TypeEquality a b where
-  (==?) :: a -> b -> Bool

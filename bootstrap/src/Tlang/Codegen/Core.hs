@@ -1,13 +1,4 @@
-module Tlang.Codegen.Core
-  ( CodegenT (..)
-  , LLVM (..)
-  , runCodegen
-  , runLLVM
-  , buildLLVM
-  )
-where
-
-{-
+{- | * Codegen module
 
 Basic primitives for building up LLVM IR. No code generation logic here.
 
@@ -15,6 +6,17 @@ Lack large amount of basic primitives here or lack one translation layer to map 
 operation into assembly like instructions.
 
 -}
+
+module Tlang.Codegen.Core
+  ( CodegenT (..)
+  , LLVM (..)
+  , runCodegen
+  , runLLVM
+  , buildLLVM
+  , EmitInstr (..)
+  )
+where
+
 
 import LLVM.AST hiding (Type)
 import LLVM.IRBuilder
@@ -44,3 +46,6 @@ buildLLVM m s ma = do
   (a, defs) <- runLLVM ma s
   return (a, m { moduleDefinitions = moduleDefinitions m <> defs })
 
+-- | General class for instruction
+class EmitInstr ctx a where
+  emit :: a -> ctx Instruction

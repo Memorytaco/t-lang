@@ -50,15 +50,6 @@ newtype Frag
   = Frag String
   deriving (Show, Eq)
 
--- | All possible declaration geners
-data DeclKind
-  = DeclData  -- data definition
-  | DeclLexi  -- lexical declaration
-  | DeclType  -- type definition
-  | DeclBind  -- value definition
-  | DeclExtl  -- external value declaration
-  deriving (Show, Eq)
-
 data Mod marker info decls =
   Mod { mmName :: ([Frag], String)  -- Module name
       , mmUses :: [Use info]        -- Module imports, including lexical items

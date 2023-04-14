@@ -9,7 +9,7 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 
--- HM(X) constraint framework, both for term language and type language
+-- ** HM(X) constraint framework, both for term language and type language
 
 -- | type constraint, parametrised with a predicate relation `rel`.
 data Constraint rel name term typ

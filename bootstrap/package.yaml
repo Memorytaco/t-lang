@@ -39,6 +39,7 @@ dependencies:
 - graphviz
 - optparse-applicative
 - exceptions
+- type-errors
 
 ghc-options:
 - -Wall

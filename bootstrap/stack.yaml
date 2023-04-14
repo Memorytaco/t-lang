@@ -107,6 +107,11 @@ extra-deps:
   - ansi-wl-pprint-0.6.9
   - ansi-terminal-0.11.4
 
+    # type errors
+  - type-errors-0.2.0.1
+  - first-class-families-0.8.0.1
+  - syb-0.7.2.2
+
 # Override default flag values for local packages and extra-deps
 flags:
   llvm-hs:

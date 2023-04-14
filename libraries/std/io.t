@@ -1,10 +1,13 @@
-module io ;;
+module std/io ;;
 
-data descriptor
+use std/string (cstr)
+;;
+
+data descriptor = #[ptr 64]
 ;;
 
 type handle = descriptor
 ;;
 
-fn open: str -> descriptor = "open"
+fn open: cstr -> descriptor = "open"
 ;;

@@ -16,6 +16,8 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 
+import Tlang.AST.Type (Bound (..))
+
 -- | type annotation with full power of the type system
 data typ :@ term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
 
@@ -45,6 +47,17 @@ data Expr typ anno name
   | ExLet (Pattern anno name)           -- ^ local variable binding
       (Expr typ anno name) (Expr typ anno name)
   | ExAnno (anno (Expr typ anno name))  -- ^ type annotation for expression
+
+-- | instantiation
+data Inst name typ
+  = InstOne       -- identity
+  | InstTyp typ   -- bottom
+  | InstNew name  -- abstract
+  | InstInside (Inst name typ)
+  | InstUnder name (Inst name typ)
+  | InstElim
+  | InstIntro
+  | InstSeq (Inst name typ) (Inst name typ)
 
 deriving instance (Show (anno (Expr typ anno name)), Show (anno (Pattern anno name)), Show typ, Show name) => Show (Expr typ anno name)
 deriving instance (Eq (anno (Expr typ anno name)), Eq (anno (Pattern anno name)), Eq typ, Eq name) => Eq (Expr typ anno name)
@@ -85,8 +98,9 @@ data Field label typ
 
 -- | Lambda computation block, support both light and heavy notation
 data Lambda typ anno name
-  = Lambda (GPattern anno name, Expr typ anno name)
-          [(GPattern anno name, Expr typ anno name)]
+  = Lambda [Bound typ name]
+    (GPattern anno name, Expr typ anno name)
+    [(GPattern anno name, Expr typ anno name)]
 
 deriving instance (Show (anno (Expr typ anno name)), Show (anno (Pattern anno name)), Show name, Show typ) => Show (Lambda typ anno name)
 deriving instance (Eq (anno (Expr typ anno name)), Eq (anno (Pattern anno name)), Eq name, Eq typ) => Eq (Lambda typ anno name)

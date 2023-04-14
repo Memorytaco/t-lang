@@ -321,4 +321,25 @@ packages:
       size: 1462
   original:
     hackage: ansi-terminal-0.11.4
+- completed:
+    hackage: type-errors-0.2.0.1@sha256:c47af01304199c6440566c0a2c9a434db7ae8027dd4701dc2e374fc341ab40b1,2311
+    pantry-tree:
+      sha256: f9e3d4bdeeccc31e88f898455a7e06082e2fd401a28a61c260866ed15ef268e0
+      size: 368
+  original:
+    hackage: type-errors-0.2.0.1
+- completed:
+    hackage: first-class-families-0.8.0.1@sha256:d7a60485a2f392818808d4decbc6af7c20281713ec1d81948747f1c9c8c2b145,1518
+    pantry-tree:
+      sha256: 1a7c7bc6da4fc6e55c004291aca537a59e5c57aeb0280cb55450f4ba593647cb
+      size: 1368
+  original:
+    hackage: first-class-families-0.8.0.1
+- completed:
+    hackage: syb-0.7.2.2@sha256:bc800dbd35a17b652082f7f9790fd20d196ea0f44daaa7d5ac46491d8ecc7347,3815
+    pantry-tree:
+      sha256: 44127e4700ae77043fc6b99c033b805c0c8826135a00a56b6097f8186212ec75
+      size: 3396
+  original:
+    hackage: syb-0.7.2.2
 snapshots: []
