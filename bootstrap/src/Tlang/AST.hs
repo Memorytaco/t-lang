@@ -5,6 +5,8 @@ module Tlang.AST
   , module Operator
   , None (..)
   , Symbol (..)
+  , Label (..)
+  , ASTType
   )
 where
 
@@ -16,6 +18,9 @@ import Data.GraphViz
 
 -- | a place holder for every parametric data type
 data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)
+
+-- | one representation used for AST Type
+type ASTType c f r = Type Label Symbol TypeLit (Bound Symbol) c f r
 
 -- | used to represent type name reference, both for operator and normal name
 data Symbol = Symbol String | Op String deriving (Eq)
@@ -32,4 +37,9 @@ instance Ord Symbol where
 instance Labellable Symbol where
   toLabelValue (Symbol name) = toLabelValue name
   toLabelValue (Op name) = toLabelValue name
+
+-- | label for variant and record
+newtype Label = Label String deriving (Eq, Ord)
+instance Show Label where
+  show (Label s) = s
 

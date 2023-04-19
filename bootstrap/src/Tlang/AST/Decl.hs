@@ -75,7 +75,9 @@ type instance UserDataMarkFamily ('DataSupply UserDataAST) = TypNative
 type instance UserDataMarkFamily ('DataVar UserDataAST) = BoundVars
 
 newtype TypNative name typ = TypNative (PrimitiveT SeqT typ) deriving (Show, Eq)
-newtype BoundVars name typ = BoundVars [Bound name typ]
+newtype BoundVars name typ = BoundVars [Bound name typ] deriving (Show, Eq)
+
+deriving instance (Show name, Show typ) => Show (UserData UserDataAST name typ)
 
 -- | a default definition for use in AST parsing
 data DataEnum name typ

@@ -29,6 +29,7 @@ This module resolves type for expression, function definition or declaration.
 -}
 
 import Tlang.AST
+import Tlang.Helper.AST
 import Tlang.Subst (Rule (..), Subst (..))
 
 import Control.Monad.Except (MonadError (..), runExceptT)
@@ -79,7 +80,7 @@ onConstraint = cata \case
   TypBotF -> TypBot
   TypUniF -> TypUni
   TypRepF r -> TypRep r
-  TypLitF () -> TypLit ()
+  TypLitF lit -> TypLit lit
   TypRefF r -> TypRef r
   TypEquF _ _ -> error "Equi-Recursive type is not supported now"
   TypAllF name t -> TypAll name t
@@ -89,7 +90,7 @@ onConstraint = cata \case
   TypTupF rs -> TypTup rs
   TypRecF rs -> TypRec rs
   TypSumF rs -> TypSum rs
-  TypLiftF r -> TypLift r
+  TypNestF r -> TypNest r
 
 -- | prepare the expression form to be solved, along with pattern and lambda.
 cookExpr
@@ -150,7 +151,7 @@ localRef = TypRef . Right
 
 -- | convert well formed type into underlying type system
 resolve :: a
-resolve = undefined
+resolve = error "not implemented"
 
 -- | [p3, p2, p1], index starts from 1
 lookupPrefix :: Integer -> Bounds Integer t -> Bound Integer t
@@ -180,7 +181,7 @@ shift reserve i t
 
 -- | remove rigid binding from prefixs
 clean :: NormalType NormalKind -> NormalType NormalKind
-clean (TypLift (t :@ k)) = TypLift (clean t :@ k)
+clean (TypNest (t :@ k)) = TypNest (clean t :@ k)
 clean (TypSum ts) = TypSum $ fmap (fmap clean) <$> ts
 clean (TypRec ts) = TypRec $ fmap clean <$> ts
 clean (TypTup ts) = TypTup $ clean <$> ts
@@ -213,9 +214,9 @@ abstractof
   :: forall k m
   . (MonadReader (Bounds Integer (NormalType k)) m, MonadFail m, Eq k, Show k)
   => NormalType k -> NormalType k -> m ()
-abstractof (TypLift (t1 :@ _)) (TypLift (t2 :@ _)) = abstractof t1 t2
-abstractof t1 (TypLift (t2 :@ _)) = abstractof t1 t2
-abstractof (TypLift (t1 :@ _)) t2 = abstractof t1 t2
+abstractof (TypNest (t1 :@ _)) (TypNest (t2 :@ _)) = abstractof t1 t2
+abstractof t1 (TypNest (t2 :@ _)) = abstractof t1 t2
+abstractof (TypNest (t1 :@ _)) t2 = abstractof t1 t2
 
 -- TODO: finish the checking
 abstractof (TypRef (Right _n1)) (TypRef (Right _n2)) = error "TODO: finish the checking"
@@ -257,9 +258,9 @@ unify
   . (MonadReader (Bounds Integer (NormalType k)) m, MonadFail m, Eq k, Show k)
   => NormalType k -> NormalType k -> m (Bounds Integer (NormalType k), NormalType k)
 -- a temporary code for handling kind
-unify (TypLift (t1 :@ _)) (TypLift (t2 :@ _)) = unify t1 t2
-unify (TypLift (t1 :@ k)) t2 = fmap (TypLift . (:@ k)) <$> unify t1 t2
-unify t1 (TypLift (t2 :@ k)) = fmap (TypLift . (:@ k)) <$> unify t1 t2
+unify (TypNest (t1 :@ _)) (TypNest (t2 :@ _)) = unify t1 t2
+unify (TypNest (t1 :@ k)) t2 = fmap (TypNest . (:@ k)) <$> unify t1 t2
+unify t1 (TypNest (t2 :@ k)) = fmap (TypNest . (:@ k)) <$> unify t1 t2
 
 unify (TypPie _ _) (TypPie _ _) = error "type constraint is not supported now"
 unify _ (TypPie _ _) = error "type constraint is not supported now"
@@ -578,10 +579,11 @@ patternTyping pat = do
       return (p :@ t3)
     go _ = error "sorry, feature is not implemented"
 
+-- | TODO: add lambda type inference
 lambdaTyping :: (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
              => Lambda typ anno name -> m b
 lambdaTyping (Lambda _ _branch _branchs) = do
-  void $ gPatternTyping undefined
+  void $ gPatternTyping (error "not implemented")
   undefined
   where
     gPatternTyping (Pattern p) = patternTyping p
@@ -611,7 +613,7 @@ instance Rule () (NormalType k) where
                           $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
   rewrite (TypAbs fb t) s = TypAbs (flip rewrite s <$> fb)
                           $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  rewrite (TypLift ft) s = TypLift (flip rewrite s <$> ft)
+  rewrite (TypNest ft) s = TypNest (flip rewrite s <$> ft)
   lmap = error "need to use another calculus"
   normalize = error "need to use another calculus"
 

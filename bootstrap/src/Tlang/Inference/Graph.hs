@@ -153,7 +153,7 @@ toGraph = cata go
       newEdge (GSub 1) absNode node
       newEdge (GSub 2) absNode rnode
       return absNode
-    go (TypLiftF _) = fail "type annotation is not supported"
+    go (TypNestF _) = fail "type annotation is not supported"
 
 -- | simplify, forall (a <> g). a == g
 -- FIXME: complete the ruleset

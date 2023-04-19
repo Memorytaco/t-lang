@@ -1,3 +1,7 @@
+{- | * Parser for type expression
+    TODO: add parser for type literal
+-}
+
 module Tlang.Parser.Type
   ( Parser
   , ExpressionToken
@@ -37,7 +41,7 @@ newtype Parser e m a = Parser
     deriving newtype (Alternative, MonadFail, MonadPlus)
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
-type ParseType c f = Type Label Symbol () (Bound Symbol) c f LLVM.AST.Type.Type
+type ParseType c f = ASTType c f LLVM.AST.Type.Type
 type ExpressionToken = OperatorClass String (ParseType None Identity)
 
 instance ShowErrorComponent e => OperatorParser ExpressionToken (Parser e m) where

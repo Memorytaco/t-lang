@@ -45,6 +45,9 @@ library
       Tlang.Codegen.Core
       Tlang.Constraint
       Tlang.Emit
+      Tlang.Helper
+      Tlang.Helper.AST
+      Tlang.Helper.AST.Type
       Tlang.Inference
       Tlang.Inference.Graph
       Tlang.Inference.Graph.Dot
@@ -68,7 +71,6 @@ library
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
       Tlang.Subst
-      Tlang.Syntax
   other-modules:
       Paths_t_lang
   hs-source-dirs:

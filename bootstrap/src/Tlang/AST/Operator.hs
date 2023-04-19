@@ -1,3 +1,6 @@
+{- | * definition of operator
+-}
+
 module Tlang.AST.Operator
   ( termOperator
   , typOperator
@@ -14,7 +17,10 @@ where
 import Data.Bifunctor (Bifunctor (..))
 
 data Operator a = Operator OperatorKind Integer Integer a deriving stock (Eq, Functor)
-data OperatorKind = Prefix | Postfix | Unifix | Infix deriving (Show, Eq)
+
+data OperatorKind = Prefix | Postfix | Unifix | Infix | NonFix deriving (Show, Eq)
+
+data Delimite a = Delimite (a, a) ((a, a) -> a)
 
 data OperatorClass s v = OpRep (Either (Either (s, s) (s, s)) s)
                        | OpNorm v

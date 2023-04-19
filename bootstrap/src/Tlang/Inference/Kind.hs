@@ -12,6 +12,7 @@ module Tlang.Inference.Kind
 where
 
 import Tlang.AST
+import Tlang.Helper.AST
 import Tlang.Constraint
 import Tlang.Subst
 import Tlang.Parser.Type (ParseType)
@@ -45,7 +46,7 @@ type Context = [GraftKind]
 -- - `c` is for any constraint
 -- - `f` is for any annotation
 -- - `r` is for any concrete type representation
-type DeBruijnType c f r = Type Label NameIndex () (Bound Integer) c f r
+type DeBruijnType c f r = Type Label NameIndex TypeLit (Bound Integer) c f r
 
 -- cookAll :: MonadFail m => [Symbol] -> [Symbol :== Type Label Symbol () None Identity r] -> m [Symbol :== DeBruijnType (TypeMetaVar GraftKind) (DefaultConstraint term) Identity r]
 -- cookAll syms decs = cata go decs
@@ -76,16 +77,16 @@ getTypD _ = []
 -- | traverse into type structure and build the variable index. Also, it detects recursive type depending on whether it is named type.
 toDebruijn
   :: forall v c f r m. (MonadFail m, Traversable c, Traversable f)
-  => (Maybe Symbol :== Type Label Symbol () (Bound Symbol) c f r) -- ^ It can lift named or unnamed type into deBruijn representation
+  => (Maybe Symbol :== Type Label Symbol TypeLit (Bound Symbol) c f r) -- ^ It can lift named or unnamed type into deBruijn representation
   -> ([Symbol], [Symbol]) -- ^ type environment, contains type name. (global environment, local environment)
   -> m (DeBruijnType c f r)  -- ^ return the standard representation
 toDebruijn (name :== tree) = runReaderT (cata go tree)
   where
-    go :: Base (Type Label Symbol () (Bound Symbol) c f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r))
+    go :: Base (ASTType c f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r))
        -> ReaderT ([Symbol], [Symbol]) m (DeBruijnType c f r)
     go TypBotF = pure TypBot
     go TypUniF = pure TypUni
-    go (TypLitF _) = pure $ TypLit ()
+    go (TypLitF lit) = pure $ TypLit lit
     go (TypRepF r) = pure $ TypRep r
     go (TypRefF s) = do
       ix'maybe <- asks $ lookup s . flip zip [1..] . snd
@@ -104,7 +105,7 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
     go (TypRecF trs) = TypRec <$> forM trs \(field, mt) -> (field,) <$> mt
     go (TypSumF trs) = TypSum <$> forM trs \(field, mt) -> (field,) <$> sequence mt
     go (TypAppF mt1 mt2 mtn) = TypApp <$> mt1 <*> mt2 <*> sequence mtn
-    go (TypLiftF fmt) = TypLift <$> sequence fmt
+    go (TypNestF fmt) = TypNest <$> sequence fmt
     handleBound f bound mt =
       case bound of
         s :> mr -> do
@@ -274,7 +275,7 @@ onAnnotate f = cata \case
   TypBotF -> TypBot
   TypUniF -> TypUni
   TypRepF r -> TypRep r
-  TypLitF () -> TypLit ()
+  TypLitF lit -> TypLit lit
   TypRefF r -> TypRef r
   TypEquF _ _ -> error "Equi-Recursive type is not supported now"
   TypAllF r t -> TypAll r t
@@ -283,7 +284,7 @@ onAnnotate f = cata \case
   TypTupF rs -> TypTup rs
   TypRecF rs -> TypRec rs
   TypSumF rs -> TypSum rs
-  TypLiftF (r :@ rk) -> TypLift (r :@ f rk)
+  TypNestF (r :@ rk) -> TypNest (r :@ f rk)
 
 -- -- | traverse around type grafted name
 -- onGraft :: (Traversable c, Traversable f) => (v1 -> v2) -> DeBruijnType v1 c f r -> DeBruijnType v2 c f r
@@ -300,7 +301,7 @@ onAnnotate f = cata \case
 --   TypTupF rs -> TypTup rs
 --   TypRecF rs -> TypRec rs
 --   TypSumF rs -> TypSum rs
---   TypLiftF r -> TypLift r
+--   TypNestF r -> TypNest r
 
 -- | unsolved and solved deBurijn type with arbitrary constraint
 type GroundEnv c r =
@@ -379,7 +380,7 @@ type AnnotatedType c r = GraftKind :@ DeBruijnType c ((:@) GraftKind) r
 
 genConstraint
   :: forall c r m f. (MonadFail m, Traversable c, Traversable f)
-  -- allow to choose whatever effect we would like to handle different shape of `TypLift`
+  -- allow to choose whatever effect we would like to handle different shape of `TypNest`
   => (f (AnnotatedType c r) -> ConstraintMonad m (AnnotatedType c r))
   -> DeBruijnType c f r -- ^ the unsolved type term
   -> ConstraintMonad m ([GraftKind :<> GraftKind], AnnotatedType c r)
@@ -389,7 +390,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
     freshName :: MonadState (Context, Integer) mf => mf GraftKind
     freshName = modify (fmap (+1)) >> get <&> KindLift . Graft . MetaVar . snd
     -- | a synonym to annotate type term
-    annotate term typ = TypLift (term :@ typ) :@ typ
+    annotate term typ = TypNest (term :@ typ) :@ typ
     -- | create a local term environment for type abstraction
     stack :: ConstraintMonad m a -> GraftKind -> ConstraintMonad m a
     stack ma v = do
@@ -426,7 +427,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
     go TypBotF = return . pure $ TypBot `annotate` KindType
     go TypUniF = return . pure $ TypUni `annotate` KindType
     go (TypRepF r) = return . pure $ TypRep r `annotate` KindType
-    go (TypLitF ()) = return . pure $ TypLit () `annotate` KindType  -- FIXME: add kind literal
+    go (TypLitF lit) = return . pure $ TypLit lit `annotate` KindType  -- FIXME: add kind literal
     go (TypAbsF nm mt) = do
       n <- freshName
       (s, name) <- mapM (fmap \(t :@ _) -> t) <$> stack (sequence nm) n
@@ -478,6 +479,6 @@ genConstraint natural = pass . fmap (, nub) . cata go
         where
           collectField (ss, ts) (l, Nothing) = (ss, ts <> [(l, Nothing)])
           collectField (ss, ts) (l, Just (s, t :@ k)) = (ss <> (k :<> KindType : s), ts <> [(l, Just t)])
-    go (TypLiftF fmt) = do
+    go (TypNestF fmt) = do
       (s, ft) <- sequence <$> sequence fmt
       (s,) <$> natural ft

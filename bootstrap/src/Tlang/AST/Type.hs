@@ -1,24 +1,22 @@
 module Tlang.AST.Type
   ( Type (..)
   , TypeF (..)
+  , TypeLit (..)
+  , TypeAssert (..)
   , Kind (..)
   , KindF (..)
-  , Label (..)
   , (:==) (..)
 
   , Variance (..)
 
   , Bound (..)
   , Bounds
-
-  , getMonoType
   )
 where
 
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
-import Data.Bifunctor (first)
 
 import Data.List (intercalate)
 
@@ -43,14 +41,22 @@ data Type label name lit bind c f rep
            (Type label name lit bind c f rep)
   | TypAbs (bind (Type label name lit bind c f rep))  -- ^ higher kinded type, naming an incompleted type
            (Type label name lit bind c f rep)
-  | TypLift (f (Type label name lit bind c f rep))    -- ^ wrap kind information into type, annotation for type
+  | TypNest (f (Type label name lit bind c f rep))    -- ^ wrap kind information into type, annotation for type
 
-getMonoType :: Traversable f
-            => Type label name lit bind c f rep
-            -> ([bind (Type label name lit bind c f rep)], Type label name lit bind c f rep)
-getMonoType (TypAll b1 t) = first (b1:) $ getMonoType t
-getMonoType (TypLift fa) = TypLift <$> mapM getMonoType fa
-getMonoType t = ([], t)
+-- | type level literal value
+data TypeLit
+  = TLNat Integer -- ^ natural num
+  | TLStr String  -- ^ constant string
+  | TLNum Double  -- ^ floating num
+  deriving (Show, Eq)
+
+-- | type constraint
+data TypeAssert msg typ
+  = TACons typ typ [typ]  -- ^ actual worker, predicate
+  | TAAnd (TypeAssert msg typ) [TypeAssert msg typ] -- ^ and connective
+  | TATrue      -- ^ always Succeed
+  | TAFail msg  -- ^ failed with a message, the message may be empty
+  deriving (Show, Eq)
 
 deriving instance (Functor f, Functor c, Functor bind) => Functor (Type label name lit bind c f)
 deriving instance
@@ -83,7 +89,7 @@ instance
   show (TypAbs bind t) = "\\" <> show bind <> ". " <> show t
   show (TypPie constraint t) = show constraint <> " => " <> show t
   show (TypApp t1 t2 tn) = "(" <> show t1 <> " " <> show t2 <> " " <> show tn <> ")"
-  show (TypLift anno) = show anno
+  show (TypNest anno) = show anno
 
 -- | MLF bounded quantifier
 data Bound name typ
@@ -107,11 +113,6 @@ data name :== typ = name :== typ  -- ^ pick a name to encapsulate a type, and tu
   deriving (Show, Eq, Functor)
 
 $(deriveBifunctor ''(:==))
-
--- | label for variant and record
-newtype Label = Label String deriving (Eq, Ord)
-instance Show Label where
-  show (Label s) = s
 
 -- | type kind representation, any kind, normal kind (*) and higher kind
 data Kind f name
