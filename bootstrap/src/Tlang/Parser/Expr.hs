@@ -25,7 +25,6 @@ import Text.Megaparsec.Char (char, string)
 import Control.Monad.Reader (ReaderT (..), ask, asks, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)
-import Control.Monad.Identity (Identity)
 import Data.Functor (($>), (<&>))
 import Data.Text (Text, pack, unpack)
 import Data.List (find)
@@ -34,6 +33,8 @@ import Data.Bifunctor (first)
 
 import qualified Tlang.Parser.Type as TypParser
 import qualified Tlang.Parser.Pattern as PatParser
+import Tlang.Helper.AST.Type (injTypeLit)
+import Tlang.Extension.Type (Tuple (..))
 
 newtype Parser e m a = Parser
   { unWrapParser :: ReaderT ([Operator String], [Operator String]) (ParsecT e Text m) a
@@ -43,11 +44,11 @@ newtype Parser e m a = Parser
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
 type ParseExpr typ = Expr typ ((:@) typ) Symbol
-type ParseExprType c f = ParseExpr (TypParser.ParseType c f)
+type ParseExprType = ParseExpr TypParser.ParseType
 type ParseLambda typ = Lambda typ ((:@) typ) Symbol
-type ParseLambdaType c f = ParseLambda (TypParser.ParseType c f)
+type ParseLambdaType = ParseLambda TypParser.ParseType
 
-type ExpressionToken = OperatorClass String (ParseExprType None Identity)
+type ExpressionToken = OperatorClass String ParseExprType
 
 getParser :: Parser e m a -> ([Operator String], [Operator String]) -> ParsecT e Text m a
 getParser = runReaderT . unWrapParser
@@ -59,18 +60,18 @@ unParser :: ShowErrorComponent e
          => ([Operator String], [Operator String])
          -> ParsecT e Text m ()
          -> Integer
-         -> ParsecT e Text m (ParseExprType None Identity)
+         -> ParsecT e Text m (ParseExprType)
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
-play :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType None Identity))
+play :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType))
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 
-parseExpr :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType None Identity))
+parseExpr :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType))
 parseExpr op txt = first errorBundlePretty
   <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 
 instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) where
-  type Expression ExpressionToken = (ParseExprType None Identity)
+  type Expression ExpressionToken = ParseExprType
   next = (OpNorm <$> try variable <?> "Identifier, Label and Selector")
      <|> (OpNorm <$> literal <?> "Literal")
      <|> (OpNorm <$> lexeme typ <?> "Type literal")
@@ -91,7 +92,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
                          <|> (reservedOp (pack r) <|> reserved (pack r)) $> Right v
       special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("let", "in"), ("{", "}"), ("[", "]")]
       sym = reservedOp ":" <|> reservedOp "\\" <&> unpack
-      typ = string "@()" $> ExTyp TypUni
+      typ = string "@()" $> ExTyp (injTypeLit (Tuple []))
         <|> string "@(" *> (ExTyp <$> pType (void . lookAhead $ reservedOp ")") (-100) <* reservedOp ")")
         <|> string "@{" *> (asks fst >>= liftParser . TypParser.getParser TypParser.record <&> ExTyp)
         <|> string "@" *> (ExTyp . TypRef . Symbol <$> identifier)
@@ -150,13 +151,13 @@ handleNorm (ExApp l1 l2 rs) r = return $ ExApp l1 l2 (rs <> [r])
 handleNorm a r = return $ ExApp a r []
 
 -- | need a complete definition of pattern match syntax
-pPattern :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (PatParser.ParsePatternType None Identity)
+pPattern :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (PatParser.ParsePatternType)
 pPattern end r = ask >>= \e -> liftParser $ PatParser.unParser e (getParser end e) r
-pType :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (TypParser.ParseType None Identity)
+pType :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m TypParser.ParseType
 pType end r = ask >>= \e -> liftParser $ TypParser.unParser (fst e) (getParser end e) r
 
 -- | let binding in expression
-letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseExprType None Identity)
+letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseExprType)
 letExpr end = do
   pat <- pPattern (void . lookAhead $ reservedOp "=") (-100) <* reservedOp "=" <?> "binding name"
   initializer <- pratt (void . lookAhead $ reserved "in") (-100) <* reserved "in"
@@ -164,7 +165,7 @@ letExpr end = do
   return $ ExLet pat initializer body
 
 -- | lambda block parser
-bigLambda :: ShowErrorComponent e => Parser e m (ParseLambdaType None Identity)
+bigLambda :: ShowErrorComponent e => Parser e m ParseLambdaType
 bigLambda = do
   let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> [",", "=", "|"] ) (-100)
       groupPat = fmap PatGrp $ iPattern `sepBy1` reservedOp ","
@@ -175,14 +176,14 @@ bigLambda = do
     <|> Lambda [] <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
   void $ reservedOp "]"
   return lambda
-smallLambda :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseLambdaType None Identity)
+smallLambda :: ShowErrorComponent e => Parser e m () -> Parser e m ParseLambdaType
 smallLambda end = do
   let iPattern = Pattern <$> pPattern (void . lookAhead . foldl1 (<|>) $ reservedOp <$> ["=>", ","] ) (-100)
       seqPat = fmap PatSeq $ iPattern <* reservedOp "," >>= \v -> (v:) <$> iPattern `sepBy1` reservedOp ","
       branch = (,) <$> ((try seqPat <|> iPattern) <* reservedOp "=>") <*> pratt (lookAhead $ end <|> void (reservedOp ",")) (-100)
   Lambda [] <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
 
-record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType None Identity)
+record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType)
 record = do
   let rprefix :: ShowErrorComponent e => Parser e m String -> Parser e m String
       rprefix m = optional (oneOf ['&', '.']) >>= maybe m (\a -> (a:) <$> m)

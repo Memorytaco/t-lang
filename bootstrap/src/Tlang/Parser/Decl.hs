@@ -10,20 +10,21 @@ import Tlang.AST
 import Tlang.Parser.Lexer
 import qualified Tlang.Parser.Expr as ExprParser
 import qualified Tlang.Parser.Type as TypeParser
+import Tlang.Helper.AST.Type (injTypeBind, injTypeLit)
+import Tlang.Extension.Type (Scope (..), Variant (..))
 
 import Control.Monad (void)
 import Control.Monad.Trans.State (StateT, get, modify, evalStateT)
 import Control.Monad.Trans (lift)
-import Control.Monad.Identity (Identity)
 import Data.Bifunctor (first)
-import Data.Functor ((<&>), ($>))
+import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Void (Void)
 import Text.Megaparsec
 
-type ParseDeclType c f = Declaration (TypeParser.ParseType c f) Symbol
+type ParseDeclType = Declaration TypeParser.ParseType Symbol
 
-defForeign :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defForeign :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
 defForeign r = do
   void $ reserved "foreign"
   name <- Symbol <$> identifier
@@ -38,7 +39,7 @@ defForeign r = do
   where
     lambda = ExprParser.getParser ExprParser.bigLambda r
 
-defLet :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defLet :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
 defLet r = do
   void $ reserved "let"
   name <- Symbol <$> identifier <|> Op <$> operator
@@ -49,7 +50,7 @@ defLet r = do
     Just typ -> LetD name . ExAnno . (:@ typ) <$> expr
     Nothing -> LetD name <$> expr
 
-defTypAlias :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defTypAlias :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
 defTypAlias r = do
   void $ reserved "type"
   aliaId <- name
@@ -64,11 +65,11 @@ defTypAlias r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = identifier <&> TypAbs . (:> TypBot) . Symbol
+    typVar = identifier <&> injTypeBind . Scope . (:> TypBot) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=")
     typBody = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
 
-defData :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType None Identity)
+defData :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
 defData r = do
   void $ reserved "data"
   dataId <- name
@@ -83,10 +84,10 @@ defData r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = identifier <&> TypAbs . (:> TypBot) . Symbol
+    typVar = identifier <&> injTypeBind . Scope . (:> TypBot) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void . lookAhead $ reservedOp "|" <|> reservedOp "{" <|> reservedOp ";;")
     typRec = reservedOp "{" *> TypeParser.getParser TypeParser.record (fst r)
-    typVariant = TypSum <$> some (reservedOp "|" *> field)
+    typVariant = injTypeLit . Variant <$> some (reservedOp "|" *> field)
       where
         fieldName = fmap Tlang.AST.Label $ identifier <|> operator
         field = (,) <$> fieldName <*> optional
@@ -109,7 +110,7 @@ defFixity = defUnifix <|> defInfix
             <|> reserved "infixr" *> (precedence >>= \bp -> Operator Infix bp (bp-1) <$> operator)
             <|> reserved "infix" *> (precedence >>= \bp -> Operator Infix bp bp <$> operator)
 
-declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity)
+declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType)
 declaration = do
   r <- lift get
   defForeign r <|> defLet r <|> defTypAlias r <|> defData r <|> do
@@ -119,7 +120,7 @@ declaration = do
     return $ FixD op
 
 -- | get operator fixity information from source file
-getFixity :: [ParseDeclType None Identity] -> [Operator String]
+getFixity :: [ParseDeclType] -> [Operator String]
 getFixity = collect . fmap pick
   where
     pick (FixD op) = Just op
@@ -127,7 +128,7 @@ getFixity = collect . fmap pick
     collect = foldl (\ls b -> maybe ls (: ls) b) []
 
 play :: (Monad f, Monad m)
-     => (ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType None Identity) -> ParsecT Void Text (StateT s f) c)
+     => (ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType) -> ParsecT Void Text (StateT s f) c)
      -> s -> Text -> f (Either String c)
 play deco op txt =
   let m = flip evalStateT op $ runParserT (deco $ declaration @Void) "stdin" txt

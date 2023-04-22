@@ -20,7 +20,6 @@ import Text.Megaparsec.Char (char)
 import Control.Monad.Reader (ReaderT (..), ask, asks, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)
-import Control.Monad.Identity (Identity)
 import Data.Text (Text, pack, unpack)
 import Data.Functor (($>), (<&>))
 import Data.List (find)
@@ -37,12 +36,12 @@ newtype Parser e m a = Parser
 deriving newtype instance ShowErrorComponent e => MonadParsec e Text (Parser e m)
 
 type ParsePattern typ = Pattern ((:@) typ) Symbol
-type ParsePatternType c f = ParsePattern (TypParser.ParseType c f)
+type ParsePatternType = ParsePattern TypParser.ParseType 
 
-type ExpressionToken = OperatorClass String (ParsePatternType None Identity)
+type ExpressionToken = OperatorClass String ParsePatternType
 
 instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) where
-  type Expression ExpressionToken = ParsePatternType None Identity
+  type Expression ExpressionToken = ParsePatternType
   next = try (OpNorm <$> wild <?> "Wild Pattern")
      <|> (OpNorm <$> variable <?> "Identifier")
      <|> (OpNorm <$> vlabel <?> "Variant Label")
@@ -100,7 +99,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
               _ -> fail "view pattern projector should be a single function"
           ":" -> case left of
               PatAnno _ -> fail $ "Can't annotate again for pattern, " <> show left
-              PatSym _ -> fail "Can't annotate symbol for polymorphic variant"
+              -- PatSym _ -> fail "Can't annotate symbol for polymorphic variant"
               _ -> do env <- ask
                       let typParser e = liftParser . TypParser.unParser (fst env) (getParser e env)
                       PatAnno . (left :@) <$> typParser (lookAhead end) (-100)
@@ -108,7 +107,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
                   return $ PatSum (PatRef $ Op s) [left, right]
         _ -> return $ PatSum (PatRef $ Op s) [left]
 
-patternSum :: ParsePatternType None Identity -> ParsePatternType None Identity -> Parser e m (ParsePatternType None Identity)
+patternSum :: ParsePatternType -> ParsePatternType -> Parser e m (ParsePatternType)
 patternSum left right =
   case left of
     PatRef _ -> return $ PatSum left [right]
@@ -116,7 +115,7 @@ patternSum left right =
     PatSum v vs -> return $ PatSum v (vs <> [right])
     _ -> fail "expect sum pattern, but it is not"
 
-record :: ShowErrorComponent e => Parser e m (ParsePatternType None Identity)
+record :: ShowErrorComponent e => Parser e m (ParsePatternType)
 record = do
   let rlabel = Symbol <$> identifier <|> Op <$> operator
       lpattern = pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
@@ -126,7 +125,7 @@ record = do
   return (PatRec sections)
 
 -- | parser group for parenthesis
-tuple, patUnit :: ShowErrorComponent e => Parser e m (ParsePatternType None Identity)
+tuple, patUnit :: ShowErrorComponent e => Parser e m (ParsePatternType)
 tuple = do
   p1 <- pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100) <* reservedOp ","
   ps <- sepBy1 (pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)) (reservedOp ",") <* reservedOp ")"
@@ -153,10 +152,10 @@ unParser :: ShowErrorComponent e
          => ([Operator String], [Operator String])
          -> ParsecT e Text m ()
          -> Integer
-         -> ParsecT e Text m (ParsePatternType None Identity)
+         -> ParsecT e Text m (ParsePatternType)
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
 play :: Monad m
      => ([Operator String], [Operator String]) -> Text
-     -> m (Either String (ParsePatternType None Identity))
+     -> m (Either String (ParsePatternType))
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt

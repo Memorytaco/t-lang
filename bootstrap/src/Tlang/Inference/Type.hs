@@ -1,6 +1,5 @@
 module Tlang.Inference.Type
   ( localKind
-  , onConstraint
   , cookExpr
   , cookPattern
   , cookLambda
@@ -16,7 +15,6 @@ module Tlang.Inference.Type
   , runTyping
   , bindCheck
 
-  , NormalConstraint
   , NormalType
   , PatternError
   )
@@ -31,7 +29,10 @@ This module resolves type for expression, function definition or declaration.
 import Tlang.AST
 import Tlang.Helper.AST
 import Tlang.Subst (Rule (..), Subst (..))
+import Tlang.Extension.Type as Ext
+import Tlang.Generic (prj)
 
+import Control.Applicative ((<|>))
 import Control.Monad.Except (MonadError (..), runExceptT)
 import Control.Monad.State
 import Control.Monad.Identity (Identity (..))
@@ -45,57 +46,34 @@ import Data.Bifunctor (first, bimap)
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable
 
-import qualified LLVM.AST.Type
 import qualified Tlang.Subst as S (Subst (..))
 
 import Tlang.Parser.Type (ParseType)
 import Tlang.Parser.Expr (ParseExpr, ParseExprType, ParseLambda, ParseLambdaType)
 import Tlang.Parser.Pattern (ParsePattern, ParsePatternType)
 
-import Tlang.Inference.Kind (kinding, DeBruijnType, NormalKind, toDebruijn, NameIndex)
--- import qualified Tlang.Transform.Kind as K (kinding)
-import Tlang.Constraint
+import Tlang.Inference.Kind (kinding, DeBruijnType, NormalKind, toDebruijn)
 
--- | used to encode constraints
-type NormalConstraint bind = Constraint (Bound NameIndex) bind Symbol
 -- | we use `()` to mark some named type is a primitive one and later transformed it into
 -- the real primitive type.
-type NormalType k = DeBruijnType (NormalConstraint ()) ((:@) k) LLVM.AST.Type.Type
+type NormalType k r = DeBruijnType ((:@) k) r
 
 type CookEnv c m
   = ( Monad m
     , MonadFail m
     , MonadReader [NormalKind :@ Symbol] m)
 
-localKind :: CookEnv c m => ParseType None Identity -> m (NormalType NormalKind)
+localKind :: CookEnv c m => ParseType -> m (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity))
 localKind typ = do
   env <- ask
   ntyp <- toDebruijn (Nothing :== typ) (fmap (\(a :@ _) -> a) env, [])
   ftyp <- fst <$> runReaderT (kinding (ntyp, 0)) env
-  return $ onConstraint ftyp
-
-onConstraint
-  :: Traversable f => DeBruijnType None f r -> DeBruijnType (NormalConstraint ()) f r
-onConstraint = cata \case
-  TypBotF -> TypBot
-  TypUniF -> TypUni
-  TypRepF r -> TypRep r
-  TypLitF lit -> TypLit lit
-  TypRefF r -> TypRef r
-  TypEquF _ _ -> error "Equi-Recursive type is not supported now"
-  TypAllF name t -> TypAll name t
-  TypPieF None t -> TypPie (Satisfiable True) t
-  TypAbsF r1 r2 -> TypAbs r1 r2
-  TypAppF r1 r2 rn -> TypApp r1 r2 rn
-  TypTupF rs -> TypTup rs
-  TypRecF rs -> TypRec rs
-  TypSumF rs -> TypSum rs
-  TypNestF r -> TypNest r
+  return ftyp
 
 -- | prepare the expression form to be solved, along with pattern and lambda.
 cookExpr
   :: CookEnv c m
-  => ParseExprType None Identity -> m (ParseExpr (NormalType NormalKind))
+  => ParseExprType -> m (ParseExpr (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity)))
 cookExpr = cata go
   where
     go ExUnitF = return ExUnit
@@ -107,7 +85,7 @@ cookExpr = cata go
       env <- ask
       ntyp <- toDebruijn (Nothing :== typ) (fmap (\(a :@ _) -> a) env, [])
       ftyp <- fst <$> runReaderT (kinding (ntyp, 0)) env
-      return . ExTyp $ onConstraint ftyp
+      return $ ExTyp ftyp
     go (ExTupF lm) = ExTup <$> sequence lm
     go (ExRecF es) = ExRec <$> mapM sequence es
     go (ExAbsF (cookLambda -> lm)) = ExAbs <$> lm
@@ -115,12 +93,11 @@ cookExpr = cata go
     go (ExLetF pat mv1 mv2) = ExLet <$> cookPattern pat <*> mv1 <*> mv2
     go (ExAnnoF (vp :@ typ)) = fmap ExAnno $ (:@) <$> vp <*> localKind typ
 
-cookPattern :: forall c m. CookEnv c m => ParsePatternType None Identity -> m (ParsePattern (NormalType NormalKind))
+cookPattern :: forall c m. CookEnv c m => ParsePatternType -> m (ParsePattern (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity)))
 cookPattern = cata go
   where
-    go :: Base (ParsePatternType None Identity)
-               (m (ParsePattern (NormalType NormalKind)))
-       -> m (ParsePattern (NormalType NormalKind))
+    go :: Base ParsePatternType (m (ParsePattern (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity))))
+       -> m (ParsePattern (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity)))
     go PatWildF = return PatWild
     go PatUnitF = return PatUnit
     go (PatRefF name) = return $ PatRef name
@@ -134,7 +111,7 @@ cookPattern = cata go
     go (PatAnnoF (mp :@ typ)) = fmap PatAnno $ (:@) <$> mp <*> localKind typ
 
 -- FIXME: handle the type declaration
-cookLambda :: forall c m. CookEnv c m => ParseLambdaType None Identity -> m (ParseLambda (NormalType NormalKind))
+cookLambda :: forall c m. CookEnv c m => ParseLambdaType -> m (ParseLambda (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity)))
 cookLambda (Lambda _ b1 bs) = Lambda [] <$> cookBranch b1 <*> forM bs cookBranch
   where
     cookGpattern = cata \case
@@ -143,10 +120,10 @@ cookLambda (Lambda _ b1 bs) = Lambda [] <$> cookBranch b1 <*> forM bs cookBranch
       PatGrpF rms -> PatGrp <$> sequence rms
     cookBranch (pat, e) = (,) <$> cookGpattern pat <*> cookExpr e
 
-nameRef, opRef :: String -> Type label (Either Symbol b) lit bind c f rep
+nameRef, opRef :: String -> Type (Either Symbol b) cons bind inj rep
 nameRef = TypRef . Left . Symbol
 opRef = TypRef. Left . Op
-localRef :: b -> Type label (Either a b) lit bind c f rep
+localRef :: b -> Type (Either a b) cons bind inj rep
 localRef = TypRef . Right
 
 -- | convert well formed type into underlying type system
@@ -172,7 +149,7 @@ updatePrefix ix u ls
       (h, v:hs) -> h <> (u v:hs)
       _ -> error "index overflow"
 
-shift :: Integer -> Integer -> NormalType k -> NormalType k
+shift :: Integer -> Integer -> NormalType k r -> NormalType k r
 shift reserve i t
   | reserve < 0 = error "invalid reserved number"
   | otherwise =
@@ -180,26 +157,35 @@ shift reserve i t
      in rewrite t $ list (() :! (reserve + i))
 
 -- | remove rigid binding from prefixs
-clean :: NormalType NormalKind -> NormalType NormalKind
-clean (TypNest (t :@ k)) = TypNest (clean t :@ k)
-clean (TypSum ts) = TypSum $ fmap (fmap clean) <$> ts
-clean (TypRec ts) = TypRec $ fmap clean <$> ts
-clean (TypTup ts) = TypTup $ clean <$> ts
-clean qual@(TypAll _ _) =
-  let (prefixs, mono) = getMonoType qual
-   in uncurry (flip general) $ clean <$> reduce 0 (prefixs, mono)
+clean :: NormalType NormalKind r -> NormalType NormalKind r
+clean (TypInj (t :@ k)) = TypInj (clean t :@ k)
+clean (TypLit lit) =
+  let handler = handleSum <$> prj @(Variant Label) lit
+            <|> handleRec <$> prj @(Record Label) lit
+            <|> handleTup <$> prj lit
+   in case handler of
+        Just v -> v
+        Nothing -> TypLit lit
   where
-    reduce :: Integer
-           -> (Bounds Integer (NormalType NormalKind), NormalType NormalKind)
-           -> (Bounds Integer (NormalType NormalKind), NormalType NormalKind)
-    reduce reserve ((_ :~ t):ts, typeMono) =
-      let nts = (\(ix, ft) -> substitute ix (shift reserve ix t) <$> ft) <$> zip [1..] ts
-       in reduce reserve (nts, substitute (toInteger $ length ts + 1)
-                                          (shift reserve (toInteger $ length ts + 1) t) typeMono)
-    reduce reserve (pre@(_ :> _):ts, typeMono) =
-      let (pres, ntype) = reduce (reserve + 1) (ts, typeMono)
-       in (pre:pres, ntype)
-    reduce _ ([], typeMono) = ([], typeMono)
+    handleSum (Variant ts) = injTypeLit . Variant $ fmap (fmap clean) <$> ts
+    handleRec (Record ts) = injTypeLit . Record $ fmap clean <$> ts
+    handleTup (Tuple ts) = injTypeLit . Tuple $ clean <$> ts
+-- FIXME:
+-- clean qual@(TypAll _ _) =
+--   let (prefixs, mono) = getMonoType qual
+--    in uncurry (flip general) $ clean <$> reduce 0 (prefixs, mono)
+--   where
+--     reduce :: Integer
+--            -> (Bounds Integer (NormalType NormalKind), NormalType NormalKind)
+--            -> (Bounds Integer (NormalType NormalKind), NormalType NormalKind)
+--     reduce reserve ((_ :~ t):ts, typeMono) =
+--       let nts = (\(ix, ft) -> substitute ix (shift reserve ix t) <$> ft) <$> zip [1..] ts
+--        in reduce reserve (nts, substitute (toInteger $ length ts + 1)
+--                                           (shift reserve (toInteger $ length ts + 1) t) typeMono)
+--     reduce reserve (pre@(_ :> _):ts, typeMono) =
+--       let (pres, ntype) = reduce (reserve + 1) (ts, typeMono)
+--        in (pre:pres, ntype)
+--     reduce _ ([], typeMono) = ([], typeMono)
 clean a = a
 
 -- freeVars = cata \case
@@ -211,12 +197,12 @@ clean a = a
 -- | check that a is abstraction of b
 -- TODO: finish abstraction checking
 abstractof
-  :: forall k m
-  . (MonadReader (Bounds Integer (NormalType k)) m, MonadFail m, Eq k, Show k)
-  => NormalType k -> NormalType k -> m ()
-abstractof (TypNest (t1 :@ _)) (TypNest (t2 :@ _)) = abstractof t1 t2
-abstractof t1 (TypNest (t2 :@ _)) = abstractof t1 t2
-abstractof (TypNest (t1 :@ _)) t2 = abstractof t1 t2
+  :: forall k m r
+  . (MonadReader (Bounds Integer (NormalType k r)) m, MonadFail m, Eq k, Show k)
+  => NormalType k r -> NormalType k r -> m ()
+abstractof (TypInj (t1 :@ _)) (TypInj (t2 :@ _)) = abstractof t1 t2
+abstractof t1 (TypInj (t2 :@ _)) = abstractof t1 t2
+abstractof (TypInj (t1 :@ _)) t2 = abstractof t1 t2
 
 -- TODO: finish the checking
 abstractof (TypRef (Right _n1)) (TypRef (Right _n2)) = error "TODO: finish the checking"
@@ -227,17 +213,17 @@ sortKey = sortBy (\a b -> compare (fst a) (fst b))
 
 -- | index, new value
 -- preserved substitution
-substitute :: Integer -> NormalType k -> NormalType k -> NormalType k
+substitute :: Integer -> NormalType k r -> NormalType k r -> NormalType k r
 substitute ix t =
   let cells = S.Cons () . localRef <$> [1..ix-1]
    in flip rewrite $ foldr (\f b -> f b) (() :! 0) (cells <> [S.Cons () t])
 
 -- | add binding to a monotype
-general :: NormalType k -> Bounds Integer (NormalType k) -> NormalType k
-general mono qs = foldr ($) mono (TypAll <$> qs)
+general :: NormalType k r -> Bounds Integer (NormalType k r) -> NormalType k r
+general mono qs = foldr ($) mono (injTypeBind @(Forall (Bound Integer)) . Forall <$> qs)
 
 -- | split bounds
-split :: Int -> Bounds Integer (NormalType k) -> (Bounds Integer (NormalType k), Bounds Integer (NormalType k))
+split :: Int -> Bounds Integer (NormalType k r) -> (Bounds Integer (NormalType k r), Bounds Integer (NormalType k r))
 split v qs
   | length qs < v = error $ "Exceeded bounds: " <> show v
   | otherwise = splitAt (length qs - v) qs
@@ -245,78 +231,76 @@ split v qs
 -- | take a temporary bounds, and unify two types. generalize the unified type with the temporary bounds and return
 -- modified global bounds.
 scopUnify
-  :: forall k m
-   . (MonadReader (Bounds Integer (NormalType k)) m, MonadFail m, Eq k, Show k)
-  => Bounds Integer (NormalType k) -> NormalType k -> NormalType k -> m (Bounds Integer (NormalType k), NormalType k)
+  :: forall k m r
+   . (MonadReader (Bounds Integer (NormalType k r)) m, MonadFail m, Eq k, Show k, Eq r, Show r)
+  => Bounds Integer (NormalType k r) -> NormalType k r -> NormalType k r -> m (Bounds Integer (NormalType k r), NormalType k r)
 scopUnify bounds t1 t2 = do
   (q1, t3) <- local (<> bounds) $ unify t1 t2
   return $ general t3 <$> split (length bounds) q1
 
 -- | unify types with prefix
 unify
-  :: forall k m
-  . (MonadReader (Bounds Integer (NormalType k)) m, MonadFail m, Eq k, Show k)
-  => NormalType k -> NormalType k -> m (Bounds Integer (NormalType k), NormalType k)
+  :: forall k m r
+  . (MonadReader (Bounds Integer (NormalType k r)) m, MonadFail m, Eq k, Show k, Eq r, Show r)
+  => NormalType k r -> NormalType k r -> m (Bounds Integer (NormalType k r), NormalType k r)
 -- a temporary code for handling kind
-unify (TypNest (t1 :@ _)) (TypNest (t2 :@ _)) = unify t1 t2
-unify (TypNest (t1 :@ k)) t2 = fmap (TypNest . (:@ k)) <$> unify t1 t2
-unify t1 (TypNest (t2 :@ k)) = fmap (TypNest . (:@ k)) <$> unify t1 t2
-
-unify (TypPie _ _) (TypPie _ _) = error "type constraint is not supported now"
-unify _ (TypPie _ _) = error "type constraint is not supported now"
-unify (TypPie _ _) _ = error "type constraint is not supported now"
-unify (TypEqu _ _) (TypEqu _ _) = error "equi-recursive type is not supported now"
-unify _ (TypEqu _ _) = error "equi-recursive type is not supported now"
-unify (TypEqu _ _) _ = error "equi-recursive type is not supported now"
+unify (TypInj (t1 :@ _)) (TypInj (t2 :@ _)) = unify t1 t2
+unify (TypInj (t1 :@ k)) t2 = fmap (TypInj . (:@ k)) <$> unify t1 t2
+unify t1 (TypInj (t2 :@ k)) = fmap (TypInj . (:@ k)) <$> unify t1 t2
 
 unify TypBot t = asks (, t)
 unify t TypBot = asks (, t)
 
--- unify (TypQue t1 t2) (TypQue g1 g2) = do
---   (q1, h1) <- unify t1 g1
---   (q2, h2) <- local (const q1) $ unify t2 g2
---   return (q2, TypQue h1 h2)
-
 -- unify suports structural polymorphism
--- | for handling unifying of tuple type
-unify t1@(TypTup ts1) t2@(TypTup ts2) =
-  if length ts1 /= length ts2
-    then fail $ "Tuple doesn't match, left: " <> show t1 <> ", right: " <> show t2
-    else do
-      let tupUnify mr (l, r) = do
-            (q1, ts) <- mr
-            (q2, t) <- local (const q1) $ unify l r
-            return (q2, ts <> [t])
-      (q1, ts3) <- foldl tupUnify (asks (,[])) (zip ts1 ts2)
-      return (q1, TypTup ts3)
--- | for handling unifying of record type
-unify t1@(TypRec ls1) t2@(TypRec ls2) = do
-  if fromList (fst <$> ls1) /= fromList (fst <$> ls2)
-  then fail $ "Record labels don't match, left: " <> show t1 <> ", right: " <> show t2
-  else do
-    let sort = sortBy \(a, _) (b, _) -> compare a b
-        recUnify mr ((l1, lt1), (_l2, lt2)) = do
-          (q, ts) <- mr
-          (q2, t3) <- local (const q) $ unify lt1 lt2
-          return (q2, ts <> [(l1, t3)])
-    (q1, ts) <- foldl recUnify (asks (, [])) (sort ls1 `zip` sort ls2)
-    return (q1, TypRec ts)
--- | for handling unifying of sum type
-unify t1@(TypSum ls1) t2@(TypSum ls2) =
-  if fromList (fst <$> ls1) /= fromList (fst <$> ls2)
-  then fail $ "Variant labels don't match, left: " <> show t1 <> ", right: " <> show t2
-  else do
-    let sort = sortBy \(a, _) (b, _) -> compare a b
-        sumUnify mr ((l1, Just lt1), (_l2, Just lt2)) = do
-          (q, ts) <- mr
-          (q2, t3) <- local (const q) $ unify lt1 lt2
-          return (q2, ts <> [(l1, Just t3)])
-        sumUnify mr ((l1, Nothing), (_, Nothing)) = do
-          (q, ts) <- mr
-          return (q, ts <> [(l1, Nothing)])
-        sumUnify _ (l, r) = fail $ "Variant Field mismatch! left: " <> show l <> ", right: " <> show r
-    (q1, ts) <- foldl sumUnify (asks (, [])) (sort ls1 `zip` sort ls2)
-    return (q1, TypSum ts)
+unify (TypLit e1) (TypLit e2) = do
+  let handler = handleTup <$> prj e1 <*> prj e2
+            <|> handleRec <$> prj e1 <*> prj e2
+            <|> handleSum <$> prj e1 <*> prj e2
+  case handler of
+    Just m -> m
+    Nothing -> fail "Unknown literal extension"
+  where
+
+    -- | unifier of tuple
+    handleTup t1@(Tuple ts1) t2@(Tuple ts2) =
+      if length ts1 /= length ts2
+        then fail $ "Tuple doesn't match, left: " <> show t1 <> ", right: " <> show t2
+        else do
+          let tupUnify mr (l, r) = do
+                (q1, ts) <- mr
+                (q2, t) <- local (const q1) $ unify l r
+                return (q2, ts <> [t])
+          (q1, ts3) <- foldl tupUnify (asks (,[])) (zip ts1 ts2)
+          return (q1, injTypeLit @Tuple $ Tuple ts3)
+
+    -- | for handling unifying of record type
+    handleRec t1@(Record ls1) t2@(Record ls2) = do
+      if fromList (fst <$> ls1) /= fromList (fst <$> ls2)
+      then fail $ "Record labels don't match, left: " <> show t1 <> ", right: " <> show t2
+      else do
+        let sort = sortBy \(a, _) (b, _) -> compare a b
+            recUnify mr ((l1, lt1), (_l2, lt2)) = do
+              (q, ts) <- mr
+              (q2, t3) <- local (const q) $ unify lt1 lt2
+              return (q2, ts <> [(l1, t3)])
+        (q1, ts) <- foldl recUnify (asks (, [])) (sort ls1 `zip` sort ls2)
+        return (q1, injTypeLit @(Record Label) $ Record ts)
+    -- | for handling unifying of sum type
+    handleSum t1@(Variant ls1) t2@(Variant ls2) = do
+      if fromList (fst <$> ls1) /= fromList (fst <$> ls2)
+      then fail $ "Variant labels don't match, left: " <> show t1 <> ", right: " <> show t2
+      else do
+        let sort = sortBy \(a, _) (b, _) -> compare a b
+            sumUnify mr ((l1, Just lt1), (_l2, Just lt2)) = do
+              (q, ts) <- mr
+              (q2, t3) <- local (const q) $ unify lt1 lt2
+              return (q2, ts <> [(l1, Just t3)])
+            sumUnify mr ((l1, Nothing), (_, Nothing)) = do
+              (q, ts) <- mr
+              return (q, ts <> [(l1, Nothing)])
+            sumUnify _ (l, r) = fail $ "Variant Field mismatch! left: " <> show l <> ", right: " <> show r
+        (q1, ts) <- foldl sumUnify (asks (, [])) (sort ls1 `zip` sort ls2)
+        return (q1, injTypeLit @(Variant Label) $ Variant ts)
 
 unify (TypRef (Right n1)) (TypRef (Right n2))
   | n1 == n2 = asks (,localRef n1)
@@ -334,7 +318,7 @@ unify (TypRef (Right n1)) (TypRef (Right n2))
       (_ :> t1, _ :~ t2) -> rigid (shift 0 n1 t1) (shift 0 n2 t2)
       (_ :~ t1, _ :> t2) -> rigid (shift 0 n1 t1) (shift 0 n2 t2)
     where
-      -- rigid :: NormalType k -> NormalType k -> m (Bounds Integer (NormalType k))
+      -- rigid :: NormalType k r -> NormalType k r -> m (Bounds Integer (NormalType k r))
       rigid t1 t2 = do
         (q1, t3) <- unify t1 t2
         let q2 = updatePrefix (max n1 n2) (const $ 1 :~ shift 0 (- (max n1 n2)) t3) q1
@@ -353,40 +337,58 @@ unify (TypRef (Right n1)) t2 =
 
 unify t2 t1@(TypRef (Right _)) = unify t1 t2
 
-unify (TypApp h1 h2 hs) (TypApp g1 g2 gs)
+unify (TypCon h hs) (TypCon g gs)
   | length hs == length gs = do
     let through mq (h, g) = do
           (q1, ts) <- mq
           (q2, t) <- local (const q1) $ unify h g
           return (q2, ts <> [t])
-    (q1, t1) <- unify h1 g1
-    (q2, t2) <- local (const q1) $ unify h2 g2
-    (q3, ts) <- foldl through (return (q2, [])) $ zip hs gs
-    return (q3, TypApp t1 t2 ts)
+    (q1, t1) <- unify h g
+    (q2, ts) <- foldl through (return (q1, [])) $ zip hs gs
+    return (q2, TypCon t1 ts)
   | otherwise = fail "Number of Type Constructor Parameter doesn't match"
 
 -- | handle polymorphic type
-unify t1@(TypAll _ _) t2@(TypAll _ _) = do
-  let (q1, mono1) = getMonoType t1
-      (q2, mono2) = getMonoType t2
-      t = shift 0 (toInteger $ length q2) mono1
-  q0 <- ask
-  (q3, t3) <- local (const $ q0 <> q1 <> q2) $ unify t (shift (toInteger $ length q2) (toInteger $ length q1) mono2)
-  return $ (\f -> f t3) . foldr (.) id . fmap TypAll <$> splitAt (length q0) q3
-unify t1@(TypAll _ _) t2 = do
-  let (q1, mono1) = getMonoType t1
-  q0 <- ask
-  (q3, t3) <- local (const $ q0 <> q1) $ unify mono1 (shift 0 (toInteger $ length q1) t2)
-  return $ (\f -> f t3) . foldr (.) id . fmap TypAll <$> splitAt (length q0) q3
-unify t1 t2@(TypAll _ _) = unify t2 t1
+unify t1@(TypLet bi1 ti1) t2@(TypLet bi2 ti2) = do
+  case handleAll <|> handleAbs of
+    Just m -> m
+    Nothing -> fail "unknown quantifier binder"
+  where
+    handleAll =
+      case (prj @(Forall (Bound Integer)) bi1, prj @(Forall (Bound Integer)) bi2) of
+        (Just (Forall _), Just (Forall _)) -> Just do
+          let (q1, mono1) = getMonoType t1
+              (q2, mono2) = getMonoType t2
+              t = shift 0 (toInteger $ length q2) mono1
+          q0 <- ask
+          (q3, t3) <- local (const $ q0 <> q1 <> q2) $ unify t (shift (toInteger $ length q2) (toInteger $ length q1) mono2)
+          return $ (\f -> f t3) . foldr (.) id . fmap (injTypeBind . Forall) <$> splitAt (length q0) q3
+        _ -> Nothing
 
--- | for type operator, we may need HOU to handle it to make it compatible with type containment.
--- but now we treat it simply and leave a comment.
--- TODO: how to deal with unification problem of type operator
--- we are going to strip off the bounds and take it as it is a quanitified type
-unify t1@(TypAbs _ _) t2@(TypAbs _ _)
-  | t1 == t2 = asks (,t1)
-  | otherwise = fail $ "Type Operator mismatch!! left: " <> show t1 <> ", right: " <> show t2
+    -- | for type operator, we may need HOU to handle it to make it compatible with type containment.
+    -- but now we treat it simply and leave a comment.
+    -- TODO: how to deal with unification problem of type operator
+    -- we are going to strip off the bounds and take it as it is a quanitified type
+    handleAbs =
+      case prj @(Scope (Bound Integer)) bi1 of
+        (Just (Scope _)) -> Just $ fail "can't prove euqality between type abstraction!"
+        Nothing -> Nothing
+
+unify t1@(TypLet bi1 ti1) t2 = do
+  case handleAll of
+    Just m -> m
+    Nothing -> fail "unknown quantifier"
+  where
+    handleAll =
+      case prj @(Forall (Bound Integer)) bi1 of
+        Just (Forall _) -> Just do
+          let (q1, mono1) = getMonoType t1
+          q0 <- ask
+          (q3, t3) <- local (const $ q0 <> q1) $ unify mono1 (shift 0 (toInteger $ length q1) t2)
+          return $ (\f -> f t3) . foldr (.) id . fmap (injTypeBind @(Forall (Bound Integer)) . Forall) <$> splitAt (length q0) q3
+        _ -> Nothing
+
+unify t1 t2@(TypLet _ _) = unify t2 t1
 
 -- | left with all simple one, compare and return. no type containment is needed.
 -- for the type symbol, we compare the symbol name and don't compare the underlying
@@ -402,11 +404,11 @@ unify a b =
 -- we have environment binding like:
 -- c:tc,b:tb,a:ta
 -- in a reverse order of introduction
-type GammaEnv k = [(Symbol, NormalType k)]
+type GammaEnv k r = [(Symbol, NormalType k r)]
 -- | (unsolved term, solved term)
-type GlobalEnv = (GammaEnv NormalKind, GammaEnv NormalKind)
-type TypingMonad m =
-  RWST (Bounds Integer (NormalType NormalKind), GlobalEnv) () (GammaEnv NormalKind) m
+type GlobalEnv r = (GammaEnv NormalKind r, GammaEnv NormalKind r)
+type TypingMonad r m =
+  RWST (Bounds Integer (NormalType NormalKind r), GlobalEnv r) () (GammaEnv NormalKind r) m
 
 data PatternError c a
   = DuplicateBinding a
@@ -420,29 +422,29 @@ instance (Show a, Show c) => Show (PatternError c a) where
     DuplicateBindingF a -> "Duplicate binding of " <> show a
     BEContextF c r -> r <> "\n" <> "in " <> show c
 
-runTyping :: MonadFail m
-          => (Maybe Symbol, ParseExpr (NormalType NormalKind))
-          -> GlobalEnv
-          -> GammaEnv NormalKind
-          -> m (ParseExpr (NormalType NormalKind), GammaEnv NormalKind, ())
+runTyping :: (MonadFail m, Show r, Eq r)
+          => (Maybe Symbol, ParseExpr (NormalType NormalKind r))
+          -> GlobalEnv r
+          -> GammaEnv NormalKind r
+          -> m (ParseExpr (NormalType NormalKind r), GammaEnv NormalKind r, ())
 runTyping e r = runRWST (typing e) ([], r)
 
 -- | infer type of expreission
 typing
-  :: forall m. (Monad m, MonadFail m)
-  => (Maybe Symbol, ParseExpr (NormalType NormalKind))
-  -> TypingMonad m (ParseExpr (NormalType NormalKind))
+  :: forall m r. (Monad m, MonadFail m, Show r, Eq r)
+  => (Maybe Symbol, ParseExpr (NormalType NormalKind r))
+  -> TypingMonad r m (ParseExpr (NormalType NormalKind r))
 typing (_symbol'maybe, tree) = do
   (_prefix, val :@ _t) <- cata go tree
   return val
   where
     annotate val typ = ExAnno (val :@ typ) :@ typ
 
-    go :: forall a. (a ~ (Bounds Integer (NormalType NormalKind), NormalType NormalKind :@ ParseExpr (NormalType NormalKind)))
-       => Base (ParseExpr (NormalType NormalKind))
-               (TypingMonad m a)
-       -> TypingMonad m a
-    go ExUnitF = asks $ (, ExUnit :@ TypUni) . fst
+    go :: forall a. (a ~ (Bounds Integer (NormalType NormalKind r), NormalType NormalKind r :@ ParseExpr (NormalType NormalKind r)))
+       => Base (ParseExpr (NormalType NormalKind r))
+               (TypingMonad r m a)
+       -> TypingMonad r m a
+    go ExUnitF = asks $ (, ExUnit :@ (injTypeLit @Tuple $ Tuple [])) . fst
     go (ExLitF lit) =
       let typ = case lit of
                   LitInt _ -> nameRef "i8"
@@ -463,14 +465,14 @@ typing (_symbol'maybe, tree) = do
             (q2, v :@ t) <- local (first $ const q1) mn
             return (q2, ts <> [t], vs <> [v])
       (q, ts, vs) <- foldl through (asks $ (,[],[]) . fst) ems
-      return (q, ExTup vs `annotate` TypTup ts)
+      return (q, ExTup vs `annotate` (injTypeLit @Tuple . Tuple) ts)
     go (ExRecF ems) = do
       let through mr mn = do
             (q1, ts, vs) <- mr
             (label, (q2, v :@ t)) <- local (first $ const q1) $ sequence mn
             return (q2, ts <> [(Label case label of Symbol s -> s; Op s -> s,t)], vs <> [(label, v)])
       (q, ts, vs) <- foldl through (asks $ (,[],[]) . fst) ems
-      return (q, ExRec vs `annotate` TypRec ts)
+      return (q, ExRec vs `annotate` (injTypeLit @(Record Label) . Record) ts)
     go (ExAbsF _lambda) = error "lambda is not implemented yet"
     go (ExAppF m1 m2 mn) = do
       let reduction t1 t2 = do
@@ -478,7 +480,7 @@ typing (_symbol'maybe, tree) = do
             (q2, getMonoType -> (prefix, _)) <-
               runReaderT (scopUnify [1 :> t1, 1 :> t2, 1 :> TypBot]
                                     (localRef 3)
-                                    (TypApp (opRef "->") (localRef 2) [localRef 1]))
+                                    (TypCon (opRef "->") [localRef 2, localRef 1]))
                           q
             return (q2, general (localRef 1) prefix)
       (q1, v1 :@ t1) <- m1
@@ -506,14 +508,14 @@ typing (_symbol'maybe, tree) = do
     go (ExAnnoF fmr) = do
       ((s1, e :@ t) :@ anno) <- sequence fmr
       (s2, _) <- runReaderT (unify (localRef 1) t) (s1 <> [1 :> anno])
-      return (take (length s1) s2, ExAnno (e :@ t) `annotate` TypAll (1 :> anno) (localRef 1))
+      return (take (length s1) s2, ExAnno (e :@ t) `annotate` injTypeBind @(Forall (Bound Integer)) (Forall (1 :> anno)) (localRef 1))
 
 -- collect names introduced by pattern, and do checking
-bindCheck :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k)) Symbol) m)
-          => ParsePattern (NormalType k) -> m [Symbol]
+bindCheck :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k r)) Symbol) m)
+          => ParsePattern (NormalType k r) -> m [Symbol]
 bindCheck = para go
-  where go :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k)) Symbol) m)
-           => Base (ParsePattern (NormalType k)) (ParsePattern (NormalType k), m [Symbol])
+  where go :: (MonadReader [Symbol] m, MonadError (PatternError (ParsePattern (NormalType k r)) Symbol) m)
+           => Base (ParsePattern (NormalType k r)) (ParsePattern (NormalType k r), m [Symbol])
            -> m [Symbol]
         go (PatRefF name) = do
           names <- ask
@@ -538,10 +540,10 @@ bindCheck = para go
 
 -- collect introduced symbols and return its relevant type
 patternTyping
-  :: forall k m
-  . (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
-  => ParsePattern (NormalType k)
-  -> m (NormalType k :@ ParsePattern (NormalType k))
+  :: forall k m r
+  . (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k r), GammaEnv k r) m, Show r, Eq r)
+  => ParsePattern (NormalType k r)
+  -> m (NormalType k r :@ ParsePattern (NormalType k r))
 patternTyping pat = do
   vars <- runReaderT (runExceptT $ bindCheck pat) mempty >>= either (fail . show) return
   let env = fmap localRef <$> zip vars [1..]
@@ -557,7 +559,7 @@ patternTyping pat = do
       modify (first ((1 :> TypBot):)) -- append a new prefix
       return (localRef (toInteger $ length prefixs + 1))
     go PatWildF = annotate PatWild <$> newAnyType
-    go PatUnitF = return (PatUnit :@ TypUni)
+    go PatUnitF = return (PatUnit :@ (injTypeLit @Tuple $ Tuple []))
     go (PatRefF name) = do
       env <- gets snd
       maybe (fail $ "can't find type for symbol " <> show name)
@@ -566,10 +568,10 @@ patternTyping pat = do
       -- return (PatRef name :@ typ)
     go (PatTupF tups) = do
       tupPairs <- sequence tups
-      return (PatTup (valOf <$> tupPairs) :@ TypTup (typOf <$> tupPairs))
+      return (PatTup (valOf <$> tupPairs) :@ (injTypeLit @Tuple . Tuple) (typOf <$> tupPairs))
     go (PatRecF recs) = do
       rs <- mapM sequence recs
-      return (PatRec (fmap valOf <$> rs) :@ TypRec ((\(l, typOf -> t) -> (case l of Symbol s -> Label s; Op s -> Label s, t)) <$> rs))
+      return (PatRec (fmap valOf <$> rs) :@ (injTypeLit @(Record Label) . Record) ((\(l, typOf -> t) -> (case l of Symbol s -> Label s; Op s -> Label s, t)) <$> rs))
     go (PatSymF _sym) = error "We need to lookup type definition to fetch full type for the variant label, not implemented yet"
     go (PatAnnoF (mp :@ t1)) = do
       p :@ t2 <- mp
@@ -580,7 +582,7 @@ patternTyping pat = do
     go _ = error "sorry, feature is not implemented"
 
 -- | TODO: add lambda type inference
-lambdaTyping :: (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k), GammaEnv k) m)
+lambdaTyping :: (MonadFail m, Eq k, Show k, MonadState (Bounds Integer (NormalType k r), GammaEnv k r) m, Show r, Eq r)
              => Lambda typ anno name -> m b
 lambdaTyping (Lambda _ _branch _branchs) = do
   void $ gPatternTyping (error "not implemented")
@@ -590,11 +592,9 @@ lambdaTyping (Lambda _ _branch _branchs) = do
     gPatternTyping (PatGrp _ms) = do undefined
     gPatternTyping (PatSeq _ms) = do undefined
 
-instance Rule () (NormalType k) where
+instance Rule () (NormalType k r) where
   rewrite TypBot _ = TypBot
-  rewrite TypUni _ = TypUni
   rewrite t@(TypRep _) _ = t
-  rewrite t@(TypLit _) _ = t
   rewrite t@(TypRef (Left _)) _ = t
   rewrite (TypRef (Right n)) (_ :! s) = TypRef . Right $ n + s
   rewrite (TypRef (Right 1)) (S.Cons _ t _) = t
@@ -602,18 +602,25 @@ instance Rule () (NormalType k) where
   rewrite t (Assoc _ (_ :! 1) (S.Cons _ _ s)) = rewrite t s
   rewrite t (Assoc _ (_ :! n) (S.Cons _ _ s)) = rewrite t $ Assoc () (() :! (n - 1)) s
   rewrite t (Assoc _ s1 s2) = rewrite t s1 `rewrite` s2
-  rewrite (TypTup ts) s = TypTup $ flip rewrite s <$> ts
-  rewrite (TypRec lts) s = TypRec $ fmap (`rewrite` s) <$> lts
-  rewrite (TypSum lts) s = TypSum $ fmap (flip rewrite s <$>) <$> lts
-  rewrite (TypPie ft t) s = TypPie (flip rewrite s <$> ft) $ rewrite t s
-  rewrite (TypApp h1 h2 hs) s = TypApp (rewrite h1 s) (rewrite h2 s) $ flip rewrite s <$> hs
-  rewrite (TypEqu fb t) s = TypEqu (flip rewrite s <$> fb)
+  rewrite (TypLit lit) s =
+    let handler = handleTup <$> prj lit
+              <|> handleSum <$> prj lit
+              <|> handleRec <$> prj lit
+     in case handler of
+          Just v -> v
+          Nothing -> TypLit lit
+    where
+      handleTup (Tuple ts) = injTypeLit @Tuple . Tuple $ flip rewrite s <$> ts
+      handleSum (Variant lts) = injTypeLit @(Variant Label) . Variant $ fmap (flip rewrite s <$>) <$> lts
+      handleRec (Record lts) = injTypeLit @(Record Label) . Record $ fmap (`rewrite` s) <$> lts
+  rewrite (TypCon h hs) s = TypCon (rewrite h s) $ flip rewrite s <$> hs
+  rewrite (TypLet fb t) s = TypLet (flip rewrite s <$> fb)
                           $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  rewrite (TypAll fb t) s = TypAll (flip rewrite s <$> fb)
-                          $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  rewrite (TypAbs fb t) s = TypAbs (flip rewrite s <$> fb)
-                          $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  rewrite (TypNest ft) s = TypNest (flip rewrite s <$> ft)
+  -- rewrite (TypAll fb t) s = TypAll (flip rewrite s <$> fb)
+  --                         $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
+  -- rewrite (TypAbs fb t) s = TypAbs (flip rewrite s <$> fb)
+  --                         $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
+  rewrite (TypInj ft) s = TypInj (flip rewrite s <$> ft)
   lmap = error "need to use another calculus"
   normalize = error "need to use another calculus"
 

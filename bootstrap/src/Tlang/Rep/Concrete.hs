@@ -27,6 +27,7 @@ data DataRep t f where
   DataRep :: f (DataRep t f) -> DataRep t f
 
 deriving instance (Show (t (PrimitiveT t (DataRep t f))), Show (f (DataRep t f))) => Show (DataRep t f)
+deriving instance (Eq (PrimitiveT t (DataRep t f)), Eq (f (DataRep t f))) => Eq (DataRep t f)
 
 -- | A hint provided by user to determin which type we will use, but the result is not guarenteed
 data SeqT a where

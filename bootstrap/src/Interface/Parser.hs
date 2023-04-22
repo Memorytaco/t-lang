@@ -38,11 +38,11 @@ data ShellError
 instance ShowErrorComponent ShellError where
   showErrorComponent = show
 
-data ShellRes txt c f
-  = LangDef (Decl.ParseDeclType c f) txt
-  | LangExpr (Expr.ParseExprType c f) txt
+data ShellRes txt
+  = LangDef Decl.ParseDeclType txt
+  | LangExpr Expr.ParseExprType txt
 
-toplevel :: MonadIO m => ShellParser m (ShellRes Text None Identity)
+toplevel :: MonadIO m => ShellParser m (ShellRes Text)
 toplevel = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- gets operators
@@ -68,5 +68,5 @@ runToplevel
   => ShellConfig
   -> ShellState
   -> Text
-  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes Text None Identity), ShellState, ())
+  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes Text), ShellState, ())
 runToplevel r s txt = runRWST (runParserT (getShellParser toplevel) "stdin" txt) r s

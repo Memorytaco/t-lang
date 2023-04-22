@@ -23,13 +23,12 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)
 import Control.Monad (void, forM)
-import Control.Monad.Identity (Identity)
 import Control.Applicative (liftA2)
 import Control.Monad.Trans.State (StateT, runStateT, modify)
 import Control.Monad.Trans (lift)
 
-type ParseModuleType c f = Module (ParseType c f) Symbol (Symbol, Declaration (ParseType c f) Symbol)
-type ParsedModule = ParseModuleType None Identity
+type ParseModuleType = Module ParseType Symbol (Symbol, Declaration ParseType Symbol)
+type ParsedModule = ParseModuleType
 
 moduleID :: ShowErrorComponent e => ParsecT e Text m ModuleID
 moduleID = liftA2 ModuleID init last <$> identifier `sepBy1` symbol "/"
@@ -65,7 +64,7 @@ parseModule ms source = do
   eof
   return (Module source path deps decls, ms)
   where
-    lookUpName :: Symbol -> ParsedModule -> Maybe (ParseDeclType None Identity)
+    lookUpName :: Symbol -> ParsedModule -> Maybe (ParseDeclType)
     lookUpName name (Module _ _ deps decs) =
       let predicate (LetD s _) = s == name
           predicate (TypD (s :== _)) = s == name
@@ -74,7 +73,7 @@ parseModule ms source = do
        in find predicate decs <|> foldl (<|>) Nothing (fmap (\(Use _ ls) -> lookup name ls) deps)
     lookUpModule :: ModuleID -> [ParsedModule] -> Maybe ParsedModule
     lookUpModule path = find \(Module _ mid _ _) -> mid == path
-    putIntoEnv :: (Monad m) => ParseDeclType None Identity -> StateT ([Operator String], [Operator String]) m ()
+    putIntoEnv :: (Monad m) => ParseDeclType -> StateT ([Operator String], [Operator String]) m ()
     putIntoEnv (FixD op@(Operator _ _ _ s)) = modify \(tys, trs) ->
       if head s == ':' then (op:tys, trs) else (tys, op:trs)
     putIntoEnv _ = pure ()

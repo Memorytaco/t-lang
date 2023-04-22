@@ -109,4 +109,3 @@ instance Show a => Labellable (GEdge a) where
   toLabelValue (GBind _perm ix Nothing)  = StrLabel . pack $ show ix
   toLabelValue (GOperate CUnify) = StrLabel "**Unify**"
   toLabelValue (GOperate (CInstance i)) = StrLabel . pack $ show i <> " |>"
-

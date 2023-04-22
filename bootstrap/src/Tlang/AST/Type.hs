@@ -1,7 +1,6 @@
 module Tlang.AST.Type
   ( Type (..)
   , TypeF (..)
-  , TypeLit (..)
   , TypeAssert (..)
   , Kind (..)
   , KindF (..)
@@ -18,37 +17,43 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 
-import Data.List (intercalate)
+-- | type representation. parameterised with some extensions.
+-- please refer to `Tlang.Extension.Type` for all available options.
+data Type name cons bind inj rep
+  = TypBot                                      -- ^ empty type or the bottom type
+  | TypRep rep                                  -- ^ type representation, the concrete one, will always be with kind '*'
+                                                --   It has syntax level support
+  | TypRef name                                 -- ^ refer to named type or type variable
+  | TypLit (cons (Type name cons bind inj rep)) -- ^ type level literal constructor. natural number, string and all that.
+                                                --   It also include sub structure like records and variants.
+                                                --   Everything that could __literally__ written in source code.
+  | TypCon (Type name cons bind inj rep)        -- ^ type application or type constructor
+           [Type name cons bind inj rep]
+  | TypLet (bind (Type name cons bind inj rep)) -- ^ a uniform way to represent arbitrary binding logic
+           (Type name cons bind inj rep)
+  | TypInj (inj (Type name cons bind inj rep))  -- ^ Allow artibrary injection, to provide further information of syntax tree
+  deriving (Functor, Foldable, Traversable)
 
--- | type representation
-data Type label name lit bind c f rep
-  = TypBot                                        -- ^ empty type or the bottom type
-  | TypUni                                        -- ^ unit type, represented as **()**
-  | TypRep rep                                    -- ^ type representation, the concrete one, will always be with kind '*'
-  | TypLit lit                                    -- ^ type level literal, natural number, string and all that
-  | TypRef name                                   -- ^ refer to named type or type variable
-  | TypTup [Type label name lit bind c f rep]                   -- ^ builtin tuple
-  | TypRec [(label, Type label name lit bind c f rep)]          -- ^ product type
-  | TypSum [(label, Maybe (Type label name lit bind c f rep))]  -- ^ variant type, grouped label type
-  | TypPie (c (Type label name lit bind c f rep))   -- ^ type constraint, a predicate
-           (Type label name lit bind c f rep)
-  | TypApp (Type label name lit bind c f rep)       -- ^ type application
-           (Type label name lit bind c f rep)
-           [Type label name lit bind c f rep]
-  | TypEqu (bind (Type label name lit bind c f rep))  -- ^ equi-recursive type
-           (Type label name lit bind c f rep)
-  | TypAll (bind (Type label name lit bind c f rep))  -- ^ universal quantified type, using de bruijn indice. this needs help from `name` type
-           (Type label name lit bind c f rep)
-  | TypAbs (bind (Type label name lit bind c f rep))  -- ^ higher kinded type, naming an incompleted type
-           (Type label name lit bind c f rep)
-  | TypNest (f (Type label name lit bind c f rep))    -- ^ wrap kind information into type, annotation for type
+deriving instance
+  ( Eq (inj  (Type name cons bind inj rep))
+  , Eq (bind (Type name cons bind inj rep))
+  , Eq (cons (Type name cons bind inj rep))
+  , Eq name, Eq rep
+  ) => Eq (Type name cons bind inj rep)
 
--- | type level literal value
-data TypeLit
-  = TLNat Integer -- ^ natural num
-  | TLStr String  -- ^ constant string
-  | TLNum Double  -- ^ floating num
-  deriving (Show, Eq)
+instance
+  ( Show name, Show rep
+  , Show (inj (Type name cons bind inj rep))
+  , Show (bind (Type name cons bind inj rep))
+  , Show (cons (Type name cons bind inj rep))
+  ) => Show (Type name cons bind inj rep) where
+  show TypBot = "⊥"
+  show (TypRep t) = show t
+  show (TypLit lit) = show lit
+  show (TypRef name) = show name
+  show (TypLet binder body) = "let { " <> show binder <> " = " <> show body <> " }"
+  show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
+  show (TypInj anno) = show anno
 
 -- | type constraint
 data TypeAssert msg typ
@@ -57,39 +62,6 @@ data TypeAssert msg typ
   | TATrue      -- ^ always Succeed
   | TAFail msg  -- ^ failed with a message, the message may be empty
   deriving (Show, Eq)
-
-deriving instance (Functor f, Functor c, Functor bind) => Functor (Type label name lit bind c f)
-deriving instance
-  ( Eq (f (Type label name lit bind c f rep))
-  , Eq (c (Type label name lit bind c f rep))
-  , Eq (bind (Type label name lit bind c f rep))
-  , Eq label, Eq lit, Eq name, Eq rep
-  ) => Eq (Type label name lit bind c f rep)
-
-instance
-  ( Show label, Show name, Show rep, Show lit
-  , Show (bind (Type label name lit bind c f rep))
-  , Show (f (Type label name lit bind c f rep))
-  , Show (c (Type label name lit bind c f rep))
-  ) => Show (Type label name lit bind c f rep) where
-  show TypBot = "⊥"
-  show TypUni = "()"
-  show (TypRep t) = show t
-  show (TypLit lit) = show lit
-  show (TypRef name) = show name
-  show (TypTup ts) = "(" <> intercalate ", " (show <$> ts) <> ")"
-  show (TypRec ts) =
-    let mapper (a, b) = show a <> " = " <> show b
-     in "{" <> intercalate ", " (mapper <$> ts) <> "}"
-  show (TypSum ts) =
-    let mapper (a, b) = show a <> maybe "" ((" = " <>) . show) b
-     in "<" <> intercalate ", " (mapper <$> ts) <> ">"
-  show (TypEqu bind t) = "μ" <> show bind <> ". " <> show t
-  show (TypAll bind t) = "∀" <> show bind <> ". " <> show t
-  show (TypAbs bind t) = "\\" <> show bind <> ". " <> show t
-  show (TypPie constraint t) = show constraint <> " => " <> show t
-  show (TypApp t1 t2 tn) = "(" <> show t1 <> " " <> show t2 <> " " <> show tn <> ")"
-  show (TypNest anno) = show anno
 
 -- | MLF bounded quantifier
 data Bound name typ
@@ -115,6 +87,7 @@ data name :== typ = name :== typ  -- ^ pick a name to encapsulate a type, and tu
 $(deriveBifunctor ''(:==))
 
 -- | type kind representation, any kind, normal kind (*) and higher kind
+-- TODO: refactor the structure
 data Kind f name
   = KindType                      -- ^ concrete type, language's builtin type kind.
   | KindRef name                  -- ^ type kinds other than KindRef and KindType,
@@ -136,6 +109,5 @@ instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
 
 infixr 5 ::>
 
-type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance (FoldFunctor c, FoldFunctor f, FoldFunctor bind) => Recursive (Type label name lit bind c f rep) |]
-makeBaseFunctor [d| instance (FoldFunctor f) => Recursive (Kind f name) |]
+makeBaseFunctor [d| instance (Traversable inj, Traversable bind, Traversable cons) => Recursive (Type name cons bind inj rep) |]
+makeBaseFunctor [d| instance (Traversable f) => Recursive (Kind f name) |]

@@ -35,8 +35,6 @@ module Tlang.Inference.Graph
   )
 where
 
-
-
 import Tlang.AST
 
 import Control.Monad
@@ -52,6 +50,12 @@ import Data.Graph.Inductive hiding (edges, nodes)
 import qualified Data.Graph.Inductive as I
 import Data.Coerce (coerce)
 import Data.Maybe (fromJust)
+import Data.Functor.Const (Const (..))
+import Control.Applicative ((<|>))
+
+import Tlang.Extension.Type as Ext
+import Tlang.Generic
+import Tlang.Helper.AST.Type (injTypeLit, injTypeBind)
 
 import Tlang.Inference.Graph.Type
 import Tlang.Inference.Graph.Operation
@@ -60,22 +64,24 @@ arityOf :: NodeArity -> [Variance]
 arityOf = coerce
 
 runToGraph
-  :: (MonadFail m, Eq name, Traversable f, Traversable c)
+  :: (MonadFail m, Eq name,  Traversable bind, Traversable cons, Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
+   , Const Ext.Literal :<: cons, Record Label :<: cons, Variant Label :<: cons, Tuple :<: cons)
   => [(name, Node)]
-  -> Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
-  -> Type label name lit (Bound name) c f rep
-  -> m (Node, Gr (GNode (GNodeLabel lit label rep name)) (GEdge name))
+  -> Gr (GNode (GNodeLabel Ext.Literal Label rep name)) (GEdge name)
+  -> Type name cons bind Identity rep
+  -> m (Node, Gr (GNode (GNodeLabel Ext.Literal Label rep name)) (GEdge name))
 runToGraph r s t = do
   (root, graph, ()) <- runRWST (toGraph t) r s
   return (root, graph)
 
 -- | transform syntactic type into graphic type, and check its validity
 toGraph :: ( MonadFail m, MonadReader [(name, Node)] m
-           , MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
-           , Eq name, Traversable f, Traversable c
+           , MonadState (Gr (GNode (GNodeLabel Ext.Literal label rep name)) (GEdge name)) m
+           , Eq name, Traversable inj, Traversable bind, Traversable cons
+           , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
+           , Tuple :<: cons, Record label :<: cons, Variant label :<: cons, Const Ext.Literal :<: cons
            )
-        => Type label name lit (Bound name) c f rep
-        -> m Node
+        => Type name cons bind inj rep -> m Node
 toGraph = cata go
   where
     newNode node = do
@@ -92,68 +98,76 @@ toGraph = cata go
               _ -> pure 1
       return (sum counts + 1)
     go TypBotF = newNode NodeBot
-    go TypUniF = newNode NodeUni
     go (TypRepF rep) = newNode (NodeRep rep)
-    go (TypLitF lit) = newNode (NodeLit lit)
     go (TypRefF name) = do
       res'maybe <- asks $ lookup name
       case res'maybe of
         Nothing -> newNode (NodeRef name)
         Just node -> return node
-    go (TypTupF nds) = do
-      tupNode <- newNode NodeTup
-      nodes <- sequence nds
-      forM_ (zip nodes $ GSub <$> [1..]) \(node, edge) -> newEdge edge tupNode node
-      return tupNode
-    go (TypRecF lns) = do
-      redNode <- newNode NodeRec
-      lbs <- mapM sequence lns
-      forM_ (zip lbs $ GSub <$> [1..]) \((label, node), edge) -> do
-        lNode <- newNode $ NodeHas label
-        newEdge edge redNode lNode
-        newEdge (GSub 1) lNode node
-      return redNode
-    go (TypSumF lns) = do
-      sumNode <- newNode NodeSum
-      lbs <- mapM (mapM sequence) lns
-      forM_ (zip lbs $ GSub <$> [1..]) \((label, node'maybe), edge) -> do
-        lNode <- newNode $ NodeHas label
-        newEdge edge sumNode lNode
-        mapM (newEdge (GSub 1) lNode) node'maybe
-      return sumNode
-    go (TypPieF _ _) = fail "type constraint is not supported"
-    go (TypAppF ma mb ms) = do
+    go (TypLitF lit) = do
+      let val = handleLit <$> prj lit <|> handleTup <$> prj lit
+            <|> handleRec <$> prj lit <|> handleSum <$> prj lit
+      case val of
+        Just m -> m
+        Nothing -> fail "Support record, variant, tuple, literal only"
+      where
+        handleLit (Const lit) = newNode (NodeLit lit)
+        handleTup (Tuple nds) = do
+          tupNode <- newNode NodeTup
+          nodes <- sequence nds
+          forM_ (zip nodes $ GSub <$> [1..]) \(node, edge) -> newEdge edge tupNode node
+          return tupNode
+        handleRec (Record lns) = do
+          redNode <- newNode NodeRec
+          lbs <- mapM sequence lns
+          forM_ (zip lbs $ GSub <$> [1..]) \((label, node), edge) -> do
+            lNode <- newNode $ NodeHas label
+            newEdge edge redNode lNode
+            newEdge (GSub 1) lNode node
+          return redNode
+        handleSum (Variant lns) = do
+          sumNode <- newNode NodeSum
+          lbs <- mapM (mapM sequence) lns
+          forM_ (zip lbs $ GSub <$> [1..]) \((label, node'maybe), edge) -> do
+            lNode <- newNode $ NodeHas label
+            newEdge edge sumNode lNode
+            mapM (newEdge (GSub 1) lNode) node'maybe
+          return sumNode
+    go (TypConF ma ms) = do
       appNode <- newNode NodeApp
       na <- ma
-      nb <- mb
       ns <- sequence ms
-      forM_ (zip (na:nb:ns) $ GSub <$> [1..]) \(node, edge) -> newEdge edge appNode node
+      forM_ (zip (na:ns) $ GSub <$> [1..]) \(node, edge) -> newEdge edge appNode node
       return appNode
-    go (TypEquF _ _) = fail "equi-recursive type is not supported"
-    go (TypAllF mbound mr) = do
-      bound <- sequence mbound
-      case bound of
-        name :> node -> do
-          root <- local ((name, node):) mr
-          ix <- newBindSeq root
-          newEdge (GBind Flexible ix (Just name)) node root
-          return root
-        name :~ node -> do
-          root <- local ((name, node):) mr
-          ix <- newBindSeq root
-          newEdge (GBind Rigid ix (Just name)) node root
-          return root
-    go (TypAbsF mbound mr) = do
-      absNode <- newNode NodeAbs
-      pair@(name, node) <- case mbound of
-        name :> mt -> (name,) <$> mt
-        name :~ mt -> (name,) <$> mt
-      rnode <- local (pair:) mr
-      newEdge (GBind Explicit 1 (Just name)) node absNode
-      newEdge (GSub 1) absNode node
-      newEdge (GSub 2) absNode rnode
-      return absNode
-    go (TypNestF _) = fail "type annotation is not supported"
+    go (TypLetF binder mr) =
+      case handleAbs <$> (prj binder) <|> handleAll <$> (prj binder) of
+        Just m -> m
+        Nothing -> fail "Support type abstraction and type scheme only!!"
+      where
+        handleAll (Forall mbound) = do
+          bound <- sequence mbound
+          case bound of
+            name :> node -> do
+              root <- local ((name, node):) mr
+              ix <- newBindSeq root
+              newEdge (GBind Flexible ix (Just name)) node root
+              return root
+            name :~ node -> do
+              root <- local ((name, node):) mr
+              ix <- newBindSeq root
+              newEdge (GBind Rigid ix (Just name)) node root
+              return root
+        handleAbs (Scope mbound) = do
+          absNode <- newNode NodeAbs
+          pair@(name, node) <- case mbound of
+            name :> mt -> (name,) <$> mt
+            name :~ mt -> (name,) <$> mt
+          rnode <- local (pair:) mr
+          newEdge (GBind Explicit 1 (Just name)) node absNode
+          newEdge (GSub 1) absNode node
+          newEdge (GSub 2) absNode rnode
+          return absNode
+    go (TypInjF _) = fail "type annotation is not supported"
 
 -- | simplify, forall (a <> g). a == g
 -- FIXME: complete the ruleset
@@ -170,11 +184,13 @@ simplify r g =
        in filter (\n -> n /= r && null (sOut lg n <> sIn lg n)) total
 
 runRestore
-  :: (Show label, MonadFail m)
+  :: forall label lit m cons rep bind.
+    (Show label, MonadFail m, Forall (Bound Symbol) :<: bind, Scope (Bound Symbol) :<: bind
+   , Const lit :<: cons, Record label :<: cons, Variant label :<: cons, Tuple :<: cons)
   => Node
   -> Gr (GNode (GNodeLabel lit label rep Symbol)) (GEdge Symbol)
   -> ([(Node, Symbol)], Int)
-  -> m (Type label Symbol lit (Bound Symbol) Identity Identity rep, ([(Node, Symbol)], Int))
+  -> m (Type Symbol cons bind Identity rep, ([(Node, Symbol)], Int))
 runRestore node g s = do
   (typ, stat, ()) <- runRWST (restore (Symbol . show) node) g s
   return (typ, stat)
@@ -185,10 +201,11 @@ runRestore node g s = do
 -- FIXME: when somewhere occurs node like forall a.a, it will enter dead loop.
 restore
   :: ( MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
-     , MonadState ([(Node, name)], Int) m, Show label
-     , MonadFail m
+     , MonadState ([(Node, name)], Int) m, Show label, MonadFail m
+     , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
+     , Tuple :<: cons, Record label :<: cons, Variant label :<: cons, Const lit :<: cons
      )
-  => (Node -> name) -> Node -> m (Type label name lit (Bound name) c f rep)
+  => (Node -> name) -> Node -> m (Type name cons bind inj rep)
 restore schema root = do
   -- we check out whether this node has been bound somewhere
   localNames <- gets fst
@@ -202,10 +219,10 @@ restore schema root = do
       modify (first ((fmap snd <$> bounds) <>))
       -- we construct type body (aka. monotype) second
       body <- case label of
-        GType NodeUni -> return TypUni
+        GType NodeUni -> return . injTypeLit $ Tuple []
         GType NodeBot -> return TypBot
         GType (NodeRep rep) -> return (TypRep rep)
-        GType (NodeLit lit) -> return (TypLit lit)
+        GType (NodeLit lit) -> return (injTypeLit $ Const lit)
         GType (NodeRef name) -> return (TypRef name)
         GType NodeSum -> do
           labelNodes <- getStructure root >>= \subs -> mapM nodeLabel subs
@@ -213,20 +230,20 @@ restore schema root = do
             case nlabel of
               GType (NodeHas l) -> getLabelMaybe node <&> (l,)
               _ -> fail "Expect a Label node, but have none!"
-          return (TypSum pairs)
+          return (injTypeLit $ Variant pairs)
         GType NodeRec -> do
           labelNodes <- getStructure root >>= mapM nodeLabel
           pairs <- forM labelNodes \(node, nlabel) ->
             case nlabel of
               GType (NodeHas l) -> getLabel node <&> (l,)
               _ -> fail "Expect a Label node, but have none!"
-          return (TypRec pairs)
+          return (injTypeLit $ Record pairs)
         GType NodeTup -> do
           subtypes <- getStructure root >>= mapM (restore schema)
-          return $ TypTup subtypes
+          return (injTypeLit $ Tuple subtypes)
         GType NodeApp -> do
-          t1:t2:subtypes <- getStructure root >>= mapM (restore schema)
-          return $ TypApp t1 t2 subtypes
+          t1:subtypes <- getStructure root >>= mapM (restore schema)
+          return $ TypCon t1 subtypes
         GType NodeAbs -> error "not supported now"
         GType (NodeHas tag) -> fail $ "Unexpected label node of " <> show tag
         GNode -> fail "Unexpected G node"
@@ -239,7 +256,7 @@ restore schema root = do
           Rigid -> return (name :~ typ)
           Flexible -> return (name :> typ)
           Explicit -> return (name :> typ)
-      let generalize = foldr (flip (.)) id $ TypAll <$> bindings
+      let generalize = foldr (flip (.)) id $ injTypeBind . Scope <$> bindings
       modify (first $ const oldBounds) -- restore the local binding
       return $ generalize body  -- return the final type
   where

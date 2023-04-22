@@ -107,7 +107,6 @@ deriving instance (Eq (anno (Expr typ anno name)), Eq (anno (Pattern anno name))
 
 $(deriveBifunctor ''Field)
 
-type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance FoldFunctor anno => Recursive (Expr typ anno name) |]
-makeBaseFunctor [d| instance FoldFunctor anno => Recursive (Pattern anno name) |]
-makeBaseFunctor [d| instance FoldFunctor anno => Recursive (GPattern anno name) |]
+makeBaseFunctor [d| instance Traversable anno => Recursive (Expr typ anno name) |]
+makeBaseFunctor [d| instance Traversable anno => Recursive (Pattern anno name) |]
+makeBaseFunctor [d| instance Traversable anno => Recursive (GPattern anno name) |]

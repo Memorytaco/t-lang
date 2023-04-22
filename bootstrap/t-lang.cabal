@@ -45,8 +45,11 @@ library
       Tlang.Codegen.Core
       Tlang.Constraint
       Tlang.Emit
+      Tlang.Extension.Type
+      Tlang.Generic
       Tlang.Helper
       Tlang.Helper.AST
+      Tlang.Helper.AST.Binder
       Tlang.Helper.AST.Type
       Tlang.Inference
       Tlang.Inference.Graph

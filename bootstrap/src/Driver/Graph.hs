@@ -14,6 +14,7 @@ import Tlang.AST
 import Tlang.Inference.Graph
 import Tlang.Inference.Graph.Dot
 
+import Control.Monad.Identity (Identity)
 import Control.Monad.State
 import Data.Text (Text)
 import qualified Data.Text.IO as Text
@@ -40,7 +41,7 @@ viewType path str = do
        saveGraph (root, g) path
        ((), ng) <- runStateT (augGraph root) g
        saveGraph (root, ng) (path <> ".aug")
-       (tn, _) <- runRestore root g ([], 0)
+       (tn :: TypeAST Identity, _) <- runRestore root g ([], 0)
        Text.putStrLn str
        putStrLn "original: "
        print t
@@ -65,12 +66,12 @@ testUnify path str = do
        (_, (simplify root -> gu, _)) <- runStateT (n1 ~=~ n2) (ng,[])
        saveGraph (root, ng) (path <> ".aug")
        saveGraph (root, simplify root gu) (path <> ".gu")
-       (tn, _) <- runRestore root gu ([], 0)
+       (tn :: TypeAST Identity, _) <- runRestore root gu ([], 0)
        Text.putStrLn str
        putStrLn "original: "
        print t
        putStrLn "Restored: "
-       print tn
+       -- print tn
     Left err -> putStrLn err
 
 play :: Text -> IO ()
@@ -79,7 +80,7 @@ play str = do
   case res of
     Right t -> do
        (root, g) <- runToGraph [] empty t
-       (tn, _) <- runRestore root g ([], 0)
+       (tn :: TypeAST Identity , _) <- runRestore @Label root g ([], 0)
        Text.putStrLn str
        putStrLn "original: "
        print t

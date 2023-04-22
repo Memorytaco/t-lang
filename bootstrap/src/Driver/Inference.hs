@@ -11,7 +11,8 @@ import Tlang.Inference.Kind (NormalKind)
 import qualified Tlang.Parser.Type as PT
 import qualified Tlang.Parser.Expr as PE
 import qualified Tlang.Parser.Pattern as PP
-import Tlang.AST (typOperator, Symbol (..), (:@) (..), Kind (..), Operator)
+import Tlang.AST (typOperator, Symbol (..), (:@) (..), Kind (..), Operator, Label, Symbol, StandardRepType, Bound)
+import Data.Functor.Identity (Identity)
 
 import Data.Text (Text, unpack)
 import Data.Bifunctor (first)
@@ -51,7 +52,7 @@ playInfer
   => [NormalKind :@ Symbol]
   -> ([Operator String], [Operator String])
   -> Text
-  -> m (PE.ParseExpr (NormalType NormalKind))
+  -> m (PE.ParseExpr (NormalType NormalKind (StandardRepType Symbol Label (Bound Symbol) Identity)))
 playInfer env ops txt = do
   res'either <- PE.play ops txt
   expr <- case res'either of
