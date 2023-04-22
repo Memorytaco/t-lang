@@ -256,7 +256,7 @@ restore schema root = do
           Rigid -> return (name :~ typ)
           Flexible -> return (name :> typ)
           Explicit -> return (name :> typ)
-      let generalize = foldr (flip (.)) id $ injTypeBind . Scope <$> bindings
+      let generalize = foldr (flip (.)) id $ injTypeBind . Forall <$> bindings
       modify (first $ const oldBounds) -- restore the local binding
       return $ generalize body  -- return the final type
   where
