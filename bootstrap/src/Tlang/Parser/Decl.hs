@@ -65,7 +65,7 @@ defTypAlias r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = identifier <&> injTypeBind . Scope . (:> TypBot) . Symbol
+    typVar = identifier <&> injTypeBind . Scope . (:> TypPht) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=")
     typBody = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
 
@@ -74,7 +74,7 @@ defData r = do
   void $ reserved "data"
   dataId <- name
   vars <- typVarlist
-  body <- typVariant <|> typRec <|> pure TypBot
+  body <- typVariant <|> typRec <|> pure TypPht
   void $ reservedOp ";;"
   return (TypD . dataId $ vars body)
   where
@@ -84,7 +84,7 @@ defData r = do
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
     name = (:==) <$> typName
-    typVar = identifier <&> injTypeBind . Scope . (:> TypBot) . Symbol
+    typVar = identifier <&> injTypeBind . Scope . (:> TypPht) . Symbol
     typVarlist = foldr (.) id <$> manyTill typVar (void . lookAhead $ reservedOp "|" <|> reservedOp "{" <|> reservedOp ";;")
     typRec = reservedOp "{" *> TypeParser.getParser TypeParser.record (fst r)
     typVariant = injTypeLit . Variant <$> some (reservedOp "|" *> field)

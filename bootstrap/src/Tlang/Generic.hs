@@ -2,6 +2,7 @@ module Tlang.Generic
   ( (:+:) (..)
   , (:+:$) (..)
   , (:<:) (..)
+  , slot
   )
 where
 
@@ -37,6 +38,12 @@ instance {-# OVERLAPS #-} (Functor f, Functor g, Functor h, f :<: g) => f :<: (h
   inj = Inr . inj
   prj (Inl _) = Nothing
   prj (Inr a) = prj a
+
+-- | choose a slot of the data, and match
+slot
+  :: (slot :<: slots, Traversable container)
+  => (a -> container (slots a)) -> a -> Maybe (container (slot a))
+slot select = sequence . fmap prj . select
 
 infixr 1 :+:
 

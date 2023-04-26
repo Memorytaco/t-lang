@@ -45,6 +45,7 @@ library
       Tlang.Codegen.Core
       Tlang.Constraint
       Tlang.Emit
+      Tlang.Extension.Decl
       Tlang.Extension.Type
       Tlang.Generic
       Tlang.Helper

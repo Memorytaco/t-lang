@@ -26,10 +26,6 @@ data ModuleID = ModuleID [String] String deriving (Eq, Ord)
 instance Show ModuleID where
   show (ModuleID prefix name) = intercalate "/" $ prefix <> [name]
 
--- | A use statement to import symbol name.
--- Use (origin name, current name) [symbol list]
-data Use info = Use (ModuleID, ModuleID) [info] deriving (Show, Eq, Functor)
-
 -- | toplevel definition in a module
 data Declaration typ name
   = FixD (Operator String)  -- ^ fixity of user defined operator
@@ -50,9 +46,21 @@ newtype Frag
   = Frag String
   deriving (Show, Eq)
 
-data Mod marker info decls =
-  Mod { mmName :: ([Frag], String)  -- Module name
-      , mmUses :: [Use info]        -- Module imports, including lexical items
-      , mmDecl :: [decls]           -- Module declarations
-      , mmLexi :: [Operator String] -- Module lexical operators
-      }
+-- | a `ModuleName` is composed by multiple `Frag`.
+-- Language takes a style of unix file path. Everything fits in
+-- unix file path is supported by `ModuleName` though it is limited
+-- in some language context.
+data ModuleName = ModuleName [Frag] Frag deriving (Show, Eq)
+
+data Mod decls info
+  = Mod
+    { mmName :: ModuleName        -- ^ Module name
+    , mmUses :: [Use info]        -- ^ Module imports, including lexical items
+    , mmDecl :: Decls decls info  -- ^ Module declarations
+    , mmItem :: [Operator String] -- ^ Module lexical item, ignore its value or type binding.
+    }
+
+-- | A use statement to import symbol name.
+-- Use (origin name, current name) [symbol list]
+data Use info = Use (ModuleID, ModuleID) [info] deriving (Show, Eq, Functor)
+

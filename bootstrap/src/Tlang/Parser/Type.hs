@@ -122,7 +122,7 @@ apply l r = TypCon l [r]
 -- recursive (lookAhead -> end) = do
 --   name <- Symbol <$> identifier <* reservedOp "."
 --   body <- pratt end (-100)
---   return $ TypEqu (name :> TypBot) body
+--   return $ TypEqu (name :> TypPht) body
 
 quantified :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType)
 quantified (lookAhead -> end) = do
@@ -133,7 +133,7 @@ quantified (lookAhead -> end) = do
         op <- reservedOp "~" $> (:>) <|> reservedOp "=" $> (:~)
         op tok <$> boundTyp
       bound = parens scopBound
-          <|> (:> TypBot) <$> name
+          <|> (:> TypPht) <$> name
   bounds <- bound `someTill` reservedOp "."
   body <- pratt end (-100)
   return $ foldr ($) body (TypLet . inj . Forall <$> bounds)
@@ -141,7 +141,7 @@ quantified (lookAhead -> end) = do
 abstract :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType)
 abstract (lookAhead -> end) = do
   let name = Symbol <$> identifier
-  bounds <- ((:> TypBot) <$> name) `someTill` reservedOp "."
+  bounds <- ((:> TypPht) <$> name) `someTill` reservedOp "."
   body <- pratt end (-100)
   return $ foldr ($) body (TypLet . inj . Scope <$> bounds)
 

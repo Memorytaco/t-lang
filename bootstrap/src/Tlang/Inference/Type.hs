@@ -189,7 +189,7 @@ clean (TypLit lit) =
 clean a = a
 
 -- freeVars = cata \case
---   TypBot -> return []
+--   TypPht -> return []
 --   TypRef (Right n) -> do
 --     bound <- ask
 --     if n <= bound then return [] else return [n]
@@ -248,8 +248,8 @@ unify (TypInj (t1 :@ _)) (TypInj (t2 :@ _)) = unify t1 t2
 unify (TypInj (t1 :@ k)) t2 = fmap (TypInj . (:@ k)) <$> unify t1 t2
 unify t1 (TypInj (t2 :@ k)) = fmap (TypInj . (:@ k)) <$> unify t1 t2
 
-unify TypBot t = asks (, t)
-unify t TypBot = asks (, t)
+unify TypPht t = asks (, t)
+unify t TypPht = asks (, t)
 
 -- unify suports structural polymorphism
 unify (TypLit e1) (TypLit e2) = do
@@ -478,7 +478,7 @@ typing (_symbol'maybe, tree) = do
       let reduction t1 t2 = do
             q <- asks fst
             (q2, getMonoType -> (prefix, _)) <-
-              runReaderT (scopUnify [1 :> t1, 1 :> t2, 1 :> TypBot]
+              runReaderT (scopUnify [1 :> t1, 1 :> t2, 1 :> TypPht]
                                     (localRef 3)
                                     (TypCon (opRef "->") [localRef 2, localRef 1]))
                           q
@@ -547,7 +547,7 @@ patternTyping
 patternTyping pat = do
   vars <- runReaderT (runExceptT $ bindCheck pat) mempty >>= either (fail . show) return
   let env = fmap localRef <$> zip vars [1..]
-      bounds = replicate (length vars) (1 :> TypBot)
+      bounds = replicate (length vars) (1 :> TypPht)
   modify $ bimap (bounds <>) (env <>)
   cata go pat
   where
@@ -556,7 +556,7 @@ patternTyping pat = do
     typOf (_ :@ t) = t
     newAnyType = do
       prefixs <- gets fst
-      modify (first ((1 :> TypBot):)) -- append a new prefix
+      modify (first ((1 :> TypPht):)) -- append a new prefix
       return (localRef (toInteger $ length prefixs + 1))
     go PatWildF = annotate PatWild <$> newAnyType
     go PatUnitF = return (PatUnit :@ (injTypeLit @Tuple $ Tuple []))
@@ -593,7 +593,7 @@ lambdaTyping (Lambda _ _branch _branchs) = do
     gPatternTyping (PatSeq _ms) = do undefined
 
 instance Rule () (NormalType k r) where
-  rewrite TypBot _ = TypBot
+  rewrite TypPht _ = TypPht
   rewrite t@(TypRep _) _ = t
   rewrite t@(TypRef (Left _)) _ = t
   rewrite (TypRef (Right n)) (_ :! s) = TypRef . Right $ n + s

@@ -20,7 +20,7 @@ import Data.Bifunctor.TH (deriveBifunctor)
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
 data Type name cons bind inj rep
-  = TypBot                                      -- ^ empty type or the bottom type
+  = TypPht                                      -- ^ empty type (bottom type) or "forall a. a" type
   | TypRep rep                                  -- ^ type representation, the concrete one, will always be with kind '*'
                                                 --   It has syntax level support
   | TypRef name                                 -- ^ refer to named type or type variable
@@ -33,6 +33,25 @@ data Type name cons bind inj rep
            (Type name cons bind inj rep)
   | TypInj (inj (Type name cons bind inj rep))  -- ^ Allow artibrary injection, to provide further information of syntax tree
   deriving (Functor, Foldable, Traversable)
+
+instance (Functor cons, Functor bind, Functor inj) => Applicative (Type name cons bind inj) where
+  pure = TypRep
+  TypPht <*> _ = TypPht
+  TypRep f <*> a = f <$> a
+  TypRef v <*> _ = TypRef v
+  TypLit ff <*> a = TypLit ((<*> a) <$> ff)
+  TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
+  TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
+  TypInj ff <*> a = TypInj ((<*> a) <$> ff)
+
+instance (Functor cons, Functor bind, Functor inj) => Monad (Type name cons bind inj) where
+  TypPht >>= _ = TypPht
+  TypRef v >>= _ = TypRef v
+  TypLit fa >>= f = TypLit ((>>= f) <$> fa)
+  TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
+  TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
+  TypRep a >>= f = f a
+  TypInj fa >>= f = TypInj ((>>= f) <$> fa)
 
 deriving instance
   ( Eq (inj  (Type name cons bind inj rep))
@@ -47,7 +66,7 @@ instance
   , Show (bind (Type name cons bind inj rep))
   , Show (cons (Type name cons bind inj rep))
   ) => Show (Type name cons bind inj rep) where
-  show TypBot = "⊥"
+  show TypPht = "⊥"
   show (TypRep t) = show t
   show (TypLit lit) = show lit
   show (TypRef name) = show name

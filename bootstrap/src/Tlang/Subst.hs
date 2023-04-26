@@ -8,7 +8,7 @@ module Tlang.Subst
   , MetaVar (..)
   , (:->) (..)
 
-  , LambdaCalculus (..)
+  , Calculus (..)
   )
 where
 
@@ -54,39 +54,39 @@ instance (Foldable t, Functor t, Grafting v a) => Grafting (t v) a where
 $(deriveBifunctor ''Graft)
 $(deriveBifunctor ''(:->))
 
+class TermRewrite op a | a -> op where
+  dojob :: op a -> a
+
 -- | any calculus support explicit substitution
 class Rule env a | a -> env where
   rewrite :: a -> Subst env a -> a
   lmap :: a -> Subst env a -> a
   normalize :: a -> a
 
-data LambdaCalculus e val =
-    CVal val
-  | CVar Integer
-  | CAbs (LambdaCalculus e val)
-  | CApp (LambdaCalculus e val) (LambdaCalculus e val)
-  | CClos (LambdaCalculus e val) (Subst e (LambdaCalculus e val))
-  deriving (Eq)
+data Calculus b e
+  = CVar Integer
+  | CAbs (b (Calculus b e)) (Calculus b e)
+  | CApp (Calculus b e) (Calculus b e)
+  | CExt (e (Calculus b e))
+deriving instance (Eq (b (Calculus b e)), Eq (e (Calculus b e))) => Eq (Calculus b e)
 
-instance Show val => Show (LambdaCalculus e val) where
-  show (CVal v) = show v
+instance (Show (b (Calculus b e)), Show (e (Calculus b e))) => Show (Calculus b e) where
   show (CVar i) = show i
-  show (CAbs t) = "λ." <> show t <> "|"
+  show (CAbs binder t) = "λ" <> show binder <> " {" <> show t <> "}"
   show (CApp a b) = "(" <> show a <> " " <> show b <> ")"
-  show (CClos a b) = show a <> "[" <> show b <> "]"
+  show (CExt v) = show v
 
-instance Monoid e => Rule e (LambdaCalculus e val) where
-  rewrite t (_ :! 0) = t
-  rewrite (CVal val) _ = CVal val
-  rewrite (CVar i) (_ :! j) = CVar (i + j)
-  rewrite (CVar 1) (Cons _ t _) = t
-  rewrite (CVar i) (Cons _ _ s2) = rewrite (CVar (i - 1)) s2
-  rewrite (CClos v s1) s2 = rewrite v s1 `rewrite` s2
-  rewrite t (Assoc _ s1 s2) = rewrite (rewrite t s1) s2
-  rewrite (CAbs t) s = CAbs . rewrite t $ Cons mempty (CVar 1) (Assoc mempty s $ mempty :! 1)
-  rewrite (CApp t1 t2) s = CApp (rewrite t1 s) (rewrite t2 s)
-  lmap = CClos
-  normalize = id
+data Rewrite a
+  = Raise Integer a
+  | Onto  a (Rewrite a)
+  | Link (Rewrite a) (Rewrite a)
+  deriving (Eq, Show, Functor, Foldable, Traversable)
+
+-- instance TermRewrite Rewrite (Calculus b Rewrite) where
+--   dojob (Raise 1 (CVar b)) = CVar (1 + b)
+--   dojob (Raise _ (CVar b)) = CVar b
+--   dojob (Raise i (CApp a b)) = CApp (dojob (Raise i a)) (dojob (Raise i b))
+--   dojob (Raise i (CAbs b v)) = CAbs b (dojob (Raise (i + 1)))
 
 instance Rule () (Kind (Graft (MetaVar Kind Integer)) Integer) where
   rewrite a (_ :! 0) = a

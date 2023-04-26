@@ -97,7 +97,7 @@ toGraph = cata go
               GSub _ -> pure 0
               _ -> pure 1
       return (sum counts + 1)
-    go TypBotF = newNode NodeBot
+    go TypPhtF = newNode NodeBot
     go (TypRepF rep) = newNode (NodeRep rep)
     go (TypRefF name) = do
       res'maybe <- asks $ lookup name
@@ -220,7 +220,7 @@ restore schema root = do
       -- we construct type body (aka. monotype) second
       body <- case label of
         GType NodeUni -> return . injTypeLit $ Tuple []
-        GType NodeBot -> return TypBot
+        GType NodeBot -> return TypPht
         GType (NodeRep rep) -> return (TypRep rep)
         GType (NodeLit lit) -> return (injTypeLit $ Const lit)
         GType (NodeRef name) -> return (TypRef name)

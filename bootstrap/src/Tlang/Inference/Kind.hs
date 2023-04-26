@@ -76,7 +76,7 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
   where
     go :: Base (StandardType Symbol Label (Bound Symbol) f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType f r))
        -> ReaderT ([Symbol], [Symbol]) m (DeBruijnType f r)
-    go TypBotF = pure TypBot
+    go TypPhtF = pure TypPht
     go (TypRepF r) = pure $ TypRep r
     go (TypRefF s) = do
       ix'maybe <- asks $ lookup s . flip zip [1..] . snd
@@ -274,7 +274,7 @@ test t = do
 -- | traverse around annotated type tree
 onAnnotate :: (anno1 -> anno2) -> DeBruijnType ((:@) anno1) r -> DeBruijnType ((:@) anno2) r
 onAnnotate f = cata \case
-  TypBotF -> TypBot
+  TypPhtF -> TypPht
   TypRepF r -> TypRep r
   TypLitF lit -> TypLit lit
   TypRefF r -> TypRef r
@@ -403,7 +403,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
 
     go :: (a ~ ([GraftKind :<> GraftKind], AnnotatedType r))
        => Base (DeBruijnType f r) (ConstraintMonad m a) -> ConstraintMonad m a
-    go TypBotF = return . pure $ TypBot `annotate` KindType
+    go TypPhtF = return . pure $ TypPht `annotate` KindType
     go (TypRepF r) = return . pure $ TypRep r `annotate` KindType
     go (TypLitF litr) = do
       let handler = handleTup <$> (prj litr) <|> handleRec <$> (prj litr) <|> handleSum <$> (prj litr) <|> handleLit <$> (prj litr)
