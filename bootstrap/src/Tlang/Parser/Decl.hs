@@ -1,8 +1,7 @@
 module Tlang.Parser.Decl
   ( declaration
+  , DeclareExtension
   , play
-  , getFixity
-  , ParseDeclType
   )
 where
 
@@ -10,8 +9,6 @@ import Tlang.AST
 import Tlang.Parser.Lexer
 import qualified Tlang.Parser.Expr as ExprParser
 import qualified Tlang.Parser.Type as TypeParser
-import Tlang.Helper.AST.Type (injTypeBind, injTypeLit)
-import Tlang.Extension.Type (Scope (..), Variant (..))
 
 import Control.Monad (void)
 import Control.Monad.Trans.State (StateT, get, modify, evalStateT)
@@ -22,79 +19,115 @@ import Data.Text (Text)
 import Data.Void (Void)
 import Text.Megaparsec
 
-type ParseDeclType = Declaration TypeParser.ParseType Symbol
+import Tlang.Extension.Decl
+import Tlang.Generic
 
-defForeign :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
-defForeign r = do
+userFFI :: (ShowErrorComponent e, UserFFI TypeParser.ParseType :<: decls)
+        => [Operator String] -> ParsecT e Text m (Decl decls Symbol)
+userFFI r = do
   void $ reserved "foreign"
+  item <- optional ffItem
   name <- Symbol <$> identifier
-  void $ reservedOp ":" <|> fail "fn declaration require type signature"
-  sig <- TypeParser.unParser (fst r) (void . lookAhead . choice $ reservedOp <$> ["[", "=", ";;"]) (-100)
-  next <- choice $ reservedOp <$> ["[", "=", ";;"]
-  case next of
-    ";;" -> return $ FnD name sig FnDefault
-    "[" -> FnDecl <$> lambda <* reservedOp ";;" <&> FnD name sig
-    "=" -> FnSymbol <$> stringLiteral <* reservedOp ";;" <&> FnD name sig
-    _ -> error "impossible in Tlang.Parser.Decl.defForeign"
+  void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
+  sig <- TypeParser.unParser r (void . lookAhead $ reservedOp ";;") (-100)
+  void $ reservedOp ";;"
+  return . declare $ UserFFI item sig name
   where
-    lambda = ExprParser.getParser ExprParser.bigLambda r
+    ffItem = brackets $ str <|> int <|> sym <|> list <|> record
+      where
+        str = FFItemS <$> stringLiteral
+        int = FFItemI <$> integer
+        sym = FFItemF <$> identifier <*> many ffItem
+        list = FFItemA <$> brackets (commaSep ffItem)
+        record =
+          let field = (,) <$> stringLiteral <*> (reservedOp "=" >> ffItem)
+           in braces $ FFItemR <$> (commaSep field)
 
-defLet :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
-defLet r = do
+userValue :: (ShowErrorComponent e, UserValue ExprParser.ParseExprType (Maybe TypeParser.ParseType) :<: decls)
+          => ([Operator String], [Operator String]) -> ParsecT e Text m (Decl decls Symbol)
+userValue r = do
   void $ reserved "let"
   name <- Symbol <$> identifier <|> Op <$> operator
-  sig'maybe <- optional $ reservedOp ":" *> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "=" <|> reservedOp ";;") (-100)
-  void $ reservedOp "=" <|> fail "let declaration require a value definition"
-  let expr = ExprParser.unParser r (void $ reservedOp ";;") (-100)
-  case sig'maybe of
-    Just typ -> LetD name . ExAnno . (:@ typ) <$> expr
-    Nothing -> LetD name <$> expr
+  sig <- optional $ reservedOp ":" *> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "=" <|> reservedOp ";;") (-100)
+  void $ reservedOp "=" <|> fail "let declaration requires a value definition"
+  expr <- ExprParser.unParser r (void . lookAhead $ reservedOp ";;") (-100)
+  void $ reservedOp ";;"
+  return . declare $ UserValue expr sig name
 
-defTypAlias :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
-defTypAlias r = do
+userType :: (ShowErrorComponent e, UserType TypeParser.ParseType [Bound Symbol TypeParser.ParseType] :<: decls)
+         => [Operator String] -> ParsecT e Text m (Decl decls Symbol)
+userType r = do
   void $ reserved "type"
-  aliaId <- name
-  vars <- typVarlist
-  body <- typBody
+  alias <- name
+  vars <- manyTill typVar (void $ reservedOp "=")
+  body <- TypeParser.unParser r (lookAhead . void $ reservedOp ";;") (-100)
   void $ reservedOp ";;"
-  return (TypF . aliaId $ vars body)
+  return . declare $ UserType body vars alias
   where
-    typName = Symbol <$> identifier <|> do
+    name = Symbol <$> identifier <|> do
       op <- lookAhead operator
       if head op == ':'
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    name = (:==) <$> typName
-    typVar = identifier <&> injTypeBind . Scope . (:> TypPht) . Symbol
-    typVarlist = foldr (.) id <$> manyTill typVar (void $ reservedOp "=")
-    typBody = TypeParser.unParser (fst r) (lookAhead . void $ reservedOp ";;") (-100)
+    typVar :: ShowErrorComponent e => ParsecT e Text m (Bound Symbol TypeParser.ParseType)
+    typVar = identifier <&> (:> TypPht) . Symbol
 
-defData :: ShowErrorComponent e => ([Operator String], [Operator String]) -> ParsecT e Text m (ParseDeclType)
-defData r = do
+type UserDataExtension = UserEnum Label :+: UserStruct Label :+: UserCoerce :+: UserPhantom
+
+userDataExt
+  :: forall exts e m
+  .  ( UserEnum Label :<: exts
+     , UserStruct Label :<: exts
+     , UserCoerce :<: exts
+     , UserPhantom :<: exts
+     , ShowErrorComponent e
+     )
+  => ([Operator String], [Operator String])
+  -> ParsecT e Text m (UserData [Bound Symbol TypeParser.ParseType] exts TypeParser.ParseType Symbol)
+
+userDataExt r = do
   void $ reserved "data"
-  dataId <- name
-  vars <- typVarlist
-  body <- typVariant <|> typRec <|> pure TypPht
+  dataName <- name
+  vars <- manyTill typVar (void . lookAhead . choice $ reservedOp <$> ["|", "{", "=", ";;"])
+  let dataOf :: forall ext _m fs a. (ext :<: fs, Monad _m)
+             => _m (ext a) -> _m (UserData [Bound Symbol TypeParser.ParseType] fs a Symbol)
+      dataOf = fmap $ injData vars dataName
+  dataDef <- dataOf userStruct <|> dataOf userEnums <|> dataOf userCoerce <|> dataOf (return UserPhantom)
   void $ reservedOp ";;"
-  return (TypD . dataId $ vars body)
+  return dataDef
   where
-    typName = Symbol <$> identifier <|> do
+    typVar = (:> TypPht) . Symbol <$> identifier 
+    name = Symbol <$> identifier <|> do
       op <- lookAhead operator
       if head op == ':'
          then Op <$> operator
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    name = (:==) <$> typName
-    typVar = identifier <&> injTypeBind . Scope . (:> TypPht) . Symbol
-    typVarlist = foldr (.) id <$> manyTill typVar (void . lookAhead $ reservedOp "|" <|> reservedOp "{" <|> reservedOp ";;")
-    typRec = reservedOp "{" *> TypeParser.getParser TypeParser.record (fst r)
-    typVariant = injTypeLit . Variant <$> some (reservedOp "|" *> field)
+    fieldName = identifier <|> operator <&> Tlang.AST.Label
+    userStruct = braces do
+      let field = do
+            constructor <- fieldName <* reservedOp ":"
+            typ <- TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
+            return (UserStruct constructor typ)
+      cs1 <- field <* optional (reservedOp ",")
+      css <-  commaSep field
+      return $ UserStructs cs1 css
+    userEnum = reservedOp "|" *> (UserEnum <$> fieldName <*> many field)
       where
-        fieldName = fmap Tlang.AST.Label $ identifier <|> operator
-        field = (,) <$> fieldName <*> optional
-          (reservedOp ":" *> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp "|" <|> reservedOp ";;") (-100))
+        field = TypRef . Symbol <$> identifier
+            <|> parens (TypeParser.unParser (fst r) (void . lookAhead $ reservedOp ")") (-100))
+    userEnums = UserEnums <$> userEnum <*> many userEnum
+    userCoerce = reservedOp "=" >> UserCoerce <$> (TypeParser.unParser (fst r) (void . lookAhead $ reservedOp ";;") (-100))
+
+userData
+  :: ( ShowErrorComponent e
+     , UserData [Bound Symbol TypeParser.ParseType] UserDataExtension TypeParser.ParseType :<: decls
+     )
+  => ([Operator String], [Operator String])
+  -> ParsecT e Text m (Decl decls Symbol)
+userData r = declare <$> userDataExt @UserDataExtension r
 
 defFixity :: ShowErrorComponent e => ParsecT e Text m (Operator String)
-defFixity = defUnifix <|> defInfix
+defFixity = (defUnifix <|> defInfix) <* reservedOp ";;"
   where
     precedence = do
       fixity <- integer
@@ -110,25 +143,26 @@ defFixity = defUnifix <|> defInfix
             <|> reserved "infixr" *> (precedence >>= \bp -> Operator Infix bp (bp-1) <$> operator)
             <|> reserved "infix" *> (precedence >>= \bp -> Operator Infix bp bp <$> operator)
 
-declaration :: (ShowErrorComponent e, Monad m) => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType)
+type DeclareExtension typ
+  = UserItem
+  :+: UserType typ [Bound Symbol typ]
+  :+: UserFFI typ
+  :+: UserValue ExprParser.ParseExprType (Maybe typ)
+  :+: UserData [Bound Symbol typ] UserDataExtension typ
+
+declaration
+  :: (ShowErrorComponent e, Monad m)
+  => ParsecT e Text (StateT ([Operator String], [Operator String]) m) (Decl (DeclareExtension TypeParser.ParseType) Symbol)
 declaration = do
   r <- lift get
-  defForeign r <|> defLet r <|> defTypAlias r <|> defData r <|> do
+  userFFI (fst r) <|> userValue r <|> userType (fst r) <|> userData r <|> do
     op@(Operator _ _ _ s) <- defFixity
     lift . modify $ \(tys, trs) -> if head s == ':' then (op:tys, trs) else (tys, op:trs)
-    void $ reservedOp ";;"
-    return $ FixD op
-
--- | get operator fixity information from source file
-getFixity :: [ParseDeclType] -> [Operator String]
-getFixity = collect . fmap pick
-  where
-    pick (FixD op) = Just op
-    pick _ = Nothing
-    collect = foldl (\ls b -> maybe ls (: ls) b) []
+    return . declare $ UserItem (ItemSpace "default") [op] (Op s)
 
 play :: (Monad f, Monad m)
-     => (ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (ParseDeclType) -> ParsecT Void Text (StateT s f) c)
+     => ( ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (Decl (DeclareExtension TypeParser.ParseType) Symbol)
+     -> ParsecT Void Text (StateT s f) c)
      -> s -> Text -> f (Either String c)
 play deco op txt =
   let m = flip evalStateT op $ runParserT (deco $ declaration @Void) "stdin" txt

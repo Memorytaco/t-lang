@@ -36,6 +36,8 @@ library
       Interface.Shell
       Tlang
       Tlang.AST
+      Tlang.AST.Class
+      Tlang.AST.Class.Decl
       Tlang.AST.Decl
       Tlang.AST.Expr
       Tlang.AST.Module

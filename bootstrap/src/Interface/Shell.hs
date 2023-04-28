@@ -20,7 +20,9 @@ import Data.Functor (($>))
 import Driver.Parser
 import qualified Interface.Parser as Helper
 import qualified Interface.Config as Helper
-import Tlang.AST (typOperator, Declaration (..))
+import Tlang.AST (typOperator, Decl (..))
+import Tlang.Extension.Decl (UserItem (..))
+import Tlang.AST.Class.Decl (query)
 
 data ReplStatus state
   = ReplStatus
@@ -44,7 +46,7 @@ repl'loop = do
       if isClosed status
       then lift $ outputStrLn "done."
       else do
-        lift $ outputStrLn "Prese Ctrl-D again to exit"
+        lift $ outputStrLn "Prese ^D again to exit"
         modify (\s -> s { isClosed = True })
         repl'loop
     Just txt -> do
@@ -53,12 +55,13 @@ repl'loop = do
         Left bundle'err -> lift . outputStrLn $ errorBundlePretty bundle'err
         Right res -> do
           case res of
-            Helper.LangDef dec txt -> do
-              case dec of
-                FixD o -> modify (\s -> s { rState = second (Helper.addTermOperator o) $ rState s})
-                _ -> return ()
-              lift . outputStrLn $ show dec
+            Helper.LangDef decl txt -> do
+              case query @UserItem (const True) decl of
+                Just (UserItem _ ops _) -> modify (\s -> s { rState = second (Helper.addTermOperators ops) $ rState s})
+                Nothing -> return ()
+              lift . outputStrLn $ show decl
             Helper.LangExpr exp txt -> lift . outputStrLn $ show exp
+            Helper.LangNone -> return ()
       modify (\s -> s { isClosed = False })
       repl'loop
 

@@ -4,6 +4,7 @@ module Interface.Config
 
   , ShellState (..)
   , addTermOperator
+  , addTermOperators
   , addTypeOperator
   )
 where
@@ -29,5 +30,7 @@ data ShellState = ShellState
 
 addTermOperator :: Operator String -> ShellState -> ShellState
 addTermOperator op stat = stat { operators = second (nub . (op:)) $ operators stat }
+addTermOperators :: [Operator String] -> ShellState -> ShellState
+addTermOperators ops stat = stat { operators = second (nub . (ops <>)) $ operators stat }
 addTypeOperator :: Operator String -> ShellState -> ShellState
 addTypeOperator op stat = stat { operators = first (nub . (op:)) $ operators stat }

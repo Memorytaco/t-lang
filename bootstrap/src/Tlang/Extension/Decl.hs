@@ -14,6 +14,7 @@ module Tlang.Extension.Decl
   , UserStruct (..)
   , UserCoerce (..)
   , UserPhantom (..)
+  , injData
 
   -- ** type alias definition
   , UserType (..)
@@ -32,11 +33,17 @@ module Tlang.Extension.Decl
 where
 
 import Tlang.AST.Operator
+import Tlang.Generic ((:<:) (..))
+import Tlang.AST.Class.Decl
+import Tlang.AST.Decl
 
 -- ** extensions for data type definition
 
 -- | Core definition for data, extended with declaration on type.
-data UserData ext typ info = UserData info (ext typ) deriving (Show, Eq, Functor, Foldable, Traversable)
+data UserData vars ext typ info = UserData vars info (ext typ) deriving (Show, Eq, Functor, Foldable, Traversable)
+
+injData :: ext :<: exts => vars -> info -> ext typ -> UserData vars exts typ info
+injData vars info = UserData vars info . inj
 
 -- | a default definition for use in AST parsing
 data UserEnum field typ
@@ -50,7 +57,7 @@ data UserStruct field typ
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | coercible definition of data type
-data UserCoerce field typ
+data UserCoerce typ
   = UserCoerce typ
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
@@ -60,7 +67,7 @@ data UserPhantom typ
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | type alias
-data UserType typ info = UserType typ info deriving (Show, Eq, Functor, Foldable, Traversable)
+data UserType typ vars info = UserType typ vars info deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- ** extensions for FFI
 
@@ -69,14 +76,14 @@ data UserType typ info = UserType typ info deriving (Show, Eq, Functor, Foldable
 -- | external defined symbol, its semantic depends
 -- on its attributes and type signature.
 data UserFFI typ info
-  = UserFFI FFItem typ info
+  = UserFFI (Maybe FFItem) typ info
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- *** attributes used to define external symbol
 
 -- | customised attribute
 data FFItem
-  = FFItem String [FFItem]      -- ^ symbol value, with optional arguments
+  = FFItemF String [FFItem]     -- ^ custom value, with optional arguments
   | FFItemS String              -- ^ string value
   | FFItemI Integer             -- ^ Integer value
   | FFItemA [FFItem]            -- ^ sequence items, take a list form
@@ -86,8 +93,8 @@ data FFItem
 -- ** extensions for value definition
 
 -- | user value definition
-data UserValue typ term info
-  = UserValue (term typ) info
+data UserValue val typ info
+  = UserValue val typ info
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- ** extensions for parser rule (user defined operator for now)
@@ -99,5 +106,23 @@ data UserItem a
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | lexical item namespace, to group lexical items together
-newtype ItemSpace = NameSpace String deriving (Show, Eq)
+newtype ItemSpace = ItemSpace String deriving (Show, Eq)
 
+
+-- ** Definition of `Decl` related type class instance
+
+-- *** `DeclInfo` related
+instance DeclInfo (UserData vars ext typ) where
+  getInfo (UserData _ info _) = info
+instance DeclInfo (UserType typ vars) where
+  getInfo (UserType _ _ info) = info
+instance DeclInfo (UserFFI typ) where
+  getInfo (UserFFI _ _ info) = info
+instance DeclInfo (UserValue val typ) where
+  getInfo (UserValue _ _ info) = info
+instance DeclInfo UserItem where
+  getInfo (UserItem _ _ info) = info
+
+-- *** `Query` related
+instance DeclInfo decl => Query decl where
+  query f (Decl cls) = prj cls >>= \decl -> if f (getInfo decl) then Just decl else Nothing

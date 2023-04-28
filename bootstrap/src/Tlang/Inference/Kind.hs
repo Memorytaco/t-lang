@@ -263,14 +263,6 @@ unify = checkOccurrence . unifySubst <=< refold shrink rollup
               KindLiftF (Graft mv) -> when (mv `elem` vars) . throwError $ InvalidMetavariablePosition mv vs
               KindLiftF (UnGraft mk) -> mk
 
--- test :: forall term m. MonadFail m
---      => String -> (Maybe Symbol :== Tlang.Parser.Type.ParseType None Identity)
---      -> m (DeBruijnType term ((:@) NormalKind))
-test t = do
-  dt <- toDebruijn t ([], [])
-  (dti, _) <- runReaderT (kinding (dt, 0)) []
-  return dti
-
 -- | traverse around annotated type tree
 onAnnotate :: (anno1 -> anno2) -> DeBruijnType ((:@) anno1) r -> DeBruijnType ((:@) anno2) r
 onAnnotate f = cata \case

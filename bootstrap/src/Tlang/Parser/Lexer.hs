@@ -9,6 +9,7 @@ module Tlang.Parser.Lexer
   , identifier, operator
   , reserved, reservedOp
   , symbol
+  , string
   )
 where
 

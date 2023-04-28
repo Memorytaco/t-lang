@@ -9,7 +9,6 @@ where
 
 import Control.Monad
 import Control.Applicative (Alternative)
-import Control.Monad.Identity (Identity)
 import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.RWS (RWST, runRWST)
@@ -19,9 +18,10 @@ import Text.Megaparsec
 import Text.Megaparsec.Char
 
 import Interface.Config
-import Tlang.AST (None)
+import Tlang.AST (Decl, Symbol)
 import qualified Tlang.Parser.Decl as Decl
 import qualified Tlang.Parser.Expr as Expr
+import qualified Tlang.Parser.Type as Type
 
 newtype ShellParser m a = ShellParser 
   { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () ShellState m) a
@@ -39,8 +39,9 @@ instance ShowErrorComponent ShellError where
   showErrorComponent = show
 
 data ShellRes txt
-  = LangDef Decl.ParseDeclType txt
+  = LangDef (Decl (Decl.DeclareExtension Type.ParseType) Symbol) txt
   | LangExpr Expr.ParseExprType txt
+  | LangNone
 
 toplevel :: MonadIO m => ShellParser m (ShellRes Text)
 toplevel = do
@@ -56,12 +57,16 @@ toplevel = do
         Right res -> LangDef res <$> getInput
     Just cmd -> customFailure $ UnknownCommand cmd
     Nothing -> do
-      res'either <- getInput >>= Expr.play ops
-      case res'either of
-        Left err -> do
-          liftIO $ putStrLn err
-          customFailure SubParseError
-        Right res -> LangExpr res <$> getInput
+      resinput <- getInput
+      case resinput of
+        "" -> return LangNone
+        _ -> do
+          res'either <- Expr.play ops resinput
+          case res'either of
+            Left err -> do
+              liftIO $ putStrLn err
+              customFailure SubParseError
+            Right res -> LangExpr res <$> getInput
 
 runToplevel
   :: MonadIO m

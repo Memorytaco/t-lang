@@ -2,7 +2,6 @@ module Main (main) where
 
 import CLI.Parser (getcommand, Command (..))
 
-import qualified LLVM.AST as AST
 import LLVM.Context
 import LLVM.Module
 import LLVM.Internal.Target

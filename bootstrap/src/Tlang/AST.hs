@@ -3,6 +3,7 @@ module Tlang.AST
   , module Module
   , module Type
   , module Operator
+  , module Decl
 
   , None (..)
   , Symbol (..)
@@ -22,6 +23,7 @@ import Tlang.AST.Expr as Expr
 import Tlang.AST.Module as Module
 import Tlang.AST.Type as Type
 import Tlang.AST.Operator as Operator
+import Tlang.AST.Decl as Decl
 import Data.GraphViz
 import Tlang.Extension.Type as Ext
 import Tlang.Generic
