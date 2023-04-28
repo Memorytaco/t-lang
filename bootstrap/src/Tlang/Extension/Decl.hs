@@ -76,7 +76,7 @@ data UserType typ vars info = UserType typ vars info deriving (Show, Eq, Functor
 -- | external defined symbol, its semantic depends
 -- on its attributes and type signature.
 data UserFFI typ info
-  = UserFFI (Maybe FFItem) typ info
+  = UserFFI [FFItem] typ info
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- *** attributes used to define external symbol

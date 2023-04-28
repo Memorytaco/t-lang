@@ -18,6 +18,7 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Void (Void)
 import Text.Megaparsec
+import Data.Maybe (fromMaybe)
 
 import Tlang.Extension.Decl
 import Tlang.Generic
@@ -26,14 +27,14 @@ userFFI :: (ShowErrorComponent e, UserFFI TypeParser.ParseType :<: decls)
         => [Operator String] -> ParsecT e Text m (Decl decls Symbol)
 userFFI r = do
   void $ reserved "foreign"
-  item <- optional ffItem
+  items <- optional $ brackets (commaSep ffItem)
   name <- Symbol <$> identifier
   void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
   sig <- TypeParser.unParser r (void . lookAhead $ reservedOp ";;") (-100)
   void $ reservedOp ";;"
-  return . declare $ UserFFI item sig name
+  return . declare $ UserFFI (fromMaybe [] items) sig name
   where
-    ffItem = brackets $ str <|> int <|> sym <|> list <|> record
+    ffItem = str <|> int <|> sym <|> list <|> record
       where
         str = FFItemS <$> stringLiteral
         int = FFItemI <$> integer
