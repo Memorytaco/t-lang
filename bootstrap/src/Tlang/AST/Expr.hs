@@ -7,7 +7,6 @@ module Tlang.AST.Expr
   , GPatternF (..)
   , Lambda (..)
   , Literal (..)
-  , Field (..)
   , (:@) (..)
   )
 where
@@ -17,6 +16,7 @@ import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 
 import Tlang.AST.Type (Bound (..))
+import Tlang.TH (fixQ)
 
 -- | type annotation with full power of the type system
 data typ :@ term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
@@ -90,12 +90,6 @@ data GPattern anno name
 deriving instance (Show (anno (Pattern anno name)), Show name) => Show (GPattern anno name)
 deriving instance (Eq (anno (Pattern anno name)), Eq name) => Eq (GPattern anno name)
 
--- | field for record
-data Field label typ
-  = Field label typ
-  | RowOf typ
-  deriving (Show, Eq, Functor, Foldable, Traversable)
-
 -- | Lambda computation block, support both light and heavy notation
 data Lambda typ anno name
   = Lambda [Bound typ name]
@@ -105,8 +99,8 @@ data Lambda typ anno name
 deriving instance (Show (anno (Expr typ anno name)), Show (anno (Pattern anno name)), Show name, Show typ) => Show (Lambda typ anno name)
 deriving instance (Eq (anno (Expr typ anno name)), Eq (anno (Pattern anno name)), Eq name, Eq typ) => Eq (Lambda typ anno name)
 
-$(deriveBifunctor ''Field)
-
-makeBaseFunctor [d| instance Traversable anno => Recursive (Expr typ anno name) |]
-makeBaseFunctor [d| instance Traversable anno => Recursive (Pattern anno name) |]
-makeBaseFunctor [d| instance Traversable anno => Recursive (GPattern anno name) |]
+makeBaseFunctor $ fixQ [d|
+  instance Traversable anno => Recursive (Expr typ anno name)
+  instance Traversable anno => Recursive (Pattern anno name)
+  instance Traversable anno => Recursive (GPattern anno name)
+  |]

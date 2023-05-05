@@ -14,6 +14,7 @@ where
 
 import Tlang.Rep.Primitive
 import Tlang.Rep.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
+import Tlang.TH (fixQ)
 import qualified LLVM.AST.Type as AST (Type (..))
 import Data.Maybe (fromMaybe)
 
@@ -66,4 +67,4 @@ instance (LLVMTypeClass a, LLVMTypeEncode a) => LLVMTypeEncode (SeqT a) where
   encode (SeqArray a i) = AST.ArrayType (fromInteger $ fromMaybe 0 i) $ encode a
 
 type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance (FoldFunctor t, FoldFunctor f) => Recursive (DataRep t f) |]
+makeBaseFunctor $ fixQ [d| instance (FoldFunctor t, FoldFunctor f) => Recursive (DataRep t f) |]

@@ -16,6 +16,7 @@ where
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
+import Tlang.TH (fixQ)
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
@@ -128,5 +129,7 @@ instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
 
 infixr 5 ::>
 
-makeBaseFunctor [d| instance (Traversable inj, Traversable bind, Traversable cons) => Recursive (Type name cons bind inj rep) |]
-makeBaseFunctor [d| instance (Traversable f) => Recursive (Kind f name) |]
+makeBaseFunctor $ fixQ [d|
+  instance (Traversable inj, Traversable bind, Traversable cons) => Recursive (Type name cons bind inj rep)
+  instance (Traversable f) => Recursive (Kind f name)
+  |]

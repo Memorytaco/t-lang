@@ -8,6 +8,7 @@ where
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
+import Tlang.TH (fixQ)
 
 -- ** HM(X) constraint framework, both for term language and type language
 
@@ -29,7 +30,7 @@ deriving instance (Show (rel typ), Show term, Show name, Show typ) => Show (Cons
 deriving instance (Eq (rel typ), Eq term, Eq name, Eq typ) => Eq (Constraint rel name term typ)
 
 type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance (FoldFunctor rel) => Recursive (Constraint rel name term typ) |]
+makeBaseFunctor $ fixQ [d| instance (FoldFunctor rel) => Recursive (Constraint rel name term typ) |]
 $(deriveBifunctor ''Constraint)
 
 data a :<> b = a :<> b deriving (Show, Eq, Functor, Foldable, Traversable)

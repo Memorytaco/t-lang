@@ -5,6 +5,13 @@
 
 packages:
 - completed:
+    hackage: compdata-0.13.0@sha256:1c9e8fc4c95b4c25ef71b221f1d69015fce4fc6ebdd4afeec3d83991cb86664a,13201
+    pantry-tree:
+      sha256: 3ff307bda14f7871f04146d03e768dea66f139113aa3fb00d3926ac2abb161e0
+      size: 7696
+  original:
+    hackage: compdata-0.13.0
+- completed:
     hackage: attoparsec-0.14.4@sha256:c0569d86c02cadd403017ea414dcb5e4f7de5380de0d8a92b9337cad84cd5e02,5811
     pantry-tree:
       sha256: 093521478c28b3d4533f8ca367562e340ef3db234156a2b9aa7caa45d87e61c1
@@ -68,6 +75,13 @@ packages:
   original:
     hackage: base-orphans-0.8.7@sha256:58d5514b688ec037f53b9d60097b9d87f6b3847da68f65124987d67222c3a334,3175
 - completed:
+    hackage: template-haskell-2.18.0.0@sha256:6cb4f8bb2e5641eb8c931105adc7184114ed42c501675779a2e8695c2d0a7975,2152
+    pantry-tree:
+      sha256: e915b412008449fdcd8b839869a4edc9a6bc29e5ee5ec80067661bf6954424e5
+      size: 921
+  original:
+    hackage: template-haskell-2.18.0.0
+- completed:
     commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
     git: https://github.com/llvm-hs/llvm-hs
     name: llvm-hs
@@ -93,41 +107,6 @@ packages:
     commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
     git: https://github.com/llvm-hs/llvm-hs
     subdir: llvm-hs-pure
-- completed:
-    hackage: recursion-schemes-5.2.2.2@sha256:8c004c36be481a1893526875bf5fc8e86b43152c64ee87ae59970084fa5fdcd0,3911
-    pantry-tree:
-      sha256: 834bf33efd94c75eefcc7a07a476cda2609eef892faed54d044e57e0d45f376a
-      size: 747
-  original:
-    hackage: recursion-schemes-5.2.2.2@sha256:8c004c36be481a1893526875bf5fc8e86b43152c64ee87ae59970084fa5fdcd0,3911
-- completed:
-    hackage: comonad-5.0.8@sha256:1f1aabd73ec7f80f20cf078a748a60cd48d8e57277802fdf6a9ab3601a9b8f7e,3631
-    pantry-tree:
-      sha256: 394660fe7fa4127e5a181890bce28b9fcd6eb180ba25aa5566bc8b5bdd385517
-      size: 1618
-  original:
-    hackage: comonad-5.0.8@sha256:1f1aabd73ec7f80f20cf078a748a60cd48d8e57277802fdf6a9ab3601a9b8f7e,3631
-- completed:
-    hackage: data-fix-0.3.2@sha256:bdea17f6b17c1d327f53ae6806e1bc3ca7813b46742a93c6088c72837c8ae77c,1706
-    pantry-tree:
-      sha256: cc8600c8ee898aae772f3aa15a23313bf6f901e61e42670454a2ccb4ffc60f84
-      size: 262
-  original:
-    hackage: data-fix-0.3.2@sha256:bdea17f6b17c1d327f53ae6806e1bc3ca7813b46742a93c6088c72837c8ae77c,1706
-- completed:
-    hackage: free-5.1.9@sha256:f4cef1f00b5686b4c93a4ed2306ebfa8fe27c5bd10adb8c57dfaf86f3bf3768c,5168
-    pantry-tree:
-      sha256: b3e50f71d8775e3ca1c174874db3737ff6538d34c5b69a4787281b668e6d1457
-      size: 3308
-  original:
-    hackage: free-5.1.9@sha256:f4cef1f00b5686b4c93a4ed2306ebfa8fe27c5bd10adb8c57dfaf86f3bf3768c,5168
-- completed:
-    hackage: th-abstraction-0.4.5.0@sha256:313f8b3c65781310df66ba86518bcf7662b1b419b601afaf72bb977c255fe6e9,2148
-    pantry-tree:
-      sha256: b89abb8fbe9ba55a8a06db243218e216c2b6ee139fc01d684212fc97a10a5683
-      size: 670
-  original:
-    hackage: th-abstraction-0.4.5.0@sha256:313f8b3c65781310df66ba86518bcf7662b1b419b601afaf72bb977c255fe6e9,2148
 - completed:
     hackage: distributive-0.6.2.1@sha256:0f99f5541cca04acf89b64432b03422b6408e830a8dff30e6c4334ef1a48680c,2996
     pantry-tree:
@@ -342,4 +321,9 @@ packages:
       size: 3396
   original:
     hackage: syb-0.7.2.2
-snapshots: []
+snapshots:
+- completed:
+    sha256: 42f77c84b34f68c30c2cd0bf8c349f617a0f428264362426290847a6a2019b64
+    size: 649618
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/20/19.yaml
+  original: lts-20.19

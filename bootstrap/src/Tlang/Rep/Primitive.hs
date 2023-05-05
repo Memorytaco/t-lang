@@ -17,6 +17,7 @@ module Tlang.Rep.Primitive
 where
 
 import Tlang.Rep.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
+import Tlang.TH (fixQ)
 
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 import LLVM.AST.AddrSpace (AddrSpace (..))
@@ -153,4 +154,4 @@ ptr :: PrimitiveT t a -> PrimitiveT t a
 ptr = flip Ptr Nothing
 
 type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor [d| instance (FoldFunctor t) => Recursive (PrimitiveT t a) |]
+makeBaseFunctor $ fixQ [d| instance (FoldFunctor t) => Recursive (PrimitiveT t a) |]

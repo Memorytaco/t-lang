@@ -460,7 +460,7 @@ augGraph root = do
       modify (first $ insEdge (b, cb, GBind (min f1 f2) count Nothing))
       return b
 
-{- | # utility for type inference
+{- | ** utility for type inference
 --
 --  used to solve graphic constraint
 -}

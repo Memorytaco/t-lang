@@ -77,45 +77,43 @@ library
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
       Tlang.Subst
+      Tlang.TH
   other-modules:
       Paths_t_lang
   hs-source-dirs:
       src
   default-extensions:
-      TupleSections
-      OverloadedLabels
-      OverloadedStrings
-      BlockArguments
-      TupleSections
-      TypeOperators
-      DeriveFunctor
-      ViewPatterns
-      FlexibleInstances
-      MultiParamTypeClasses
-      LambdaCase
-      StandaloneDeriving
-      ConstraintKinds
-      GADTs
-      UndecidableInstances
-      DataKinds
-      FunctionalDependencies
-      GeneralizedNewtypeDeriving
-      TypeApplications
       DerivingStrategies
-      PolyKinds
-      StandaloneKindSignatures
-      TemplateHaskell
-      KindSignatures
-      TypeFamilies
+      DeriveFunctor
       DeriveFoldable
       DeriveTraversable
+      GeneralizedNewtypeDeriving
+      StandaloneKindSignatures
+      StandaloneDeriving
+      BlockArguments
+      LambdaCase
+      OverloadedStrings
       ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeOperators
+      ViewPatterns
+      FlexibleInstances
       FlexibleContexts
+      FunctionalDependencies
+      MultiParamTypeClasses
+      UndecidableInstances
+      ConstraintKinds
+      GADTs
+      PolyKinds
+      TypeFamilies
+      TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       base >=4.9 && <5
     , bifunctors
     , bytestring
+    , compdata
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl
@@ -130,6 +128,7 @@ library
     , optparse-applicative
     , parsec
     , recursion-schemes
+    , template-haskell
     , text
     , transformers >=0.5.6.2
     , type-errors
@@ -142,40 +141,37 @@ executable t-lang-exe
   hs-source-dirs:
       app
   default-extensions:
-      TupleSections
-      OverloadedLabels
-      OverloadedStrings
-      BlockArguments
-      TupleSections
-      TypeOperators
-      DeriveFunctor
-      ViewPatterns
-      FlexibleInstances
-      MultiParamTypeClasses
-      LambdaCase
-      StandaloneDeriving
-      ConstraintKinds
-      GADTs
-      UndecidableInstances
-      DataKinds
-      FunctionalDependencies
-      GeneralizedNewtypeDeriving
-      TypeApplications
       DerivingStrategies
-      PolyKinds
-      StandaloneKindSignatures
-      TemplateHaskell
-      KindSignatures
-      TypeFamilies
+      DeriveFunctor
       DeriveFoldable
       DeriveTraversable
+      GeneralizedNewtypeDeriving
+      StandaloneKindSignatures
+      StandaloneDeriving
+      BlockArguments
+      LambdaCase
+      OverloadedStrings
       ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeOperators
+      ViewPatterns
+      FlexibleInstances
       FlexibleContexts
+      FunctionalDependencies
+      MultiParamTypeClasses
+      UndecidableInstances
+      ConstraintKinds
+      GADTs
+      PolyKinds
+      TypeFamilies
+      TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.9 && <5
     , bifunctors
     , bytestring
+    , compdata
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl
@@ -191,6 +187,7 @@ executable t-lang-exe
     , parsec
     , recursion-schemes
     , t-lang
+    , template-haskell
     , text
     , transformers >=0.5.6.2
     , type-errors
@@ -204,40 +201,37 @@ test-suite t-lang-test
   hs-source-dirs:
       test
   default-extensions:
-      TupleSections
-      OverloadedLabels
-      OverloadedStrings
-      BlockArguments
-      TupleSections
-      TypeOperators
-      DeriveFunctor
-      ViewPatterns
-      FlexibleInstances
-      MultiParamTypeClasses
-      LambdaCase
-      StandaloneDeriving
-      ConstraintKinds
-      GADTs
-      UndecidableInstances
-      DataKinds
-      FunctionalDependencies
-      GeneralizedNewtypeDeriving
-      TypeApplications
       DerivingStrategies
-      PolyKinds
-      StandaloneKindSignatures
-      TemplateHaskell
-      KindSignatures
-      TypeFamilies
+      DeriveFunctor
       DeriveFoldable
       DeriveTraversable
+      GeneralizedNewtypeDeriving
+      StandaloneKindSignatures
+      StandaloneDeriving
+      BlockArguments
+      LambdaCase
+      OverloadedStrings
       ScopedTypeVariables
+      TupleSections
+      TypeApplications
+      TypeOperators
+      ViewPatterns
+      FlexibleInstances
       FlexibleContexts
+      FunctionalDependencies
+      MultiParamTypeClasses
+      UndecidableInstances
+      ConstraintKinds
+      GADTs
+      PolyKinds
+      TypeFamilies
+      TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       base >=4.9 && <5
     , bifunctors
     , bytestring
+    , compdata
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl
@@ -253,6 +247,7 @@ test-suite t-lang-test
     , parsec
     , recursion-schemes
     , t-lang
+    , template-haskell
     , text
     , transformers >=0.5.6.2
     , type-errors

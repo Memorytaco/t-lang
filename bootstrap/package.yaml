@@ -40,6 +40,8 @@ dependencies:
 - optparse-applicative
 - exceptions
 - type-errors
+- compdata
+- template-haskell
 
 ghc-options:
 - -Wall
@@ -53,36 +55,37 @@ ghc-options:
 - -Wredundant-constraints
 
 default-extensions:
-- TupleSections
-- OverloadedLabels
-- OverloadedStrings
-- BlockArguments
-- TupleSections
-- TypeOperators
-- DeriveFunctor
-- ViewPatterns
-- FlexibleInstances
-- MultiParamTypeClasses
-- LambdaCase
-- StandaloneDeriving
-- ConstraintKinds
-- GADTs
-- UndecidableInstances
-- DataKinds
-- FunctionalDependencies
-- GeneralizedNewtypeDeriving
-- TypeApplications
-- DerivingStrategies
-- PolyKinds
-- StandaloneKindSignatures
 
-- TemplateHaskell
-- KindSignatures
-- TypeFamilies
+- DerivingStrategies
+- DeriveFunctor
 - DeriveFoldable
 - DeriveTraversable
+- GeneralizedNewtypeDeriving
+
+- StandaloneKindSignatures
+- StandaloneDeriving
+
+- BlockArguments
+- LambdaCase
+- OverloadedStrings
 - ScopedTypeVariables
+- TupleSections
+- TypeApplications
+- TypeOperators
+- ViewPatterns
+
+- FlexibleInstances
 - FlexibleContexts
+- FunctionalDependencies
+- MultiParamTypeClasses
+- UndecidableInstances
+
+- ConstraintKinds
+- GADTs
+- PolyKinds
+- TypeFamilies
+
+- TemplateHaskell
 
 library:
   source-dirs: src

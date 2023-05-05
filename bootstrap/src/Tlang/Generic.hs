@@ -8,6 +8,7 @@ where
 
 import Data.Functor.Foldable (Recursive)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Tlang.TH (fixQ)
 
 -- | * generic functor sum type
 -- a way using functor making extended data, please refer https://doi.org/10.1017/S0956796808006758 
@@ -47,4 +48,4 @@ slot select = sequence . fmap prj . select
 
 infixr 1 :+:
 
-makeBaseFunctor [d| instance (Traversable g, Traversable f) => Recursive ((f :+: g) a) |]
+makeBaseFunctor $ fixQ [d| instance (Traversable g, Traversable f) => Recursive ((f :+: g) a) |]
