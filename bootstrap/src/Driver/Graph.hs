@@ -12,7 +12,7 @@ where
 import qualified Tlang.Parser.Type as PT
 import Tlang.AST
 import Tlang.Inference.Graph
-import Tlang.Inference.Graph.Dot
+import Tlang.Graph.Dot
 
 import Control.Monad.Identity (Identity)
 import Control.Monad.State

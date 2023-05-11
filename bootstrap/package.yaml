@@ -40,8 +40,8 @@ dependencies:
 - optparse-applicative
 - exceptions
 - type-errors
-- compdata
 - template-haskell
+- tasty
 
 ghc-options:
 - -Wall

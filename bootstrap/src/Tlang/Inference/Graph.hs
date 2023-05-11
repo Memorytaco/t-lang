@@ -10,8 +10,7 @@
 -}
 
 module Tlang.Inference.Graph
-  ( GraphRel (..)
-  , GEdge (..)
+  ( GEdge (..)
   , GConstraint (..)
   , GFlag (..)
   , Perm (..)
@@ -57,8 +56,8 @@ import Tlang.Extension.Type as Ext
 import Tlang.Generic
 import Tlang.Helper.AST.Type (injTypeLit, injTypeBind)
 
-import Tlang.Inference.Graph.Type
-import Tlang.Inference.Graph.Operation
+import Tlang.Graph.Type
+import Tlang.Graph.Operation
 
 arityOf :: NodeArity -> [Variance]
 arityOf = coerce

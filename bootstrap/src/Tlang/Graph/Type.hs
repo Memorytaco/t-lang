@@ -1,6 +1,6 @@
-module Tlang.Inference.Graph.Type
-  ( GraphRel (..)
-  , GEdge (..)
+module Tlang.Graph.Type
+  (
+    GEdge (..)
   , GConstraint (..)
   , GFlag (..)
   , Perm (..)
@@ -13,18 +13,9 @@ where
 import Data.GraphViz
 import Data.GraphViz.Attributes.Complete (Label (StrLabel))
 import Data.Text.Lazy (pack)
+import Tlang.Graph.Core
 
 import Tlang.AST (Symbol (..), Variance (..))
-
--- | instance relation
-data GraphRel
-  = EqualRel    -- exact same structure
-  | SimilarRel  -- similar relation
-  | GraftRel    -- graft instance relation
-  | MergeRel    -- merge instance relation
-  | RaiseRel    -- raise instance relation
-  | WeakRel     -- weaken instance relation
-  deriving (Ord, Show, Eq)
 
 -- | label for edge
 data GEdge a

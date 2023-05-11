@@ -2,7 +2,8 @@ module Tlang.Generic
   ( (:+:) (..)
   , (:+:$) (..)
   , (:<:) (..)
-  , slot
+  , Alg (..)
+  , (:@:)
   )
 where
 
@@ -14,10 +15,12 @@ import Tlang.TH (fixQ)
 -- a way using functor making extended data, please refer https://doi.org/10.1017/S0956796808006758 
 -- for more information
 
+infixr 1 :+:
 data (f :+: g) a
   = Inl (f a)
   | Inr (g a)
   deriving (Functor, Foldable, Traversable, Eq)
+makeBaseFunctor $ fixQ [d| instance (Traversable g, Traversable f) => Recursive ((f :+: g) a) |]
 
 instance (Show (f a), Show (g a)) => Show ((f :+: g) a) where
   show (Inl v) = show v
@@ -40,12 +43,12 @@ instance {-# OVERLAPS #-} (Functor f, Functor g, Functor h, f :<: g) => f :<: (h
   prj (Inl _) = Nothing
   prj (Inr a) = prj a
 
--- | choose a slot of the data, and match
-slot
-  :: (slot :<: slots, Traversable container)
-  => (a -> container (slots a)) -> a -> Maybe (container (slot a))
-slot select = sequence . fmap prj . select
+-- | general algebra operation
+class Alg f a | a -> f where
+  alg :: f a -> a
+instance (Alg l a, Alg r a) => Alg (l :+: r) a where
+  alg (Inl v) = alg v
+  alg (Inr v) = alg v
 
-infixr 1 :+:
+type (:@:) a op = Alg op a
 
-makeBaseFunctor $ fixQ [d| instance (Traversable g, Traversable f) => Recursive ((f :+: g) a) |]

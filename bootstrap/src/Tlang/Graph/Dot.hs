@@ -1,4 +1,4 @@
-module Tlang.Inference.Graph.Dot
+module Tlang.Graph.Dot
   ( dotGraph
   , runDotGraph
   )
@@ -8,8 +8,8 @@ where
 -}
 
 import Tlang.AST
-import Tlang.Inference.Graph.Type
-import Tlang.Inference.Graph.Operation
+import Tlang.Graph.Type
+import Tlang.Graph.Operation
 
 import Data.Graph.Inductive
 import Data.GraphViz hiding (DotGraph)

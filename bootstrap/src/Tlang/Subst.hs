@@ -15,7 +15,7 @@ where
 import Tlang.AST (Kind (..), None (..), Type (..), Label (..), StandardType, (:@), Bound (..), Symbol (..))
 import Tlang.Helper.AST.Type (injTypeLit)
 import Control.Applicative ((<|>))
-import Tlang.Generic (prj)
+import Tlang.Generic ((:<:) (..))
 import Tlang.Extension.Type
 import Data.Bifunctor.TH (deriveBifunctor)
 
@@ -58,9 +58,6 @@ instance (Foldable t, Functor t, Grafting v a) => Grafting (t v) a where
 $(deriveBifunctor ''Graft)
 $(deriveBifunctor ''(:->))
 
-class TermRewrite op a | a -> op where
-  dojob :: op a -> a
-
 -- | any calculus support explicit substitution
 class Rule env a | a -> env where
   rewrite :: a -> Subst env a -> a
@@ -79,18 +76,6 @@ instance (Show (b (Calculus b e)), Show (e (Calculus b e))) => Show (Calculus b 
   show (CAbs binder t) = "λ" <> show binder <> " {" <> show t <> "}"
   show (CApp a b) = "(" <> show a <> " " <> show b <> ")"
   show (CExt v) = show v
-
-data Rewrite a
-  = Raise Integer a
-  | Onto  a (Rewrite a)
-  | Link (Rewrite a) (Rewrite a)
-  deriving (Eq, Show, Functor, Foldable, Traversable)
-
--- instance TermRewrite Rewrite (Calculus b Rewrite) where
---   dojob (Raise 1 (CVar b)) = CVar (1 + b)
---   dojob (Raise _ (CVar b)) = CVar b
---   dojob (Raise i (CApp a b)) = CApp (dojob (Raise i a)) (dojob (Raise i b))
---   dojob (Raise i (CAbs b v)) = CAbs b (dojob (Raise (i + 1)))
 
 instance Rule () (Kind (Graft (MetaVar Kind Integer)) Integer) where
   rewrite a (_ :! 0) = a
@@ -165,10 +150,6 @@ instance Rule () (StandardType NameIndex Label (Bound Integer) ((:@) k) rep) whe
   rewrite (TypCon h hs) s = TypCon (rewrite h s) $ flip rewrite s <$> hs
   rewrite (TypLet fb t) s = TypLet (flip rewrite s <$> fb)
                           $ rewrite t (Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  -- rewrite (TypAll fb t) s = TypAll (flip rewrite s <$> fb)
-  --                         $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
-  -- rewrite (TypAbs fb t) s = TypAbs (flip rewrite s <$> fb)
-  --                         $ rewrite t (S.Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
   rewrite (TypInj ft) s = TypInj (flip rewrite s <$> ft)
   lmap = error "need to use another calculus"
   normalize = error "need to use another calculus"

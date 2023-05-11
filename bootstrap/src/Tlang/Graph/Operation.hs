@@ -1,4 +1,4 @@
-module Tlang.Inference.Graph.Operation
+module Tlang.Graph.Operation
   ( sOut, sIn
   , isStructureEdge, isBindEdge, isConstraintEdge
   , sEdgeOut, sEdgeIn, bEdgeOut, bEdgeIn
@@ -7,7 +7,7 @@ module Tlang.Inference.Graph.Operation
   )
 where
 
-import Tlang.Inference.Graph.Type
+import Tlang.Graph.Type
 import Data.Graph.Inductive
 
 -- | successor and presuccsor structure nodes of the node
