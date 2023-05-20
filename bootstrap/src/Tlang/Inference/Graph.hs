@@ -18,7 +18,6 @@ module Tlang.Inference.Graph
   , GNodeLabel (..)
   , NodeArity (..)
 
-  , arityOf
   , runToGraph
   , toGraph
   , simplify
@@ -58,9 +57,6 @@ import Tlang.Helper.AST.Type (injTypeLit, injTypeBind)
 
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
-
-arityOf :: NodeArity -> [Variance]
-arityOf = coerce
 
 runToGraph
   :: (MonadFail m, Eq name,  Traversable bind, Traversable cons, Forall (Bound name) :<: bind, Scope (Bound name) :<: bind

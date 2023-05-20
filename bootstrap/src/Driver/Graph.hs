@@ -3,6 +3,7 @@ module Driver.Graph
   , saveGraph
   , viewType
   , testUnify
+  , parseTypeGrpah
   )
 where
 
@@ -21,6 +22,10 @@ import qualified Data.Text.IO as Text
 import Data.GraphViz
 import Data.Graph.Inductive
 import Data.GraphViz.Commands.IO (writeDotFile)
+
+import Algebra.Graph.Export.Dot (exportViaShow)
+
+import qualified Driver.Transform as G
 
 -- | save graph as png file
 saveGraph :: (Show label, Show name, Labellable name, Ord name)
@@ -88,3 +93,12 @@ play str = do
        print tn
     Left err -> putStrLn err
 
+parseTypeGrpah :: Text -> IO G.PlayGP
+parseTypeGrpah typ = do
+   res <- PT.play typOperator typ
+   case res of
+     Right t -> do
+        ((a, g :: G.PlayGP), _) <- G.runToGraph 0 t
+        writeFile "graph.dot" $ exportViaShow g
+        return g
+     Left err -> putStrLn err >> error "see previous message"

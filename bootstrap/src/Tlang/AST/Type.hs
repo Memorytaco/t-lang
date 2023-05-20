@@ -61,6 +61,13 @@ deriving instance
   , Eq name, Eq rep
   ) => Eq (Type name cons bind inj rep)
 
+deriving instance
+  ( Ord (inj  (Type name cons bind inj rep))
+  , Ord (bind (Type name cons bind inj rep))
+  , Ord (cons (Type name cons bind inj rep))
+  , Ord name, Ord rep
+  ) => Ord (Type name cons bind inj rep)
+
 instance
   ( Show name, Show rep
   , Show (inj (Type name cons bind inj rep))
@@ -87,7 +94,7 @@ data TypeAssert msg typ
 data Bound name typ
   = name :~ typ -- ^ equality relation
   | name :> typ -- ^ lower bound or subsume
-  deriving (Show, Eq, Functor, Traversable, Foldable)
+  deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
 $(deriveBifunctor ''Bound)
 
 -- | type Prefixs qual name typ = [Prefix qual name typ]

@@ -21,7 +21,7 @@ import Tlang.Parser.Lexer
 import Tlang.AST
 
 import Text.Megaparsec
-import Text.Megaparsec.Char (char, string)
+import Text.Megaparsec.Char (char)
 import Control.Monad.Reader (ReaderT (..), ask, asks, MonadReader, runReaderT)
 import Control.Applicative (Alternative)
 import Control.Monad (MonadPlus, void)

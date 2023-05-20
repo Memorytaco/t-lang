@@ -217,6 +217,13 @@ packages:
     commit: b8c417f470dd6ac25eebacd326c3b2db85e71f27
     git: https://github.com/haskell/fgl
 - completed:
+    hackage: algebraic-graphs-0.7@sha256:d7703fb764ec14bbf7e2ee6296045d8bc1ddb9c1acdcd1841c6299cc6b5955fb,8618
+    pantry-tree:
+      sha256: 5caf69702b46f7be7744f357bc59bd56c0ae61a1addfcfc3b10b289629deb3db
+      size: 4347
+  original:
+    hackage: algebraic-graphs-0.7@sha256:d7703fb764ec14bbf7e2ee6296045d8bc1ddb9c1acdcd1841c6299cc6b5955fb,8618
+- completed:
     hackage: graphviz-2999.20.1.0@sha256:772573528d5e4fe5f818eb00d6f126306d109e38474fd12da55c672960b81e84,7935
     pantry-tree:
       sha256: b5ed2a1b0a13fa950330ee166e18acc839b6e65fe333c9273646c587cc4fecb1

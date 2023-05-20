@@ -56,6 +56,7 @@ extra-deps:
     # graph
   - git: https://github.com/haskell/fgl
     commit: b8c417f470dd6ac25eebacd326c3b2db85e71f27
+  - algebraic-graphs-0.7@sha256:d7703fb764ec14bbf7e2ee6296045d8bc1ddb9c1acdcd1841c6299cc6b5955fb,8618
 
     # visualize graph
   - graphviz-2999.20.1.0

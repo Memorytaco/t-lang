@@ -44,6 +44,7 @@ data PrimitiveT seq a where
 
 deriving instance Functor t => Functor (PrimitiveT t)
 deriving instance (Eq a, Eq (t (PrimitiveT t a))) => Eq (PrimitiveT t a)
+deriving instance (Ord a, Ord (t (PrimitiveT t a))) => Ord (PrimitiveT t a)
 deriving instance Foldable t => Foldable (PrimitiveT t)
 deriving instance Traversable t => Traversable (PrimitiveT t)
 
@@ -52,14 +53,14 @@ data ScalaType
   = NumT NumType    -- ^ Number type for floating and integer, all are signed. for arithmetic operation only.
   | DataT BitType   -- ^ Data type is used to represent user defined data, like interpreting memory chunk [u8 x 4] as u32.
                     -- it can also treat 16 bits as u16 and it is endian sensitive.
-  deriving (Eq)
+  deriving (Eq, Ord)
 
 -- | Basic definition number type
 data NumType = IntegerT IntegerLength
              | FloatT FloatLength
-             deriving (Eq)
+             deriving (Eq, Ord)
 
-newtype BitType = Bit Integer deriving (Eq)
+newtype BitType = Bit Integer deriving (Eq, Ord)
 
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)

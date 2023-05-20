@@ -31,6 +31,7 @@ library
       Driver.Graph
       Driver.Inference
       Driver.Parser
+      Driver.Transform
       Interface.Config
       Interface.Parser
       Interface.Shell
@@ -63,7 +64,6 @@ library
       Tlang.Inference.Graph
       Tlang.Inference.Kind
       Tlang.Inference.Type
-      Tlang.Inference.TypeGen
       Tlang.JIT
       Tlang.Parser
       Tlang.Parser.Class
@@ -80,6 +80,7 @@ library
       Tlang.Rep.Primitive
       Tlang.Subst
       Tlang.TH
+      Tlang.Transform.TypeGraph
       Tlang.Unification
       Tlang.Unification.Kind
       Tlang.Unification.Type
@@ -88,11 +89,11 @@ library
   hs-source-dirs:
       src
   default-extensions:
-      DerivingStrategies
+      GeneralizedNewtypeDeriving
       DeriveFunctor
       DeriveFoldable
       DeriveTraversable
-      GeneralizedNewtypeDeriving
+      DerivingVia
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments
@@ -112,12 +113,15 @@ library
       GADTs
       PolyKinds
       TypeFamilies
+      DataKinds
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      base >=4.9 && <5
+      algebraic-graphs ==0.7
+    , base >=4.9 && <5
     , bifunctors
     , bytestring
+    , capability
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl
@@ -146,11 +150,11 @@ executable t-lang-exe
   hs-source-dirs:
       app
   default-extensions:
-      DerivingStrategies
+      GeneralizedNewtypeDeriving
       DeriveFunctor
       DeriveFoldable
       DeriveTraversable
-      GeneralizedNewtypeDeriving
+      DerivingVia
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments
@@ -170,12 +174,15 @@ executable t-lang-exe
       GADTs
       PolyKinds
       TypeFamilies
+      DataKinds
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.9 && <5
+      algebraic-graphs ==0.7
+    , base >=4.9 && <5
     , bifunctors
     , bytestring
+    , capability
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl
@@ -206,11 +213,11 @@ test-suite t-lang-test
   hs-source-dirs:
       test
   default-extensions:
-      DerivingStrategies
+      GeneralizedNewtypeDeriving
       DeriveFunctor
       DeriveFoldable
       DeriveTraversable
-      GeneralizedNewtypeDeriving
+      DerivingVia
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments
@@ -230,12 +237,15 @@ test-suite t-lang-test
       GADTs
       PolyKinds
       TypeFamilies
+      DataKinds
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      base >=4.9 && <5
+      algebraic-graphs ==0.7
+    , base >=4.9 && <5
     , bifunctors
     , bytestring
+    , capability
     , containers >=0.6.5 && <0.7
     , exceptions
     , fgl

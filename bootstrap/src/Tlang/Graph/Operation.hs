@@ -9,6 +9,8 @@ where
 
 import Tlang.Graph.Type
 import Data.Graph.Inductive
+import Capability
+import Tlang.Generic ((:<:), prj)
 
 -- | successor and presuccsor structure nodes of the node
 sOut, sIn

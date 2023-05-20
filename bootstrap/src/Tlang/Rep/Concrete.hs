@@ -29,6 +29,7 @@ data DataRep t f where
 
 deriving instance (Show (t (PrimitiveT t (DataRep t f))), Show (f (DataRep t f))) => Show (DataRep t f)
 deriving instance (Eq (PrimitiveT t (DataRep t f)), Eq (f (DataRep t f))) => Eq (DataRep t f)
+deriving instance (Ord (PrimitiveT t (DataRep t f)), Ord (f (DataRep t f))) => Ord (DataRep t f)
 
 -- | A hint provided by user to determin which type we will use, but the result is not guarenteed
 data SeqT a where
@@ -37,6 +38,7 @@ data SeqT a where
   deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq a) => Eq (SeqT a)
+deriving instance (Ord a) => Ord (SeqT a)
 
 instance
   ( LLVMTypeEncode (f (DataRep t f))

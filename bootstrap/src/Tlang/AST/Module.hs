@@ -19,9 +19,6 @@ module Tlang.AST.Module
   )
 where
 
-import Tlang.AST.Expr
-import Tlang.AST.Type
-import Tlang.AST.Operator
 import Tlang.AST.Decl
 
 -- | module path fragment
