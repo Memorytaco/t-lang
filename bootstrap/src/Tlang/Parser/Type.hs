@@ -124,7 +124,7 @@ apply l r = TypCon l [r]
 --   body <- pratt end (-100)
 --   return $ TypEqu (name :> TypPht) body
 
-quantified :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType)
+quantified :: ShowErrorComponent e => Parser e m () -> Parser e m ParseType
 quantified (lookAhead -> end) = do
   let name = Symbol <$> identifier
       boundTyp = pratt (void . lookAhead $ reservedOp ")") (-100)
@@ -138,7 +138,7 @@ quantified (lookAhead -> end) = do
   body <- pratt end (-100)
   return $ foldr ($) body (TypLet . inj . Forall <$> bounds)
 
-abstract :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType)
+abstract :: ShowErrorComponent e => Parser e m () -> Parser e m ParseType
 abstract (lookAhead -> end) = do
   let name = Symbol <$> identifier
   bounds <- ((:> TypPht) <$> name) `someTill` reservedOp "."
@@ -146,7 +146,7 @@ abstract (lookAhead -> end) = do
   return $ foldr ($) body (TypLet . inj . Scope <$> bounds)
 
 -- | record type parser
-record :: ShowErrorComponent e => Parser e m (ParseType)
+record :: ShowErrorComponent e => Parser e m ParseType
 record = do
   let recordPair = do
         name <- fmap Label $ identifier <|> operator
@@ -156,7 +156,7 @@ record = do
   return . TypLit . inj $ Record fields
 
 -- | variant type parser
-variant :: ShowErrorComponent e => Parser e m (ParseType)
+variant :: ShowErrorComponent e => Parser e m ParseType
 variant = do
   let variantPair = do
         name <- fmap Label $ identifier <|> operator
@@ -166,7 +166,7 @@ variant = do
   return . TypLit . inj $ Variant fields
 
 -- | a specialized version used in type declaration context. see `Tlang.AST.Declaration`.
-dataVariant :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseType)
+dataVariant :: ShowErrorComponent e => Parser e m () -> Parser e m ParseType
 dataVariant end = do
   let variantPair = do
         name <- fmap Label $ identifier <|> operator
@@ -192,10 +192,10 @@ getParser :: Parser e m a -> [Operator String] -> ParsecT e Text m a
 getParser = runReaderT . unWrapParser
 
 -- | build a type parser from operator table
-unParser :: ShowErrorComponent e => [Operator String] -> ParsecT e Text m () -> Integer -> ParsecT e Text m (ParseType)
+unParser :: ShowErrorComponent e => [Operator String] -> ParsecT e Text m () -> Integer -> ParsecT e Text m ParseType
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
 -- | play and test and feel the parser
-play :: Monad m => [Operator String] -> Text -> m (Either String (ParseType))
+play :: Monad m => [Operator String] -> Text -> m (Either String ParseType)
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 

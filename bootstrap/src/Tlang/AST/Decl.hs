@@ -30,7 +30,7 @@ import Tlang.Generic ((:<:) (..))
 -- ** Core declaration structure
 
 -- | including data definition and operations
-data Decl decls info = Decl (decls info) deriving (Show, Functor, Foldable, Traversable)
+newtype Decl decls info = Decl (decls info) deriving (Show, Functor, Foldable, Traversable)
 newtype Decls decls info = Decls [Decl decls info] deriving (Show, Functor, Foldable, Traversable)
 
 -- | declare a structure

@@ -42,7 +42,7 @@ userFFI r = do
         list = FFItemA <$> brackets (commaSep ffItem)
         record =
           let field = (,) <$> stringLiteral <*> (reservedOp "=" >> ffItem)
-           in braces $ FFItemR <$> (commaSep field)
+           in braces $ FFItemR <$> commaSep field
 
 userValue :: (ShowErrorComponent e, UserValue ExprParser.ParseExprType (Maybe TypeParser.ParseType) :<: decls)
           => ([Operator String], [Operator String]) -> ParsecT e Text m (Decl decls Symbol)
@@ -117,7 +117,7 @@ userDataExt r = do
         field = TypRef . Symbol <$> identifier
             <|> parens (TypeParser.unParser (fst r) (void . lookAhead $ reservedOp ")") (-100))
     userEnums = UserEnums <$> userEnum <*> many userEnum
-    userCoerce = reservedOp "=" >> UserCoerce <$> (TypeParser.unParser (fst r) (void . lookAhead $ reservedOp ";;") (-100))
+    userCoerce = reservedOp "=" >> UserCoerce <$> TypeParser.unParser (fst r) (void . lookAhead $ reservedOp ";;") (-100)
 
 userData
   :: ( ShowErrorComponent e

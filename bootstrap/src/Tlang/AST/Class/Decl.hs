@@ -8,6 +8,8 @@ where
 
 import Tlang.AST.Decl
 import Tlang.Generic ((:<:))
+import Control.Monad (mapM)
+import Data.Maybe (fromMaybe)
 
 -- ** plain method
 
@@ -15,10 +17,7 @@ import Tlang.Generic ((:<:))
 class Query decl where
   query :: decl :<: decls => (info -> Bool) -> Decl decls info -> Maybe (decl info)
   queryAll :: decl :<: decls => (info -> Bool) -> Decls decls info -> [decl info]
-  queryAll info (Decls decls) =
-    case sequence $ query info <$> decls of
-      Just ls -> ls
-      Nothing -> []
+  queryAll info (Decls decls) = fromMaybe [] $ mapM (query info) decls
 
 -- | allow fetching inner information
 class DeclInfo decl where

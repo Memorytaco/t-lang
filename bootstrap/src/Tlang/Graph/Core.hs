@@ -45,13 +45,14 @@ import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
 import Algebra.Graph.Labelled (Graph (..), Context (..), context, edgeLabel, replaceEdge, transpose, emap, foldg)
 import qualified Algebra.Graph.Labelled as Algebra (edge, connect, overlay, vertices, overlays, edges)
 import Data.Kind (Constraint, Type)
+import Data.Functor ((<&>))
 import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
 
 import Tlang.Generic ((:<:) (..), (:+:) (..))
 
 -- | algebraic edge for graph
-data Link e = Link (e (Link e))
+newtype Link e = Link (e (Link e))
 deriving instance (Show (e (Link e))) => Show (Link e)
 deriving instance (Eq (e (Link e))) => Eq (Link e)
 deriving instance (Ord (e (Link e))) => Ord (Link e)
@@ -160,7 +161,7 @@ connect :: forall edge edges nodes info. (edge :<: edges)
         -> CoreG nodes edges info
         -> CoreG nodes edges info
         -> CoreG nodes edges info
-connect e g1 g2 = Algebra.connect (link e) g1 g2
+connect e = Algebra.connect (link e)
 
 overlay :: Ord (edges (Link edges)) => CoreG nodes edges info -> CoreG nodes edges info -> CoreG nodes edges info
 overlay = Algebra.overlay
@@ -181,11 +182,11 @@ vertices = Algebra.vertices
 linkFrom, linkTo :: Ord (es (Link es)) => (Hole ns info -> Bool) -> CoreG ns es info -> [(Link es, Hole ns info)]
 linkFrom p g =
   case context p g of
-    Just (outputs -> vs) -> vs >>= \(toList -> es, a) -> es >>= pure . (, a)
+    Just (outputs -> vs) -> vs >>= \(toList -> es, a) -> es <&> (, a)
     Nothing -> mempty
 linkTo p g =
   case context p g of
-    Just (inputs -> vs) -> vs >>= \(toList -> es, a) -> es >>= pure . (, a)
+    Just (inputs -> vs) -> vs >>= \(toList -> es, a) -> es <&> (, a)
     Nothing -> mempty
 
 lFrom, lTo :: forall e es ns info. (e :<: es, Ord (es (Link es)))

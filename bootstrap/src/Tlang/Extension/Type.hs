@@ -31,7 +31,7 @@ newtype Equiv hd t = Equiv (hd t) deriving (Functor, Foldable, Traversable, Show
 -- | * Structural type extenstion
 
 -- | builtin tuple
-data Tuple a
+newtype Tuple a
   = Tuple [a]
   deriving (Eq, Ord, Functor, Foldable, Traversable)
 
@@ -39,7 +39,7 @@ instance (Show a) => Show (Tuple a) where
   show (Tuple vs) = "(" <> intercalate ", " (show <$> vs) <> ")"
 
 -- | product type
-data Record label a
+newtype Record label a
   = Record [(label, a)]
   deriving (Eq, Ord, Functor, Foldable, Traversable)
 
@@ -47,7 +47,7 @@ instance (Show label, Show a) => Show (Record label a) where
   show (Record vs) = "{" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> "}"
 
 -- | variant type, grouped label type
-data Variant label a
+newtype Variant label a
   = Variant [(label, Maybe a)]
   deriving (Eq, Ord, Functor, Foldable, Traversable)
 

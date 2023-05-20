@@ -19,6 +19,7 @@ import Tlang.Generic ((:<:))
 import Tlang.Extension.Decl
 
 import Data.Text (Text)
+import Data.Functor ((<&>))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Control.Monad (void, forM, forM_)
@@ -29,7 +30,7 @@ import Control.Monad.Trans (lift)
 type ParseModuleType decls = Module decls Symbol
 
 moduleName :: ShowErrorComponent e => ParsecT e Text m ModuleName
-moduleName = liftA2 ModuleName init last <$> (Frag <$> identifier) `sepBy1` (string "/")
+moduleName = liftA2 ModuleName init last <$> (Frag <$> identifier) `sepBy1` string "/"
 
 -- | parsing module header
 -- a header is composed by
@@ -71,7 +72,7 @@ module' ms declaraton = do
   uses <- many stmtUse >>= \deps -> do
     forM deps \(pos, u@(Use namespace@(NameAlias from _) imps)) -> region (setErrorOffset pos) do
       forM_ imps \(NameAlias sym _) -> do
-        case lookUpModule from ms >>= pure . (`itemOf` (== sym)) of
+        case lookUpModule from ms <&> (`itemOf` (== sym)) of
           Just ops -> lift (forM_ ops putIntoEnv)
           Nothing -> fail
             $ "module (" <> show namespace <> ") does not contain definition for " <> show sym <> " or it does not exist"

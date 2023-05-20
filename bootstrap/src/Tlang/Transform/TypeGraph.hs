@@ -141,9 +141,9 @@ instance BinderGraph (Bound name) Int where
     if hasVertex (== var) body
     then do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
-            return . overlay (n -<< (Uno $ Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+            return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
       g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< (Uno $ Bind Flexible 1 (Just name)) >>- root)
+      return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
     else return (root, body)
   handleBinder (name :> mbound) mbody = do
     a@(var, _) <- mbound
@@ -151,9 +151,9 @@ instance BinderGraph (Bound name) Int where
     if hasVertex (== var) body
     then do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
-            return . overlay (n -<< (Uno $ Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+            return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
       g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< (Uno $ Bind Rigid 1 (Just name)) >>- root)
+      return (root, overlay g' $ var -<< Uno (Bind Rigid 1 (Just name)) >>- root)
     else return (root, body)
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
@@ -178,7 +178,7 @@ instance LiteralGraph Tuple Int where
     gs <- sequence ms
     let len = toInteger $ length gs
     root <- node <&> hole' (Uno $ NodeTup len)
-    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< (Uno $ Sub i) >>- a) Empty $ zip [1..len] gs
+    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< Uno (Sub i) >>- a) Empty $ zip [1..len] gs
     return (root, g)
 
 
@@ -195,7 +195,7 @@ instance LiteralGraph (Record label) Int where
     root <- node <&> hole' (Uno $ NodeRec len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, (a, g'))) -> do
       label <- node <&> hole' (Uno $ NodeHas True l)
-      return $ overlays [root -<< (Uno $ Sub i) >>- label, label -<< (Uno $ Sub 1) >>- a, g', g]
+      return $ overlays [root -<< Uno (Sub i) >>- label, label -<< Uno (Sub 1) >>- a, g', g]
     return (root, g)
 
 
@@ -213,8 +213,8 @@ instance LiteralGraph (Variant label) Int where
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, val)) -> do
       label <- node <&> hole' (Uno $ NodeHas True l)
       return . overlays $
-        [ overlays [root -<< (Uno $ Sub i) >>- label, g]
-        , maybe Empty (\(a, g') -> overlays [label -<< (Uno $ Sub 1) >>- a, g']) val
+        [ overlays [root -<< Uno (Sub i) >>- label, g]
+        , maybe Empty (\(a, g') -> overlays [label -<< Uno (Sub 1) >>- a, g']) val
         ]
     return (root, g)
 

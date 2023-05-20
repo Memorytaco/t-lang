@@ -107,7 +107,7 @@ instance (ShowErrorComponent e) => OperatorParser ExpressionToken (Parser e m) w
                   return $ PatSum (PatRef $ Op s) [left, right]
         _ -> return $ PatSum (PatRef $ Op s) [left]
 
-patternSum :: ParsePatternType -> ParsePatternType -> Parser e m (ParsePatternType)
+patternSum :: ParsePatternType -> ParsePatternType -> Parser e m ParsePatternType
 patternSum left right =
   case left of
     PatRef _ -> return $ PatSum left [right]
@@ -115,7 +115,7 @@ patternSum left right =
     PatSum v vs -> return $ PatSum v (vs <> [right])
     _ -> fail "expect sum pattern, but it is not"
 
-record :: ShowErrorComponent e => Parser e m (ParsePatternType)
+record :: ShowErrorComponent e => Parser e m ParsePatternType
 record = do
   let rlabel = Symbol <$> identifier <|> Op <$> operator
       lpattern = pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
@@ -125,7 +125,7 @@ record = do
   return (PatRec sections)
 
 -- | parser group for parenthesis
-tuple, patUnit :: ShowErrorComponent e => Parser e m (ParsePatternType)
+tuple, patUnit :: ShowErrorComponent e => Parser e m ParsePatternType
 tuple = do
   p1 <- pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100) <* reservedOp ","
   ps <- sepBy1 (pratt (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)) (reservedOp ",") <* reservedOp ")"
@@ -152,10 +152,10 @@ unParser :: ShowErrorComponent e
          => ([Operator String], [Operator String])
          -> ParsecT e Text m ()
          -> Integer
-         -> ParsecT e Text m (ParsePatternType)
+         -> ParsecT e Text m ParsePatternType
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
 play :: Monad m
      => ([Operator String], [Operator String]) -> Text
-     -> m (Either String (ParsePatternType))
+     -> m (Either String ParsePatternType)
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt

@@ -60,13 +60,13 @@ unParser :: ShowErrorComponent e
          => ([Operator String], [Operator String])
          -> ParsecT e Text m ()
          -> Integer
-         -> ParsecT e Text m (ParseExprType)
+         -> ParsecT e Text m ParseExprType
 unParser r end rbp = getParser (pratt (liftParser end) rbp) r
 
-play :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType))
+play :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String ParseExprType)
 play op txt = first errorBundlePretty <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 
-parseExpr :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String (ParseExprType))
+parseExpr :: Monad m => ([Operator String], [Operator String]) -> Text -> m (Either String ParseExprType)
 parseExpr op txt = first errorBundlePretty
   <$> runParserT (unParser @Void op eof (-100)) "stdin" txt
 
@@ -151,13 +151,13 @@ handleNorm (ExApp l1 l2 rs) r = return $ ExApp l1 l2 (rs <> [r])
 handleNorm a r = return $ ExApp a r []
 
 -- | need a complete definition of pattern match syntax
-pPattern :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m (PatParser.ParsePatternType)
+pPattern :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m PatParser.ParsePatternType
 pPattern end r = ask >>= \e -> liftParser $ PatParser.unParser e (getParser end e) r
 pType :: ShowErrorComponent e => Parser e m () -> Integer -> Parser e m TypParser.ParseType
 pType end r = ask >>= \e -> liftParser $ TypParser.unParser (fst e) (getParser end e) r
 
 -- | let binding in expression
-letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m (ParseExprType)
+letExpr :: ShowErrorComponent e => Parser e m () -> Parser e m ParseExprType
 letExpr end = do
   pat <- pPattern (void . lookAhead $ reservedOp "=") (-100) <* reservedOp "=" <?> "binding name"
   initializer <- pratt (void . lookAhead $ reserved "in") (-100) <* reserved "in"
@@ -172,7 +172,7 @@ bigLambda = do
       seqPat = fmap PatSeq $ groupPat `sepBy1` reservedOp "|"
       branch = (,) <$> seqPat <*> (reservedOp "=" *> pratt (void . lookAhead $ reservedOp "]" <|> reservedOp "|" ) (-100))
   lambda <-
-    try ((flip (Lambda []) []) . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "]") (-100))
+    try (flip (Lambda []) [] . (PatGrp [],) <$> pratt (void . lookAhead $ reservedOp "]") (-100))
     <|> Lambda [] <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
   void $ reservedOp "]"
   return lambda
@@ -183,7 +183,7 @@ smallLambda end = do
       branch = (,) <$> ((try seqPat <|> iPattern) <* reservedOp "=>") <*> pratt (lookAhead $ end <|> void (reservedOp ",")) (-100)
   Lambda [] <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
 
-record, tup, tunit :: ShowErrorComponent e => Parser e m (ParseExprType)
+record, tup, tunit :: ShowErrorComponent e => Parser e m ParseExprType
 record = do
   let rprefix :: ShowErrorComponent e => Parser e m String -> Parser e m String
       rprefix m = optional (oneOf ['&', '.']) >>= maybe m (\a -> (a:) <$> m)
