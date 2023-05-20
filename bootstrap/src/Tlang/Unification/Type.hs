@@ -6,6 +6,7 @@
 
 module Tlang.Unification.Type
   ( Uno (..)
+  , Histo (..)
   , (~=~)
   )
 where

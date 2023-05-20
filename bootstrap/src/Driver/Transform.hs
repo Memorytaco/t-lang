@@ -36,11 +36,11 @@ newtype TypeToGraph name nodes edges m a = TypeToGraph
   { runTypeToGraph ::
       ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m) a
   } deriving newtype (Functor, Applicative, Monad)
-  deriving ( HasSource "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))]
-           , HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))]
-           ) via MonadReader (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
-  deriving (HasState "node" Int, HasSource "node" Int, HasSink "node" Int)
-        via MonadState (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
+    deriving ( HasSource "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))]
+             , HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))]
+             ) via MonadReader (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
+    deriving (HasState "node" Int, HasSource "node" Int, HasSink "node" Int)
+          via MonadState (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
 
 runToGraph :: ( ConstrainGraph cons nodes edges Int (TypeToGraph name nodes edges m)
               , ConstrainGraph bind nodes edges Int (TypeToGraph name nodes edges m)
