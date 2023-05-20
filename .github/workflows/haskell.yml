@@ -26,7 +26,7 @@ jobs:
         stack-setup-ghc: true
         enable-stack: true
         stack-version: 'latest'
-        cabal-version: '3.4.0.0'
+        cabal-version: '3.6.0.0'
 
     - name: LLVM Environment
       run: |
@@ -47,6 +47,5 @@ jobs:
     - name: Build
       run: |
         cd bootstrap
-        echo "allow-newer: true" > ~/.stack/config.yaml # FIXME: rebuild project dependency
         stack build
         cd ..
