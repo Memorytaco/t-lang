@@ -42,15 +42,15 @@ instance
   => HasPratt (WithPattern m proxy e) (ParsePatternType e) m where
   type Token (WithPattern m proxy e) (ParsePatternType e) = OperatorClass String (Either e (ParsePatternType e))
   next _ = try (OpNorm . Right <$> wild <?> "Wild Pattern")
-       <|> try (OpRep . Right <$> (syms <|> try operator) <?> "Pattern Operator")
        <|> (OpNorm . Left  <$> try (pratt @proxy (void . lookAhead $ reservedOp "->") (-100)) <?> "View Expression")
        <|> (OpNorm . Right <$> variable <?> "Identifier")
+       <|> (OpRep . Left  <$> special <?> "Pair Operator")
+       <|> try (OpRep . Right <$> (syms <|> try operator) <?> "Pattern Operator")
        <|> (OpNorm . Right <$> vlabel <?> "Variant Label")
        <|> (OpNorm . Right <$> num <?> "Literal Match Number")
        <|> (OpNorm . Right <$> str <?> "Literal Match String")
-       <|> (OpRep . Left  <$> special <?> "Pair Operator")
       where
-        variable = char '?' *> identifier <&> PatRef . Symbol
+        variable = (char '?' <|> char '!') *> identifier <&> PatRef . Symbol
         vlabel = identifier <&> PatSym . Symbol
         wild = symbol "_" $> PatWild <* notFollowedBy identifier
         num = try floating <|> nat
