@@ -35,7 +35,7 @@ shell :: IO ()
 shell =  runInputT defaultSettings loop $> ()
   where loop = runStateT repl'loop (ReplStatus False "$ > " (conf, stat))
         conf = Helper.ShellConfig (Helper.SearchEnv [] [])
-        stat = Helper.ShellState 0 (typOperator, [])
+        stat = Helper.ShellState 0 ([], typOperator)
 
 repl'loop :: (MonadIO m, MonadMask m) => StateT (ReplStatus (Helper.ShellConfig, Helper.ShellState)) (InputT m) ()
 repl'loop = do

@@ -40,13 +40,14 @@ instance
   , Show e
   )
   => HasPratt (WithPattern m proxy e) (ParsePatternType e) m where
-  type Token (WithPattern m proxy e) (ParsePatternType e) = OperatorClass String (ParsePatternType e)
-  next _ = try (OpNorm <$> wild <?> "Wild Pattern")
-       <|> (OpNorm <$> variable <?> "Identifier")
-       <|> (OpNorm <$> vlabel <?> "Variant Label")
-       <|> (OpNorm <$> num <?> "Literal Match Number")
-       <|> (OpNorm <$> str <?> "Literal Match String")
-       <|> try (OpRep . Right <$> (try operator <|> syms) <?> "Pattern Operator")
+  type Token (WithPattern m proxy e) (ParsePatternType e) = OperatorClass String (Either e (ParsePatternType e))
+  next _ = try (OpNorm . Right <$> wild <?> "Wild Pattern")
+       <|> try (OpRep . Right <$> (syms <|> try operator) <?> "Pattern Operator")
+       <|> (OpNorm . Left  <$> try (pratt @proxy (void . lookAhead $ reservedOp "->") (-100)) <?> "View Expression")
+       <|> (OpNorm . Right <$> variable <?> "Identifier")
+       <|> (OpNorm . Right <$> vlabel <?> "Variant Label")
+       <|> (OpNorm . Right <$> num <?> "Literal Match Number")
+       <|> (OpNorm . Right <$> str <?> "Literal Match String")
        <|> (OpRep . Left  <$> special <?> "Pair Operator")
       where
         variable = char '?' *> identifier <&> PatRef . Symbol
@@ -59,7 +60,7 @@ instance
         withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) $> Left v
                            <|> (reservedOp (pack r) <|> reserved (pack r)) $> Right v
         special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("{", "}")]
-        syms = fmap unpack . foldl1 (<|>) $ reservedOp <$> [":", "@"]
+        syms = fmap unpack . foldl1 (<|>) $ reservedOp <$> [":", "@", "->"]
 
   peek witness = lookAhead $ next witness
 
@@ -68,10 +69,12 @@ instance
     (OpRep (Left _)) -> return (999, 999)
     (OpRep (Right op)) -> getOperator op <&> getBindPower
 
-  nud _ end = withOperator return \case
+  nud _ end = withOperator (either (patternView @proxy end) return) \case
     (Left (Left  (l, r))) -> case l of
       "{" -> record @proxy @e
-      _ -> patUnit <|> try (tuple @proxy @e) <|> (pratt  @(WithPattern m proxy e) (void . lookAhead . reservedOp $ pack r) (-100) <* reservedOp (pack r))
+      "->" -> fail "view pattern projector should be paired with expression: expression -> pat"
+      _ -> patUnit <|> try (tuple @proxy @e)
+                   <|> (pratt  @(WithPattern m proxy e) (void . lookAhead . reservedOp $ pack r) (-100) <* reservedOp (pack r))
     (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
     (Right s) -> getOperator s >>= \op@(Operator assoc _ r _) ->
       case assoc of
@@ -80,7 +83,7 @@ instance
         _ -> do right <- pratt @(WithPattern m proxy e) end r
                 return $ PatSum (PatRef $ Op s) [right]
 
-  led _ end left = withOperator (patternSum @e left) \case
+  led _ end left = withOperator (either (patternView @proxy end) (patternSum @e left)) \case
     (Left (Left  (l, r))) -> case l of
       "{" -> record @proxy @e >>= patternSum @e left
       _ ->  patUnit
@@ -96,9 +99,7 @@ instance
               PatWild -> PatBind (Symbol "_") <$> pratt @(WithPattern m proxy e) end r
               PatRef name -> PatBind name <$> pratt @(WithPattern m proxy e) end r
               _ -> fail "expect plain identifier on the left of '@' for binder syntax"
-          "->" -> case left of
-              PatRef name -> undefined -- PatView name <$> pratt end r
-              _ -> fail "view pattern projector should be a single function"
+          "->" -> fail "view pattern projector should be paired with expression: expression -> pat"
           ":" -> case left of
               PatAnno _ -> fail $ "Can't annotate again for pattern, " <> show left
               -- PatSym _ -> fail "Can't annotate symbol for polymorphic variant"
@@ -106,6 +107,15 @@ instance
           _ -> do right <- pratt @(WithPattern m proxy e) end (-100)
                   return $ PatSum (PatRef $ Op s) [left, right]
         _ -> return $ PatSum (PatRef $ Op s) [left]
+
+patternView
+  :: forall proxy e m err.
+    ( MonadFail m, ShowErrorComponent err
+    , MonadParsec err Text m
+    , HasPratt (WithPattern m proxy e) (ParsePatternType e) m
+    )
+  => m () -> e -> m (ParsePatternType e)
+patternView end e = reservedOp "->" *> pratt @(WithPattern m proxy e) end (-100) <&> PatView e
 
 patternSum :: forall e m. (MonadFail m)
            => ParsePatternType e -> ParsePatternType e -> m (ParsePatternType e)

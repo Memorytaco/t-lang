@@ -13,9 +13,8 @@ import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.RWS (RWST, runRWST)
 import Control.Monad.Except
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Text.Megaparsec hiding (runParser)
-import Text.Megaparsec (eof)
 import Text.Megaparsec.Char
 import Data.Void (Void)
 

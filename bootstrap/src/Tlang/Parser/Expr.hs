@@ -132,8 +132,14 @@ instance
         _ -> ExStc . inj $ Apply l r []
       apply l r = ExStc . inj $ Apply l r []
 
+type ReaderM m =
+  ( HasReader "TermOperator" [Operator String] m
+  , HasReader "TypeOperator" [Operator String] m
+  , HasReader "PatternOperator" [Operator String] m
+  )
+
 -- | let binding in expression
-letExpr :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, HasReader "TermOperator" [Operator String] m, HasReader "TypeOperator" [Operator String] m, HasReader "PatternOperator" [Operator String] m) => m () -> m ParseExprType
+letExpr :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, ReaderM m) => m () -> m ParseExprType
 letExpr end = do
   pat <- pratt @(WithPattern m (WithExpr m) ParseExprType)
          (void . lookAhead $ reservedOp "=") (-100) <* reservedOp "=" <?> "binding name"
@@ -142,20 +148,20 @@ letExpr end = do
   return . ExStc . inj $ Let pat initializer body
 
 -- | lambda block parser
-bigLambda :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, HasReader "TypeOperator" [Operator String] m, HasReader "PatternOperator" [Operator String] m, HasReader "TermOperator" [Operator String] m) => m ParseLambdaType
+bigLambda :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, ReaderM m) => m ParseLambdaType
 bigLambda = do
   let iPattern = Pattern <$> pratt @(WithPattern m (WithExpr m) ParseExprType)
                  (void . lookAhead . foldl1 (<|>) $ reservedOp <$> [",", "=", "|"] ) (-100)
       groupPat = fmap PatGrp $ iPattern `sepBy1` reservedOp ","
       seqPat = fmap PatSeq $ groupPat `sepBy1` reservedOp "|"
       branch = (,) <$> seqPat <*> (reservedOp "=" *> pratt @(WithExpr m) (void . lookAhead $ reservedOp "]" <|> reservedOp "|" ) (-100))
-  header <- Lambda . Bounds . fromMaybe [] <$> optional (((:> TypPht) . Symbol <$> identifier) `manyTill`  reservedOp ";;")
+  header <- Lambda . Bounds . fromMaybe [] <$> optional (try $ ((:> TypPht) . Symbol <$> identifier) `manyTill`  reservedOp ";;")
   lambda <-
     try ((`header` []) . (PatGrp [],) <$> pratt @(WithExpr m) (void . lookAhead $ reservedOp "]") (-100))
     <|> header <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
   reservedOp "]" $> lambda
 
-smallLambda :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, HasReader "TermOperator" [Operator String] m, HasReader "TypeOperator" [Operator String] m, HasReader "PatternOperator" [Operator String] m) => m () -> m ParseLambdaType
+smallLambda :: forall m err. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, ReaderM m) => m () -> m ParseLambdaType
 smallLambda end = do
   let iPattern = Pattern
              <$> pratt @(WithPattern m (WithExpr m) ParseExprType)
@@ -164,12 +170,11 @@ smallLambda end = do
       branch = (,) <$> ((try seqPat <|> iPattern) <* reservedOp "=>") <*> pratt @(WithExpr m) (lookAhead $ end <|> void (reservedOp ",")) (-100)
   Lambda (Bounds []) <$> branch <*> (reservedOp "," *> branch `sepBy1` reservedOp "," <|> return []) <* end
 
-record, tup :: forall err m. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, HasReader "TermOperator" [Operator String] m, HasReader "PatternOperator" [Operator String] m, HasReader "TypeOperator" [Operator String] m) => m ParseExprType
+record, tup :: forall err m. (ShowErrorComponent err, MonadParsec err Text m, MonadFail m, ReaderM m) => m ParseExprType
 record = do
   let rprefix m = optional (oneOf ['&', '.']) >>= maybe m (\a -> (a:) <$> m)
       rlabel = try (Symbol <$> rprefix identifier) <|> Op <$> operator
       field = (,) <$> (rlabel <* reservedOp "=") <*> pratt @(WithExpr m) (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
-      -- rowof = RowOf <$> (reservedOp "..." *> pratt (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100))
   ExPrm . inj . Record <$> field `sepBy1` reservedOp "," <* reservedOp "}"
 
 tup =
@@ -187,5 +192,5 @@ getOperator op = do
   res <- asks @"TermOperator" $ find (\(Operator _ _ _ n) -> n == op)
   case res of
     Just a -> return a
-    Nothing -> fail $ "Operator " <> show op <> " is undefined in term level."
+    Nothing -> fail $ "Operator " <> show op <> " is undefined in expression term level."
 

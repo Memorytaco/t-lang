@@ -24,7 +24,6 @@ import Data.Void (Void)
 import GHC.Generics (Generic)
 
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT)
-import Text.Megaparsec.Error (ShowErrorComponent)
 
 import Tlang.Parser.Decl (declaration, DeclareExtension)
 import Tlang.Parser.Type (ParseType)
