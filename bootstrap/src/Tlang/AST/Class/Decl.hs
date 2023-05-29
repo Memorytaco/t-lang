@@ -1,6 +1,8 @@
+{- | ** methods for interacting with AST structure
+-}
 module Tlang.AST.Class.Decl
   (
-  -- ** Open methods for useful info from `Decl`
+    -- ** Open methods for useful info from `Decl`
     Query (..)
   , DeclInfo (..)
   )

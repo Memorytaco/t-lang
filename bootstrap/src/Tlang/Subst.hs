@@ -16,7 +16,7 @@ import Tlang.AST (Kind (..), None (..), Type (..), Label (..), StandardType, (:@
 import Tlang.Helper.AST.Type (injTypeLit)
 import Control.Applicative ((<|>))
 import Tlang.Generic ((:<:) (..))
-import Tlang.Extension.Type
+import Tlang.Extension
 import Data.Bifunctor.TH (deriveBifunctor)
 
 -- | extension of lambda calculus

@@ -44,12 +44,15 @@ library
       Tlang.AST.Expr
       Tlang.AST.Module
       Tlang.AST.Operator
+      Tlang.AST.Pattern
       Tlang.AST.Type
       Tlang.Codegen
       Tlang.Codegen.Core
       Tlang.Constraint
       Tlang.Emit
+      Tlang.Extension
       Tlang.Extension.Decl
+      Tlang.Extension.Expr
       Tlang.Extension.Type
       Tlang.Generic
       Tlang.Graph.Core
@@ -62,9 +65,9 @@ library
       Tlang.Helper.AST.Binder
       Tlang.Helper.AST.Type
       Tlang.Inference
+      Tlang.Inference.Expr
       Tlang.Inference.Graph
       Tlang.Inference.Kind
-      Tlang.Inference.Type
       Tlang.JIT
       Tlang.Parser
       Tlang.Parser.Class
@@ -73,7 +76,6 @@ library
       Tlang.Parser.Lexer
       Tlang.Parser.Module
       Tlang.Parser.Pattern
-      Tlang.Parser.Pratt
       Tlang.Parser.Type
       Tlang.Rep
       Tlang.Rep.Class
@@ -95,6 +97,7 @@ library
       DeriveFoldable
       DeriveTraversable
       DerivingVia
+      DeriveGeneric
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments
@@ -156,6 +159,7 @@ executable t-lang-exe
       DeriveFoldable
       DeriveTraversable
       DerivingVia
+      DeriveGeneric
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments
@@ -219,6 +223,7 @@ test-suite t-lang-test
       DeriveFoldable
       DeriveTraversable
       DerivingVia
+      DeriveGeneric
       StandaloneKindSignatures
       StandaloneDeriving
       BlockArguments

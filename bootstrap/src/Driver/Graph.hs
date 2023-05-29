@@ -1,31 +1,31 @@
+{- | play with graphic type and get information from data
+-}
+
 module Driver.Graph
-  ( play
-  , saveGraph
-  , viewType
-  , testUnify
+  (
+    saveGraph
   , parseTypeGrpah
   )
 where
 
-{- play with graphic type and get information from data
--}
+import Tlang.Parser (WithType, pratt)
+import Driver.Parser (runParser)
+import Text.Megaparsec hiding (runParser)
+import Data.Void (Void)
 
-import qualified Tlang.Parser.Type as PT
 import Tlang.AST
 import Tlang.Inference.Graph
 import Tlang.Graph.Dot
 
-import Control.Monad.Identity (Identity)
 import Control.Monad.State
 import Data.Text (Text)
-import qualified Data.Text.IO as Text
 import Data.GraphViz
 import Data.Graph.Inductive
 import Data.GraphViz.Commands.IO (writeDotFile)
 
 import Algebra.Graph.Export.Dot (exportViaShow)
 
-import qualified Driver.Transform as G
+import Driver.Transform
 
 -- | save graph as png file
 saveGraph :: (Show label, Show name, Labellable name, Ord name)
@@ -36,69 +36,12 @@ saveGraph (root, g) name = do
   void $ runGraphviz dot Png (name <> ".png")
   writeDotFile (name <> ".dot") dot
 
--- | a way to visualize graphic type
-viewType :: FilePath -> Text -> IO ()
-viewType path str = do
-  res <- PT.play typOperator str
-  case res of
-    Right t -> do
-       (root, g) <- runToGraph [] empty t
-       saveGraph (root, g) path
-       ((), ng) <- runStateT (augGraph root) g
-       saveGraph (root, ng) (path <> ".aug")
-       (tn :: TypeAST Identity, _) <- runRestore root g ([], 0)
-       Text.putStrLn str
-       putStrLn "original: "
-       print t
-       putStrLn "Restored: "
-       print tn
-       prettyPrint g
-    Left err -> putStrLn err
-
--- | a temporary function used to play unify in ghci REPL
-testUnify :: FilePath -> Text -> IO ()
-testUnify path str = do
-  res <- PT.play typOperator str
-  case res of
-    Right t -> do
-       (root, g) <- runToGraph [] empty t
-       saveGraph (root, g) path
-       putStrLn "the graph:"
-       prettyPrint g
-       n1 <- getLine >>= return . read @Int
-       n2 <- getLine >>= return . read @Int
-       ((), ng) <- runStateT (augGraph root) g
-       (_, (simplify root -> gu, _)) <- runStateT (n1 ~=~ n2) (ng,[])
-       saveGraph (root, ng) (path <> ".aug")
-       saveGraph (root, simplify root gu) (path <> ".gu")
-       (tn :: TypeAST Identity, _) <- runRestore root gu ([], 0)
-       Text.putStrLn str
-       putStrLn "original: "
-       print t
-       putStrLn "Restored: "
-       -- print tn
-    Left err -> putStrLn err
-
-play :: Text -> IO ()
-play str = do
-  res <- PT.play typOperator str
-  case res of
-    Right t -> do
-       (root, g) <- runToGraph [] empty t
-       (tn :: TypeAST Identity , _) <- runRestore @Label root g ([], 0)
-       Text.putStrLn str
-       putStrLn "original: "
-       print t
-       putStrLn "Restored: "
-       print tn
-    Left err -> putStrLn err
-
-parseTypeGrpah :: Text -> IO G.PlayGP
+parseTypeGrpah :: Text -> IO PlayGP
 parseTypeGrpah typ = do
-   res <- PT.play typOperator typ
+   res <- runParser (typOperator, []) (pratt @(WithType _) eof (-100)) "stdin" typ
    case res of
-     Right t -> do
-        ((a, g :: G.PlayGP), _) <- G.runToGraph 0 t
+     (Right t, _) -> do
+        ((_, g :: PlayGP), _) <- runToGraph 0 t
         writeFile "graph.dot" $ exportViaShow g
         return g
-     Left err -> putStrLn err >> error "see previous message"
+     (Left (err :: ParseErrorBundle Text Void), _) -> putStrLn (errorBundlePretty err) >> error "see previous message"

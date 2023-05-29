@@ -7,10 +7,7 @@ module Tlang.Extension.Type
   , Equiv (..)
 
     -- | * available structure extension
-  , Tuple (..)
-  , Record (..)
   , Variant (..)
-  , Literal (..)
   )
 where
 
@@ -30,22 +27,6 @@ newtype Equiv hd t = Equiv (hd t) deriving (Functor, Foldable, Traversable, Show
 
 -- | * Structural type extenstion
 
--- | builtin tuple
-newtype Tuple a
-  = Tuple [a]
-  deriving (Eq, Ord, Functor, Foldable, Traversable)
-
-instance (Show a) => Show (Tuple a) where
-  show (Tuple vs) = "(" <> intercalate ", " (show <$> vs) <> ")"
-
--- | product type
-newtype Record label a
-  = Record [(label, a)]
-  deriving (Eq, Ord, Functor, Foldable, Traversable)
-
-instance (Show label, Show a) => Show (Record label a) where
-  show (Record vs) = "{" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> "}"
-
 -- | variant type, grouped label type
 newtype Variant label a
   = Variant [(label, Maybe a)]
@@ -53,10 +34,4 @@ newtype Variant label a
 
 instance (Show label, Show a) => Show (Variant label a) where
   show (Variant vs) = "<" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> ">"
-
--- | type level literal value
-data Literal
-  = Nat Integer -- ^ natural num
-  | Str Text    -- ^ constant string
-  deriving (Show, Eq, Ord)
 

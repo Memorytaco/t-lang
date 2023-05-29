@@ -19,6 +19,8 @@ module Tlang.Graph.Extension.Type
   , Sub (..)
   , Bind (..)
   , Flag (..) -- ^ binding flag
+  , Instance (..)
+  , Unify (..)
   )
 where
 
@@ -88,3 +90,6 @@ data P
 
 -- | unify constraint edge, underictional edge
 data Unify = Unify deriving (Show, Eq, Ord)
+
+-- | instance constraint edge
+data Instance = Instance Integer deriving (Show, Eq, Ord)

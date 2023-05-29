@@ -4,7 +4,6 @@ module Tlang.Parser.Module
     module'
   , ParseModuleType
   , moduleHeader
-  , parseModule
 
   )
 where
@@ -24,20 +23,20 @@ import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Control.Monad (void, forM, forM_)
 import Control.Applicative (liftA2)
-import Control.Monad.Trans.State (StateT, runStateT, modify)
-import Control.Monad.Trans (lift)
+
+import Capability.State (HasState, modify)
 
 type ParseModuleType decls = Module decls Symbol
 
-moduleName :: ShowErrorComponent e => ParsecT e Text m ModuleName
+moduleName :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m ModuleName
 moduleName = liftA2 ModuleName init last <$> (Frag <$> identifier) `sepBy1` string "/"
 
 -- | parsing module header
 -- a header is composed by
 -- 1. a module name
--- 2. import statements
-moduleHeader :: (ShowErrorComponent e)
-             => ParsecT e Text m ([Use Symbol], ModuleName)
+-- 2. use statements
+moduleHeader :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m)
+             => m ([Use Symbol], ModuleName)
 moduleHeader = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
@@ -45,10 +44,10 @@ moduleHeader = do
   whiteSpace
   return (snd <$> deps, name)
 
-item :: ShowErrorComponent e => ParsecT e Text m Symbol
+item :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m Symbol
 item = Symbol <$> identifier <|> Op <$> operator
 
-stmtUse :: ShowErrorComponent e => ParsecT e Text m (Int, Use Symbol)
+stmtUse :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m (Int, Use Symbol)
 stmtUse = do
   pos <- stateOffset <$> getParserState
   void $ reserved "use"
@@ -62,10 +61,13 @@ infixl 4 ??
      => Module decls info -> (info -> Bool) -> [decl info]
 _mod ?? info = queryAll info (mmDecl _mod)
 
-module' :: (ShowErrorComponent e, Monad m, UserItem :<: decls)
-        => [Module decls Symbol]
-        -> ParsecT e Text (StateT ([Operator String], [Operator String]) m) (Decl decls Symbol)
-        -> ParsecT e Text (StateT ([Operator String], [Operator String]) m) (Module decls Symbol, [Module decls Symbol])
+module'
+  :: ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
+     , HasState "TypeOperator" [Operator String] m
+     , HasState "TermOperator" [Operator String] m
+     , UserItem :<: decls)
+  => [Module decls Symbol] -> m (Decl decls Symbol)
+  -> m (Module decls Symbol, [Module decls Symbol])
 module' ms declaraton = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
@@ -73,7 +75,7 @@ module' ms declaraton = do
     forM deps \(pos, u@(Use namespace@(NameAlias from _) imps)) -> region (setErrorOffset pos) do
       forM_ imps \(NameAlias sym _) -> do
         case lookUpModule from ms <&> (`itemOf` (== sym)) of
-          Just ops -> lift (forM_ ops putIntoEnv)
+          Just ops -> forM_ ops putIntoEnv
           Nothing -> fail
             $ "module (" <> show namespace <> ") does not contain definition for " <> show sym <> " or it does not exist"
       return u
@@ -83,20 +85,16 @@ module' ms declaraton = do
     itemOf = (??) @UserItem
     lookUpModule :: ModuleName -> [Module decls Symbol] -> Maybe (Module decls Symbol)
     lookUpModule name = find $ (== name) . mmName
-    putIntoEnv :: (Monad m) => UserItem a -> StateT ([Operator String], [Operator String]) m ()
-    putIntoEnv (UserItem _ ops _) = forM_ ops \op@(Operator _ _ _ s) -> do
-      modify \(tys, trs) -> if head s == ':' then (op:tys, trs) else (tys, op:trs)
+    -- putIntoEnv :: (Monad m) => UserItem a -> StateT ([Operator String], [Operator String]) m ()
+    putIntoEnv (UserItem _ ops _) = forM_ ops \op@(Operator _ _ _ s) ->
+      if head s == ':' then modify @"TypeOperator" (op:)
+                       else modify @"TermOperator" (op:)
 
 -- | parse a new module basing on existed module
-parseModule
-  :: (ShowErrorComponent e, Monad m, UserItem :<: decls)
-  => String -> ([Operator String], [Operator String]) -> [Module decls Symbol]
-  -> ParsecT e Text (StateT ([Operator String], [Operator String]) m) (Decl decls Symbol)
-  -> Text
-  -> m (Either (ParseErrorBundle Text e) (Module decls Symbol, [Module decls Symbol]), ([Operator String], [Operator String]))
-parseModule source op ms decl txt = flip runStateT op $ runParserT (module' ms decl) source txt
-
--- playModule :: ([Operator String], [Operator String]) -> [Module decls Symbol] -> Text -> IO ()
--- playModule op ms txt =
---   let m = runModule @Void "stdin" op ms txt <&> fst
---    in m >>= putStrLn . either errorBundlePretty show
+-- parseModule
+--   :: (ShowErrorComponent e, MonadParsec e Text m, UserItem :<: decls)
+--   => String -> ([Operator String], [Operator String]) -> [Module decls Symbol]
+--   -> (StateT ([Operator String], [Operator String]) m) (Decl decls Symbol)
+--   -> Text
+--   -> m (Either (ParseErrorBundle Text e) (Module decls Symbol, [Module decls Symbol]), ([Operator String], [Operator String]))
+-- parseModule source op ms decl txt = flip runStateT op $ runParserT (module' ms decl) source txt

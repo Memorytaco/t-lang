@@ -1,13 +1,17 @@
 module std/io ;;
 
-use std/string (cstr)
+use std/ctype (cstr, cptr, cint)
 ;;
 
-data descriptor = #[ptr 64]
+use std/type (str)
 ;;
 
-type handle = descriptor
+// file descriptor
+data fd = cint
 ;;
 
-fn open: cstr -> descriptor = "open"
+type handle = fd
+;;
+
+foreign [name "open"] open: str -> handle
 ;;

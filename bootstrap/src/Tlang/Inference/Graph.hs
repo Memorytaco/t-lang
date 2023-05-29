@@ -18,8 +18,6 @@ module Tlang.Inference.Graph
   , GNodeLabel (..)
   , NodeArity (..)
 
-  , runToGraph
-  , toGraph
   , simplify
   , runRestore
   , restore
@@ -48,121 +46,16 @@ import Data.Graph.Inductive hiding (edges, nodes)
 import qualified Data.Graph.Inductive as I
 import Data.Coerce (coerce)
 import Data.Maybe (fromJust)
-import Data.Functor.Const (Const (..))
 import Control.Applicative ((<|>))
+import Data.Functor.Const (Const (..))
 
 import Tlang.Extension.Type as Ext
+import Tlang.Extension as Ext
 import Tlang.Generic
 import Tlang.Helper.AST.Type (injTypeLit, injTypeBind)
 
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
-
-runToGraph
-  :: (MonadFail m, Eq name,  Traversable bind, Traversable cons, Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
-   , Const Ext.Literal :<: cons, Record Label :<: cons, Variant Label :<: cons, Tuple :<: cons)
-  => [(name, Node)]
-  -> Gr (GNode (GNodeLabel Ext.Literal Label rep name)) (GEdge name)
-  -> Type name cons bind Identity rep
-  -> m (Node, Gr (GNode (GNodeLabel Ext.Literal Label rep name)) (GEdge name))
-runToGraph r s t = do
-  (root, graph, ()) <- runRWST (toGraph t) r s
-  return (root, graph)
-
--- | transform syntactic type into graphic type, and check its validity
-toGraph :: ( MonadFail m, MonadReader [(name, Node)] m
-           , MonadState (Gr (GNode (GNodeLabel Ext.Literal label rep name)) (GEdge name)) m
-           , Eq name, Traversable inj, Traversable bind, Traversable cons
-           , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
-           , Tuple :<: cons, Record label :<: cons, Variant label :<: cons, Const Ext.Literal :<: cons
-           )
-        => Type name cons bind inj rep -> m Node
-toGraph = cata go
-  where
-    newNode node = do
-      nid <- gets $ head . newNodes 1
-      modify $ insNode (nid, GType node)
-      return nid
-    newEdge label n1 n2 = modify $ insEdge (n1, n2, label)
-    -- count new binding edge, and introduce a new index
-    newBindSeq node = do
-      graph <- get
-      let counts = inn graph node >>= \(_, _, edge) ->
-            case edge of
-              GSub _ -> pure 0
-              _ -> pure 1
-      return (sum counts + 1)
-    go TypPhtF = newNode NodeBot
-    go (TypRepF rep) = newNode (NodeRep rep)
-    go (TypRefF name) = do
-      res'maybe <- asks $ lookup name
-      case res'maybe of
-        Nothing -> newNode (NodeRef name)
-        Just node -> return node
-    go (TypLitF lit) = do
-      let val = handleLit <$> prj lit <|> handleTup <$> prj lit
-            <|> handleRec <$> prj lit <|> handleSum <$> prj lit
-      case val of
-        Just m -> m
-        Nothing -> fail "Support record, variant, tuple, literal only"
-      where
-        handleLit (Const lit) = newNode (NodeLit lit)
-        handleTup (Tuple nds) = do
-          tupNode <- newNode NodeTup
-          nodes <- sequence nds
-          forM_ (zip nodes $ GSub <$> [1..]) \(node, edge) -> newEdge edge tupNode node
-          return tupNode
-        handleRec (Record lns) = do
-          redNode <- newNode NodeRec
-          lbs <- mapM sequence lns
-          forM_ (zip lbs $ GSub <$> [1..]) \((label, node), edge) -> do
-            lNode <- newNode $ NodeHas label
-            newEdge edge redNode lNode
-            newEdge (GSub 1) lNode node
-          return redNode
-        handleSum (Variant lns) = do
-          sumNode <- newNode NodeSum
-          lbs <- mapM (mapM sequence) lns
-          forM_ (zip lbs $ GSub <$> [1..]) \((label, node'maybe), edge) -> do
-            lNode <- newNode $ NodeHas label
-            newEdge edge sumNode lNode
-            mapM (newEdge (GSub 1) lNode) node'maybe
-          return sumNode
-    go (TypConF ma ms) = do
-      appNode <- newNode NodeApp
-      na <- ma
-      ns <- sequence ms
-      forM_ (zip (na:ns) $ GSub <$> [1..]) \(node, edge) -> newEdge edge appNode node
-      return appNode
-    go (TypLetF binder mr) =
-      case handleAbs <$> (prj binder) <|> handleAll <$> (prj binder) of
-        Just m -> m
-        Nothing -> fail "Support type abstraction and type scheme only!!"
-      where
-        handleAll (Forall mbound) = do
-          bound <- sequence mbound
-          case bound of
-            name :> node -> do
-              root <- local ((name, node):) mr
-              ix <- newBindSeq root
-              newEdge (GBind Flexible ix (Just name)) node root
-              return root
-            name :~ node -> do
-              root <- local ((name, node):) mr
-              ix <- newBindSeq root
-              newEdge (GBind Rigid ix (Just name)) node root
-              return root
-        handleAbs (Scope mbound) = do
-          absNode <- newNode NodeAbs
-          pair@(name, node) <- case mbound of
-            name :> mt -> (name,) <$> mt
-            name :~ mt -> (name,) <$> mt
-          rnode <- local (pair:) mr
-          newEdge (GBind Explicit 1 (Just name)) node absNode
-          newEdge (GSub 1) absNode node
-          newEdge (GSub 2) absNode rnode
-          return absNode
-    go (TypInjF _) = fail "type annotation is not supported"
 
 -- | simplify, forall (a <> g). a == g
 -- FIXME: complete the ruleset

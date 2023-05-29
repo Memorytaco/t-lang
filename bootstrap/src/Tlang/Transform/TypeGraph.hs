@@ -21,11 +21,11 @@ where
 import Tlang.Unification.Type
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
+import Tlang.Extension
 import Tlang.Generic ((:+:) (..), (:<:))
 
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, ask, local)
-import Control.Applicative (Const (..))
 import Control.Monad (forM, foldM)
 import Control.Monad.Identity (Identity (..))
 
@@ -36,7 +36,6 @@ import Data.Text (Text)
 -- ** for type
 import qualified Tlang.AST.Type as Type
 import Tlang.AST.Type (Bound (..))
-import Tlang.Extension.Type
 
 -- ** for signature
 import Data.Kind (Constraint, Type)
@@ -218,14 +217,18 @@ instance LiteralGraph (Variant label) Int where
         ]
     return (root, g)
 
--- | handle `Literal'
-type instance ConstrainGraph (Const Literal) nodes edges info m
-  = ( Uno (NodeLit Integer) :<: nodes, Uno (NodeLit Text) :<: nodes
-    , HasState "node" Int m
-    )
-instance LiteralGraph (Const Literal) Int where
-  handleLiteral (Const (Nat i)) = node <&> hole' (Uno $ NodeLit i) <&> \v -> (v, Vertex v)
-  handleLiteral (Const (Str i)) = node <&> hole' (Uno $ NodeLit i) <&> \v -> (v, Vertex v)
+-- | handle `LiteralText'
+type instance ConstrainGraph LiteralText nodes edges info m
+  = ( Uno (NodeLit Text) :<: nodes, HasState "node" Int m)
+instance LiteralGraph LiteralText Int where
+  handleLiteral (LiteralText (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+
+-- | handle `LiteralNatural'
+type instance ConstrainGraph LiteralNatural nodes edges info m
+  = ( Uno (NodeLit Integer) :<: nodes, HasState "node" Int m)
+instance LiteralGraph LiteralNatural Int where
+  handleLiteral (LiteralNatural (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+
 
 -- *** handle Injectors
 

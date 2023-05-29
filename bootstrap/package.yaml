@@ -63,6 +63,7 @@ default-extensions:
 - DeriveFoldable
 - DeriveTraversable
 - DerivingVia
+- DeriveGeneric
 
 - StandaloneKindSignatures
 - StandaloneDeriving

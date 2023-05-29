@@ -13,15 +13,17 @@ import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.RWS (RWST, runRWST)
 import Control.Monad.Except
-import Data.Text (Text)
-import Text.Megaparsec
+import Data.Text (Text, pack)
+import Text.Megaparsec hiding (runParser)
+import Text.Megaparsec (eof)
 import Text.Megaparsec.Char
+import Data.Void (Void)
 
 import Interface.Config
 import Tlang.AST (Decl, Symbol)
-import qualified Tlang.Parser.Decl as Decl
-import qualified Tlang.Parser.Expr as Expr
-import qualified Tlang.Parser.Type as Type
+import Tlang.Parser (pratt, DeclareExtension, ParseExprType, WithExpr, ParseType)
+
+import Driver.Parser
 
 newtype ShellParser m a = ShellParser 
   { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () ShellState m) a
@@ -39,34 +41,32 @@ instance ShowErrorComponent ShellError where
   showErrorComponent = show
 
 data ShellRes txt
-  = LangDef (Decl (Decl.DeclareExtension Type.ParseType) Symbol) txt
-  | LangExpr Expr.ParseExprType txt
+  = LangDef (Decl (DeclareExtension ParseType) Symbol) txt
+  | LangExpr ParseExprType txt
   | LangNone
 
-toplevel :: MonadIO m => ShellParser m (ShellRes Text)
+toplevel :: forall m. MonadIO m => ShellParser m (ShellRes Text)
 toplevel = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- gets operators
   case command'maybe of
-    Just "def" -> do
-      res'either <- getInput >>= Decl.play id ops 
-      case res'either of
-        Left err -> do
-          liftIO $ putStrLn err
+    Just "def" ->
+      getInput >>= parseDecl ops eof "stdin" >>= \case
+        (Left err, _) -> do
+          liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
-        Right res -> LangDef res <$> getInput
+        (Right res, _) -> LangDef res <$> getInput
     Just cmd -> customFailure $ UnknownCommand cmd
     Nothing -> do
       resinput <- getInput
       case resinput of
         "" -> return LangNone
         _ -> do
-          res'either <- Expr.play ops resinput
-          case res'either of
-            Left err -> do
-              liftIO $ putStrLn err
+          runParser ops (pratt @(WithExpr _) eof (-100)) "stdin" resinput >>= \case
+            (Left err, _) -> do
+              liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
               customFailure SubParseError
-            Right res -> LangExpr res <$> getInput
+            (Right res, _) -> LangExpr res <$> getInput
 
 runToplevel
   :: MonadIO m

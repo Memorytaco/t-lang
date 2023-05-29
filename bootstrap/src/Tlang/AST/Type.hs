@@ -9,7 +9,7 @@ module Tlang.AST.Type
   , Variance (..)
 
   , Bound (..)
-  , Bounds
+  , Bounds (..)
   )
 where
 
@@ -98,7 +98,8 @@ data Bound name typ
 $(deriveBifunctor ''Bound)
 
 -- | type Prefixs qual name typ = [Prefix qual name typ]
-type Bounds name typ = [Bound name typ]
+newtype Bounds name typ = Bounds [Bound name typ] deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
+$(deriveBifunctor ''Bounds)
 
 -- | type variance
 data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)

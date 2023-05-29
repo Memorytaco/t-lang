@@ -17,6 +17,7 @@ import Tlang.Constraint
 import Tlang.Subst
 import Tlang.Generic (prj)
 import Tlang.Extension.Type as Ext
+import Tlang.Extension as Ext
 
 import qualified Data.Functor.Foldable as F (ListF (..))
 import Control.Monad
@@ -97,7 +98,7 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
         handleAll (Forall bound) = handleBound (injTypeBind @(Forall (Bound Integer)) . Forall) bound mt
         handleAbs (Scope bound) = handleBound (injTypeBind @(Scope (Bound Integer)) . Scope) bound mt
     go (TypLitF lit) = do
-      let handler = handleSum <$> (prj lit) <|> handleRec <$> (prj lit) <|> handleTup <$> (prj lit) <|> handleLit <$> (prj lit)
+      let handler = handleSum <$> (prj lit) <|> handleRec <$> (prj lit) <|> handleTup <$> (prj lit) <|> handleLitNat <$> (prj lit) <|> handleLitText <$> (prj lit)
       case handler of
         Just m -> m
         Nothing -> fail $ "Unrecognized literal"
@@ -105,7 +106,8 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
         handleSum (Variant trs) = injTypeLit @(Variant Label) . Variant <$> forM trs \(field, mt) -> (field,) <$> sequence mt
         handleRec (Record trs) = injTypeLit @(Record Label) . Record <$> forM trs \(field, mt) -> (field,) <$> mt
         handleTup (Tuple rs) = injTypeLit @Tuple . Tuple <$> sequence rs
-        handleLit (Const v) = pure . injTypeLit @(Const Ext.Literal) $ Const v
+        handleLitNat (LiteralNatural (getLiteral -> v)) = pure . injTypeLit @Ext.LiteralNatural $ LiteralNatural (Literal v)
+        handleLitText (LiteralText (getLiteral -> v)) = pure . injTypeLit @Ext.LiteralText $ LiteralText (Literal v)
     go (TypConF mt mtn) = TypCon <$> mt <*> sequence mtn
     go (TypInjF fmt) = TypInj <$> sequence fmt
     handleBound f bound mt =
@@ -398,7 +400,11 @@ genConstraint natural = pass . fmap (, nub) . cata go
     go TypPhtF = return . pure $ TypPht `annotate` KindType
     go (TypRepF r) = return . pure $ TypRep r `annotate` KindType
     go (TypLitF litr) = do
-      let handler = handleTup <$> (prj litr) <|> handleRec <$> (prj litr) <|> handleSum <$> (prj litr) <|> handleLit <$> (prj litr)
+      let handler = handleTup <$> (prj litr)
+                <|> handleRec <$> (prj litr)
+                <|> handleSum <$> (prj litr)
+                <|> handleLitNat <$> (prj litr)
+                <|> handleLitText <$> (prj litr)
       case handler of
         Just m -> m
         Nothing -> fail $ "Unknown literal"
@@ -415,7 +421,9 @@ genConstraint natural = pass . fmap (, nub) . cata go
             where
               collectField (ss, ts) (l, Nothing) = (ss, ts <> [(l, Nothing)])
               collectField (ss, ts) (l, Just (s, t :@ k)) = (ss <> (k :<> KindType : s), ts <> [(l, Just t)])
-        handleLit (Const lit) = return . pure $ injTypeLit @(Const Ext.Literal) (Const lit) `annotate` KindType  -- FIXME: add kind literal
+        -- FIXME: add kind literal
+        handleLitNat (LiteralNatural (getLiteral -> v)) = return . pure $ injTypeLit @Ext.LiteralNatural (LiteralNatural $ Literal v) `annotate` KindType
+        handleLitText (LiteralText (getLiteral -> v)) = return . pure $ injTypeLit @Ext.LiteralText (LiteralText $ Literal v) `annotate` KindType
     go (TypLetF binder mt) = do
       let handler = handleAbs <$> (prj binder) <|> handleAll <$> (prj binder)
       case handler of

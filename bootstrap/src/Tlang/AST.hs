@@ -1,11 +1,8 @@
 module Tlang.AST
-  ( module Expr
-  , module Module
-  , module Type
-  , module Operator
-  , module Decl
+  (
 
-  , None (..)
+    -- ** useful data
+    None (..)
   , Symbol (..)
   , Label (..)
 
@@ -16,6 +13,15 @@ module Tlang.AST
   , TypeAST
   , TypLitExt
   , TypBindExt
+
+    -- ** reexport of AST
+  , module Expr
+  , module Module
+  , module Type
+  , module Operator
+  , module Decl
+  , module Pattern
+
   )
 where
 
@@ -24,13 +30,15 @@ import Tlang.AST.Module as Module
 import Tlang.AST.Type as Type
 import Tlang.AST.Operator as Operator
 import Tlang.AST.Decl as Decl
+import Tlang.AST.Pattern as Pattern
+
 import Data.GraphViz
 import Tlang.Extension.Type as Ext
+import Tlang.Extension as Ext
 import Tlang.Generic
 import Tlang.Rep (DataRep, SeqT)
-import Data.Functor.Const (Const)
 
-type TypLitExt label = Tuple :+: Record label :+: Variant label :+: Const Ext.Literal
+type TypLitExt label = Tuple :+: Record label :+: Variant label :+: Ext.LiteralNatural :+: Ext.LiteralText
 type TypBindExt bound = Forall bound :+: Scope bound
 
 -- | original type definition
