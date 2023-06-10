@@ -7,8 +7,8 @@ module Tlang.AST.Pattern
     Pattern (..)
   , PatternF (..)
     -- | group pattern, pattern with different name binding strategies and logics
-  , GPattern (..)
-  , GPatternF (..)
+  , PatGroup (..)
+  , Grp (..)
   )
 where
 
@@ -17,41 +17,40 @@ import Data.Functor.Foldable (Recursive)
 import Tlang.TH (fixQ)
 
 -- | pattern matching syntax
-data Pattern lit inj name expr
+data Pattern lit ext label name expr
   = PatWild         -- ^ match every thing and ignore it
   | PatUnit         -- ^ unit pattern
-  | PatRef name     -- ^ bind content to a variable or match a constructor
-  | PatSym name     -- ^ match polymorphic variant symbol
-  | PatPrm (lit (Pattern lit inj name expr))   -- ^ match builtin primitives, its semantic is determined by extension
-  | PatTup [Pattern lit inj name expr]         -- ^ tuple pattern
-  | PatRec [(name, Pattern lit inj name expr)] -- ^ record pattern, open or closed
-  | PatSum (Pattern lit inj name expr)         -- ^ variant pattern, both for **polymorphic variant** and **closed variant**
-           [Pattern lit inj name expr]
-  | PatView expr (Pattern lit inj name expr)   -- ^ allow applying function to the argument and view results
-  | PatBind name (Pattern lit inj name expr)   -- ^ assign a name to the whold pattern
-  | PatAnno (inj (Pattern lit inj name expr))  -- ^ type annotation for pattern
-  deriving Functor
+  | PatVar name     -- ^ bind content to a variable or match a constructor
+  | PatPrm (lit (Pattern lit ext label name expr))    -- ^ match builtin primitives, its semantic is determined by extension
+  | PatTup [Pattern lit ext label name expr]          -- ^ tuple pattern
+  | PatRec [(label, Pattern lit ext label name expr)] -- ^ record pattern, open or closed
+  | PatSym label [Pattern lit ext label name expr]    -- ^ variant pattern, both for **polymorphic variant** and **closed variant**
+  | PatView expr (Pattern lit ext label name expr)    -- ^ allow applying function to the argument and view results
+  | PatBind name (Pattern lit ext label name expr)    -- ^ assign a name to the whold pattern
+  | PatExt (ext (Pattern lit ext label name expr))    -- ^ pattern extension
+  deriving (Functor, Foldable, Traversable)
 
-deriving instance (Show (lit (Pattern lit inj name expr)), Show (inj (Pattern lit inj name expr)), Show name, Show expr)
-  => Show (Pattern lit inj name expr)
-deriving instance (Eq (lit (Pattern lit inj name expr)), Eq (inj (Pattern lit inj name expr)), Eq name, Eq expr)
-  => Eq (Pattern lit inj name expr)
+deriving instance
+  ( Show (lit (Pattern lit ext label name expr))
+  , Show (ext (Pattern lit ext label name expr))
+  , Show name, Show expr, Show label)
+  => Show (Pattern lit ext label name expr)
+deriving instance
+  ( Eq (lit (Pattern lit ext label name expr))
+  , Eq (ext (Pattern lit ext label name expr))
+  , Eq name, Eq expr, Eq label)
+  => Eq (Pattern lit ext label name expr)
 
 -- | pattern group with logic combination
-data GPattern lit inj name expr
-  = Pattern (Pattern lit inj name expr)   -- ^ pattern for single field
-  | PatSeq [GPattern lit inj name expr]   -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
-  | PatGrp [GPattern lit inj name expr]   -- ^ __pat1, pat2, pat3__, match with multiple patterns simutaneously, capture all
-                                          -- ^ of them at a time. some special rules will be applied to it.
-                                          -- ^ thus, called pattern group.
-  deriving Functor
+data PatGroup a
+  = PatSeq [a] -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
+  | PatGrp [a] -- ^ __pat1, pat2, pat3__, match with multiple patterns simutaneously, capture all
+               -- ^ of them at a time. some special rules will be applied to it.
+               -- ^ thus, called pattern group.
+  deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
 
-deriving instance (Show (lit (Pattern lit inj name expr)), Show (inj (Pattern lit inj name expr)), Show name, Show expr)
-  => Show (GPattern lit inj name expr)
-deriving instance (Eq (lit (Pattern lit inj name expr)), Eq (inj (Pattern lit inj name expr)), Eq name, Eq expr)
-  => Eq (GPattern lit inj name expr)
+newtype Grp f a = Grp [f a] deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
 
 makeBaseFunctor $ fixQ [d|
-  instance (Traversable inj, Traversable lit) => Recursive (Pattern lit inj name expr)
-  instance (Traversable inj, Traversable lit) => Recursive (GPattern lit inj name expr)
+  instance (Functor ext, Functor lit) => Recursive (Pattern lit ext label name expr)
   |]

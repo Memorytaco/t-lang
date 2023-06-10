@@ -1,13 +1,10 @@
 {- | * Parser for type expression
-    TODO: add parser for type literal
 -}
 
 module Tlang.Parser.Type
-  (
-    WithType
-  , ParseType
+  ( WithType
 
-  , dataVariant
+  -- ** syntax group
   , record
   )
 where
@@ -17,158 +14,147 @@ import Tlang.Parser.Lexer
 
 import Tlang.AST
 
+import Data.Proxy (Proxy (..))
 import Data.Text (Text, pack)
 import Data.List (find)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Text.Megaparsec hiding (Label)
-import Control.Monad (void)
-import Control.Monad.Identity (Identity)
-import Tlang.Generic (inj)
-import Tlang.Helper.AST.Type (getTypeLit)
-import Tlang.Extension (Tuple (..), Forall (..), Variant (..), Record (..), Scope (..), Literal (..), LiteralNatural (..), LiteralText (..))
+import Tlang.Generic ((:<:) (..))
+import Tlang.Extension
+  ( Tuple (..), Forall (..), Variant (..), Record (..)
+  , Scope (..), Literal (..), LiteralNatural (..), LiteralText (..)
+  )
+import Control.Monad (when)
 
-import Capability.Reader (HasReader, ask)
-
-type ParseType = TypeAST Identity
+import Capability.Reader (HasReader, asks)
 
 -- | symbol for type parser
-data WithType (m :: Kind.Type -> Kind.Type)
+data WithType (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
+type TypeC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
-instance (MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m, ShowErrorComponent e)
-  => HasPratt (WithType m) ParseType m where
-  type Token (WithType m) ParseType = OperatorClass String ParseType
-  next _ = (OpRep . Left <$> syntax <?> "Type Pair Operator")
-       <|> (OpRep . Right <$> operator <?> "Type Operator")
-       <|> (OpNorm <$> lit <?> "Type Literal")
-       <|> (OpNorm <$> typNormal <?> "Type Name")
-      where
-        lit = nat <|> str
-        nat = TypLit . inj . LiteralNatural . Literal <$> integer <?> "Literal Natural"
-        str = TypLit . inj . LiteralText . Literal . pack <$> stringLiteral <?> "Literal String"
-        typNormal = identifier <&> TypRef . Symbol
-        withSpecial v@(l, r) = reservedOp (pack l) $> Left v
-                           <|> reservedOp (pack r) $> Right v
-        special = foldr1 (<|>) $ withSpecial
-              <$> [("(", ")"), ("[", "]"), ("<", ">"), ("{", "}")]
-        syntax  = reserved "forall" $> Left ("forall", "forall")
-              <|> reservedOp "\\" $> Left ("\\", "\\")
-              <|> special
+-- pratt @(WithType Void _ ("identifier" :- "operator" :- "group" :- Tuple)) @(TypeAST Identity) eof Go
 
-  peek witness = lookAhead (next witness)
+cons :: Type name cons bind inj rep -> Type name cons bind inj rep -> Type name cons bind inj rep
+cons (TypCon a as) rhs = TypCon a (as <> [rhs])
+cons a rhs = TypCon a [rhs]
 
-  getPower _ = \case
-    (OpNorm _) -> return (999, 999)
-    (OpRep (Left _)) -> return (999, 999)
-    (OpRep (Right op)) -> getOperator op <&> getBindPower
+-- | a specialised `return` for Semantic
+literal :: Monad m => Type name cons bind inj rep -> Semantic m (Type name cons bind inj rep)
+literal a = Semantic (const $ return a) (\_ left -> return $ cons left a) (return Infinite)
 
-  nud witness end = withOperator return \case
-    Left (Left (l, r)) -> do
-      case l of
-        "{" -> record
-        "<" -> variant
-        "forall" -> quantified end
-        "\\" -> abstract end
-        _ -> do ntok <- peek witness
-                matchPairOperator (Right ("(", ")")) ntok
-                  (next witness $> TypLit (inj $ Tuple [])) $ pratt @(WithType m) (void $ reservedOp (pack r)) (-100)
-    Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
-    Right s -> getOperator s >>= \(Operator assoc _ r op) ->
-      case assoc of
-        Infix -> fail $ "expect prefix or unifix operator but got infix operator " <> op
-        Postfix -> fail $ "expect prefix or unifix operator but got postfix operator " <> op
-        _ -> do right <- pratt @(WithType m) end r
-                return $ TypCon (TypRef $ Op op) [right]
+-- *** syntax group
 
-  led witness (lookAhead -> end) left = withOperator (return . apply left) \case
-    Right s -> getOperator s >>= \(Operator assoc _ r op) ->
-      case assoc of
-        Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
-        Infix -> case s of
-                  "*" -> pratt @(WithType m) end r >>= \right -> return
-                    case getTypeLit @Tuple right of
-                      Just (Tuple ls) -> TypLit . inj . Tuple $ left:ls
-                      Nothing -> TypLit . inj $ Tuple [left, right]
-                    -- TypTup ls -> return . TypTup $ left: ls
-                    -- right -> return $ TypTup [left, right]
-                  "->" -> TypCon (TypRef (Op "->")) . (left:) . pure <$> pratt @(WithType m) end r
-                  _ -> pratt @(WithType m) end r <&> TypCon (TypRef $ Op op) . (left:) . pure
-        _ -> return $ TypCon (TypRef $ Op op) [left]
-    Left (Left (l, r)) ->
-      case l of
-        "(" -> do
-          ntok <- peek witness
-          matchPairOperator (Right ("(", ")")) ntok
-            (next witness $> left `apply` TypLit (inj $ Tuple [])) $ pratt @(WithType m) (void $ reservedOp (pack r)) (-100) <&> apply left
-        "{" -> apply left <$> record
-        "<" -> apply left <$> variant
-        "forall" -> apply left <$> quantified end
-        "\\" -> apply left <$> abstract end
-        _   -> fail $ "Unrecognized " <> l <> ", It could be an internal error, please report to upstream."
-    Left (Right (l, r)) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
+record :: TypeC e m => (m () -> Power -> m (Type name cons bind inj rep)) -> m (Record Label (Type name cons bind inj rep))
+record parser = braces (sepBy1 pair (reservedOp ",")) <&> Record
+  where pair = do
+          name <- identifier <|> operator <&> Label
+          typ <- reservedOp ":" *> parser (lookAhead $ (reservedOp "}" <|> reservedOp ",") $> ()) Go
+          return (name, typ)
 
-apply :: Type name cons bind inj rep -> Type name cons bind inj rep -> Type name cons bind inj rep
-apply (TypCon v vs) r = TypCon v (vs <> [r])
-apply l r = TypCon l [r]
+-- | use type level
+instance ( PrattToken (WithType e m a) (Type name cons bind inj rep) m
+         , PrattToken (WithType e m as) (Type name cons bind inj rep) m
+         , TypeC e m
+         )
+  => PrattToken (WithType e m (a :- as)) (Type name cons bind inj rep) m where
+  tokenize _ parser end = try (tokenize (Proxy @(WithType e m a)) parser end)
+                      <|> tokenize (Proxy @(WithType e m as)) parser end
 
-quantified :: forall m e. (ShowErrorComponent e, MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => m () -> m ParseType
-quantified (lookAhead -> end) = do
-  let name = Symbol <$> identifier
-      boundTyp = pratt @(WithType m) (void . lookAhead $ reservedOp ")") (-100)
-      scopBound = do
-        tok <- name
-        op <- reservedOp "~" $> (:>) <|> reservedOp "=" $> (:~)
-        op tok <$> boundTyp
-      bound = parens scopBound
-          <|> (:> TypPht) <$> name
-  bounds <- bound `someTill` reservedOp "."
-  body <- pratt @(WithType m) end (-100)
-  return $ foldr ($) body (TypLet . inj . Forall <$> bounds)
+-- | most common identifier in `Type`
+instance (TypeC e m, name ~ Symbol)
+  => PrattToken (WithType e m "identifier") (Type name cons bind inj rep) m where
+  tokenize _ _ _ = do
+    name <- identifier <?> "Type Identifier"
+    if name `elem` ["forall"]
+       then fail $ "Unexpected reserved: " <> name
+       else return . literal . TypRef $ Symbol name
 
-abstract :: forall m e. (ShowErrorComponent e, MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => m () -> m ParseType
-abstract (lookAhead -> end) = do
-  let name = Symbol <$> identifier
-  bounds <- ((:> TypPht) <$> name) `someTill` reservedOp "."
-  body <- pratt @(WithType m) end (-100)
-  return $ foldr ($) body (TypLet . inj . Scope <$> bounds)
+-- | "operator" in type
+instance (TypeC e m, name ~ Symbol, HasReader "TypeOperator" [Operator String] m)
+  => PrattToken (WithType e m "operator") (Type name cons bind inj rep) m where
+  tokenize _ parser _ = do
+    op <- operator
+    when (op `elem` ["\\", "."]) do
+      fail $ "Unexpected reserved: " <> op
+    Operator fixity l r _ <- asks @"TypeOperator" (find (\(Operator _ _ _ n) -> n == op)) >>= \case
+      Just a -> return a
+      Nothing -> fail $ "Operator is not defined in type level: " <> op
+    let nud' end =
+          if fixity `elem` [Prefix, Unifix]
+             then parser end (Power r) <&> TypCon (TypRef $ Op op) . pure
+             else fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Prefix or Unifix"
+        led' end left =
+          case fixity of
+            Infix -> parser end (Power r) <&> TypCon (TypRef $ Op op) . (left:) . pure
+            Unifix -> return (TypCon (TypRef $ Op op) [left])
+            Postfix -> return (TypCon (TypRef $ Op op) [left])
+            _ -> fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
+    return (Semantic nud' led' (return $ Power l))
 
--- | record type parser
-record :: forall m e. (ShowErrorComponent e, MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => m ParseType
-record = do
-  let recordPair = do
-        name <- fmap Label $ identifier <|> operator
-        typ <- reservedOp ":" *> pratt @(WithType m) (lookAhead ((reservedOp "}" <|> reservedOp ",") $> ())) (-100)
-        return (name, typ)
-  fields <- sepBy1 recordPair (reservedOp ",") <* reservedOp "}"
-  return . TypLit . inj $ Record fields
+-- | enable "(any type expression)" group
+instance TypeC e m
+  => PrattToken (WithType e m "group") (Type name cons bind inj rep) m where
+  tokenize _ parser _ = parens (parser (lookAhead (reservedOp ")") $> ()) Go) <&> literal
 
--- | variant type parser
-variant :: forall m e. (ShowErrorComponent e, MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => m ParseType
-variant = do
-  let variantPair = do
-        name <- fmap Label $ identifier <|> operator
-        typ <- optional $ reservedOp ":" *> pratt @(WithType m) (lookAhead ((reservedOp ">" <|> reservedOp ",") $> ())) (-100)
-        return (name, typ)
-  fields <- sepBy1 variantPair (reservedOp ",") <* reservedOp ">"
-  return . TypLit . inj $ Variant fields
+-- | type level nat number
+instance (TypeC e m, LiteralNatural :<: cons)
+  => PrattToken (WithType e m "nat") (Type name cons bind inj rep) m where
+  tokenize _ _ _ = do
+    nat <- TypLit . inj . LiteralNatural . Literal <$> integer <?> "Natural Number"
+    return $ literal nat
 
--- | a specialized version used in type declaration context. see `Tlang.AST.Declaration`.
-dataVariant :: forall m e. (ShowErrorComponent e, MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => m () -> m ParseType
-dataVariant end = do
-  let variantPair = do
-        name <- fmap Label $ identifier <|> operator
-        isEnd <- lookAhead . optional $ void (reservedOp "|") <|> end
-        typ <- maybe
-                 (Just <$> pratt @(WithType m) (lookAhead $ void (reservedOp "|") <|> end) (-100))
-                 (const $ return Nothing) isEnd
-        return (name, typ)
-  fields <- sepBy1 variantPair (reservedOp "|") <* end
-  return . TypLit . inj $ Variant fields
+-- | type level str number
+instance (TypeC e m, LiteralText :<: cons)
+  => PrattToken (WithType e m "text") (Type name cons bind inj rep) m where
+  tokenize _ _ _ = do
+    str <- TypLit . inj . LiteralText . Literal . pack <$> stringLiteral <?> "Type Level String"
+    return $ literal str
 
-getOperator :: (MonadFail m, MonadParsec e Text m, HasReader "TypeOperator" [Operator String] m) => String -> m (Operator String)
-getOperator op = do
-  stat <- ask @"TypeOperator"
-  case find (\(Operator _ _ _ n) -> n == op) stat of
-    Just a -> return a
-    Nothing -> fail $ "Operator " <> op <> " is undefined in type level."
+-- -- | record literal for type
+instance (TypeC e m, Record Label :<: cons)
+  => PrattToken (WithType e m "record") (Type name cons bind inj rep) m where
+  tokenize _ parser _ = record parser <&> literal . TypLit . inj
 
+-- | variant literal for type
+instance (TypeC e m, Variant Label :<: cons)
+  => PrattToken (WithType e m "variant") (Type name cons bind inj rep) m where
+  tokenize _ parser _ = do
+    let pair = do
+          name <- identifier <|> operator <&> Label
+          typ <- optional $ reservedOp ":" *> (parser (lookAhead $ (reservedOp "," <|> reservedOp ">") $> ()) Go)
+          return (name, typ)
+    variant <- angles $ sepBy pair (reservedOp ",")
+            <&> TypLit . inj . Variant
+    return $ literal variant
+
+-- | tuple literal for type
+instance (TypeC e m, Tuple :<: cons)
+  => PrattToken (WithType e m "tuple") (Type name cons bind inj rep) m where
+  tokenize _ parser _ = do
+    tuple <- parens (sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
+          <&> TypLit . inj . Tuple
+    return $ literal tuple
+
+-- | `Forall` quantified type
+instance (TypeC e m, (Forall (Bound Symbol)) :<: bind)
+  => PrattToken (WithType e m "forall") (Type name cons bind inj rep) m where
+  tokenize _ parser end = do
+    let name = Symbol <$> identifier
+        bound = (:> TypPht) <$> name <|> parens do
+          name' <- name
+          op <- reservedOp "~" $> (:>) <|> reservedOp "=" $> (:~)
+          op name' <$> parser (lookAhead $ reservedOp ")" $> ()) Go
+    bounds <- reserved "forall" *> bound `someTill` reservedOp "."
+    body <- parser end Go
+    return . literal $ foldr ($) body (TypLet . inj . Forall <$> bounds)
+
+-- | `Scope` quantified type
+instance (TypeC e m, (Scope (Bound Symbol)) :<: bind)
+  => PrattToken (WithType e m "abstract") (Type name cons bind inj rep) m where
+  tokenize _ parser end = do
+    let name = Symbol <$> identifier
+        bound = (:> TypPht) <$> name
+    bounds <- reservedOp "\\" *> bound `someTill` reservedOp "."
+    body <- parser end Go
+    return . literal $ foldr ($) body (TypLet . inj . Scope <$> bounds)

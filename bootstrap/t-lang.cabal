@@ -1,6 +1,6 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.1.
+-- This file has been generated from package.yaml by hpack version 0.35.2.
 --
 -- see: https://github.com/sol/hpack
 
@@ -138,7 +138,6 @@ library
     , megaparsec
     , mtl
     , optparse-applicative
-    , parsec
     , recursion-schemes
     , tasty
     , template-haskell
@@ -200,7 +199,6 @@ executable t-lang-exe
     , megaparsec
     , mtl
     , optparse-applicative
-    , parsec
     , recursion-schemes
     , t-lang
     , tasty
@@ -264,7 +262,6 @@ test-suite t-lang-test
     , megaparsec
     , mtl
     , optparse-applicative
-    , parsec
     , recursion-schemes
     , t-lang
     , tasty

@@ -32,8 +32,8 @@ type PlayG r
 -- | Graph for handling type generated fro parser
 type PlayGP = PlayG (StandardRepType Symbol Label (Bound Symbol) Identity)
 
-newtype TypeToGraph name nodes edges m a = TypeToGraph
-  { runTypeToGraph ::
+newtype TypeToGraphM name nodes edges m a = TypeToGraphM
+  { runTypeToGraphM ::
       ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m) a
   } deriving newtype (Functor, Applicative, Monad)
     deriving ( HasSource "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))]
@@ -42,15 +42,17 @@ newtype TypeToGraph name nodes edges m a = TypeToGraph
     deriving (HasState "node" Int, HasSource "node" Int, HasSink "node" Int)
           via MonadState (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
 
-runToGraph :: ( ConstrainGraph cons nodes edges Int (TypeToGraph name nodes edges m)
-              , ConstrainGraph bind nodes edges Int (TypeToGraph name nodes edges m)
-              , ConstrainGraph inj nodes edges Int (TypeToGraph name nodes edges m)
+runToGraph :: ( ConstrainGraph cons nodes edges Int (TypeToGraphM name nodes edges m)
+              , ConstrainGraph bind nodes edges Int (TypeToGraphM name nodes edges m)
+              , ConstrainGraph inj nodes edges Int (TypeToGraphM name nodes edges m)
               , InjGraph inj Int, LiteralGraph cons Int, BinderGraph bind Int
               , Monad m, Ord (edges (Link edges))
               , Traversable inj, Traversable bind, Traversable cons
               , Uno (NodeRep rep) :<: nodes, Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
               , Uno NodeApp :<: nodes, Uno Sub :<: edges, Eq name
               )
-           => Int -> Type name cons bind inj rep -> m ((Hole nodes Int, CoreG nodes edges Int), Int)
-runToGraph seed t = runStateT (runReaderT (runTypeToGraph $ toGraph t) []) seed
+           => [(name, (Hole nodes Int, CoreG nodes edges Int))]
+           -> Int -> Type name cons bind inj rep
+           -> m ((Hole nodes Int, CoreG nodes edges Int), Int)
+runToGraph r seed t = runStateT (runReaderT (runTypeToGraphM $ toGraph t) r) seed
 

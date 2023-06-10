@@ -19,7 +19,6 @@ import Control.Monad (when, unless, forM, foldM)
 import Data.Functor ((<&>), ($>))
 import Capability.Error (HasThrow)
 import Capability.State (HasState)
-import Capability.Reader (HasReader, ask)
 import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy, intercalate)
 import Data.Set (toList)
@@ -171,7 +170,7 @@ type instance GraphConstraint (Uno NodeRec) n e i m
     )
 -- | unification for record node
 instance Uno NodeRec :~~: Int where
-  gunify unify (Uno (NodeRec s1), n1) a@(Hole tag _) = 
+  gunify unify (Uno (NodeRec s1), n1) a@(Hole tag _) =
     if isHole @(Uno NodeBot) a true || isHole @Histo a true then
       unify a (hole n1 . Uno $ NodeRec s1)
     else case prj @(Uno NodeRec) tag of
@@ -197,7 +196,7 @@ type instance GraphConstraint (Uno NodeApp) n e i m
     )
 -- | unification for variant node
 instance Uno NodeApp :~~: Int where
-  gunify unify (Uno (NodeApp s1), n1) a@(Hole tag _) = 
+  gunify unify (Uno (NodeApp s1), n1) a@(Hole tag _) =
     if isHole @(Uno NodeBot) a true || isHole @Histo a true then
       unify a (hole n1 . Uno $ NodeApp s1)
     else case prj @(Uno NodeApp) tag of

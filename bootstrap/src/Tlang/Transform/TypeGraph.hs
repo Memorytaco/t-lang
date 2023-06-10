@@ -57,13 +57,15 @@ class BinderGraph binder info | binder -> info where
 class LiteralGraph literal info | literal -> info where
   handleLiteral
     :: ConstrainGraph literal nodes edges info m
-    => literal (m (Hole nodes info, CoreG nodes edges info)) -> m (Hole nodes info, CoreG nodes edges info)
+    => literal (m (Hole nodes info, CoreG nodes edges info))
+    -> m (Hole nodes info, CoreG nodes edges info)
 
 -- | for handling type extension
 class InjGraph injector info | injector -> info where
   handleInj
     :: ConstrainGraph injector nodes edges info m
-    => injector (m (Hole nodes info, CoreG nodes edges info)) -> m (Hole nodes info, CoreG nodes edges info)
+    => injector (m (Hole nodes info, CoreG nodes edges info))
+    -> m (Hole nodes info, CoreG nodes edges info)
 
 -- ** definition for `:+:`
 type instance ConstrainGraph (f :+: g) nodes edges info m
@@ -97,10 +99,10 @@ toGraph
      , HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
      , ConstrainGraph cons nodes edges Int m, ConstrainGraph bind nodes edges Int m, ConstrainGraph inj nodes edges Int m
      , Eq name, Ord (edges (Link edges)), Traversable inj, Traversable bind, Traversable cons
-     -- nodes
+     -- nodes constraint
      , Uno (NodeRep rep) :<: nodes, Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
      , Uno NodeApp :<: nodes
-     -- edges
+     -- edges constraint
      , Uno Sub :<: edges
      )
   => Type.Type name cons bind inj rep -> m (Hole nodes Int, CoreG nodes edges Int)

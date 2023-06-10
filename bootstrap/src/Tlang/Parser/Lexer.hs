@@ -6,7 +6,7 @@ module Tlang.Parser.Lexer
   , parens, braces, brackets, angles
   , stringLiteral
   , commaSep, semiSep
-  , identifier, operator
+  , identifier, identifier', operator
   , reserved, reservedOp
   , symbol
   , string
@@ -44,16 +44,19 @@ operator = lexeme $ do
      then fail $ "unexpected reserved operator " <> show ops
      else return ops
 
-identifier :: (TextParser e m, MonadFail m) => m String
-identifier = lexeme $ do
+identifier' :: (TextParser e m, MonadFail m) => m String
+identifier' = do
   name <- do
     c <- char '_' <|> letterChar <?> "identifier prefix"
     cs <- many (char '_' <|> alphaNumChar) <?> "identifier suffix"
     return (c : cs)
-  let reservedNames = ["fn", "let", "in", "data", "module" ]
+  let reservedNames = ["let", "in", "data", "module"]
   if name `notElem` reservedNames
      then return name
      else fail $ "unexpected reserved name " <> name
+
+identifier :: (TextParser e m, MonadFail m) => m String
+identifier = lexeme identifier'
 
 float :: (TextParser e m, RealFloat a) => m a
 float = lexeme Lex.float

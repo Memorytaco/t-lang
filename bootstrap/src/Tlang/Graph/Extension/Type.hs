@@ -11,6 +11,7 @@ module Tlang.Graph.Extension.Type
   , NodeRep (..)
   , NodeTup (..)
   , NodeBot (..)
+  , NodeArr (..)
 
   , G (..)
   , P (..)  -- ^ permission
@@ -53,11 +54,14 @@ newtype NodeTup = NodeTup Integer deriving (Show, Eq, Ord)
 -- | bottom node, anonymous local type variable
 data NodeBot = NodeBot deriving (Show, Eq, Ord)
 
+-- | arrow node, for ->
+data NodeArr = NodeArr deriving (Show, Eq, Ord)
+
 -- *** Constraint node
 
 -- | `G` node, represents one level of generalization.
 -- the integer indicates how many instances it now has.
-newtype G = G Integer deriving (Show, Eq)
+newtype G = G Integer deriving (Show, Eq, Ord)
 
 -- ** Edge definition
 

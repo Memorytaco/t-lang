@@ -19,17 +19,15 @@ import Text.Megaparsec.Char
 import Data.Void (Void)
 
 import Interface.Config
-import Tlang.AST (Decl, Symbol)
-import Tlang.Parser (pratt, DeclareExtension, ParseExprType, WithExpr, ParseType)
+import Tlang.Parser (runDSL)
 
 import Driver.Parser
 
-newtype ShellParser m a = ShellParser 
+newtype ShellParser m a = ShellParser
   { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () ShellState m) a
-  } deriving (Functor, Applicative, Monad, MonadState ShellState, MonadReader ShellConfig, MonadIO, MonadFail)
-    deriving newtype (Alternative, MonadPlus)
-
-deriving instance MonadParsec ShellError Text (ShellParser m)
+  } deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
+    deriving newtype (MonadState ShellState, MonadReader ShellConfig)
+    deriving newtype (MonadPlus, Alternative, MonadParsec ShellError Text)
 
 data ShellError
   = UnknownCommand String
@@ -39,12 +37,12 @@ data ShellError
 instance ShowErrorComponent ShellError where
   showErrorComponent = show
 
-data ShellRes txt
-  = LangDef (Decl (DeclareExtension ParseType) Symbol) txt
-  | LangExpr ParseExprType txt
+data ShellRes decl expr txt
+  = LangDef decl txt
+  | LangExpr expr txt
   | LangNone
 
-toplevel :: forall m. MonadIO m => ShellParser m (ShellRes Text)
+toplevel :: forall m. MonadIO m => ShellParser m (ShellRes PredefDeclVal PredefExprVal Text)
 toplevel = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- gets operators
@@ -61,7 +59,7 @@ toplevel = do
       case resinput of
         "" -> return LangNone
         _ -> do
-          runParser ops (pratt @(WithExpr _) eof (-100)) "stdin" resinput >>= \case
+          driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" resinput >>= \case
             (Left err, _) -> do
               liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
               customFailure SubParseError
@@ -72,5 +70,5 @@ runToplevel
   => ShellConfig
   -> ShellState
   -> Text
-  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes Text), ShellState, ())
+  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes PredefDeclVal PredefExprVal Text), ShellState, ())
 runToplevel r s txt = runRWST (runParserT (getShellParser toplevel) "stdin" txt) r s

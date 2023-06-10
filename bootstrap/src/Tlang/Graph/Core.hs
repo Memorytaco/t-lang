@@ -122,7 +122,7 @@ link' = Link . inj
 hole :: sub :<: sup => info -> sub (Hole sup info) -> Hole sup info
 hole info v = Hole (inj v) info
 hole' :: sub :<: sup => sub (Hole sup info) -> info -> Hole sup info
-hole' a b = hole b a
+hole' v info = hole info v
 {-# INLINE hole' #-}
 
 infixl 5 -<, >-, -<<, >>-

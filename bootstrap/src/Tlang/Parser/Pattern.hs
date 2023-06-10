@@ -1,10 +1,7 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
 module Tlang.Parser.Pattern
   (
     -- ** pattern parser handler
     WithPattern
-  , ParsePattern
-  , ParsePatternType
   )
 where
 
@@ -13,152 +10,149 @@ import Tlang.Parser.Lexer
 
 import Tlang.AST
 
-import Text.Megaparsec
+import Text.Megaparsec hiding (Label)
 import Text.Megaparsec.Char (char)
-import Control.Monad (void)
-import Data.Text (Text, pack, unpack)
+import Text.Megaparsec.Debug (MonadParsecDbg (..), dbg')
+import Data.Text (Text, pack)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Data.List (find)
-import Tlang.Generic ((:+:), (:<:) (..))
+import Tlang.Generic ((:<:) (..))
 import Tlang.Extension (LiteralText (..), LiteralInteger (..), LiteralNumber (..), Literal (..))
-import Capability.Reader (HasReader, ask)
+import Capability.Reader (HasReader, asks)
 
-import qualified Tlang.Parser.Type as TypParser
+-- | the `a` is where to define and use syntax
+data WithPattern (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
+type PatternC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
-type ParsePattern typ e = Pattern (LiteralInteger :+: LiteralText :+: LiteralNumber) ((:@) typ) Symbol e
-type ParsePatternType e = ParsePattern TypParser.ParseType e
+cons :: MonadFail m
+     => Pattern lit ext label name expr -> Pattern lit ext label name expr -> m (Pattern lit ext label name expr)
+cons (PatSym a as) v = return $ PatSym a (as <> [v])
+cons _ _ = fail "Expect a variant symbol on lhs"
 
--- | the proxy and e will allow parsing nested expression
-data WithPattern (m :: Kind.Type -> Kind.Type) (proxy :: any) (e :: Kind.Type)
+-- | a specialised `return` for Semantic
+literal :: MonadFail m => Pattern lit ext label name expr -> Semantic m (Pattern lit ext label name expr)
+literal a = Semantic (const $ return a) (\_ left -> cons left a) (return Infinite)
 
-instance
-  ( MonadFail m, ShowErrorComponent err
-  , MonadParsec err Text m, HasPratt proxy e m
-  , HasReader "PatternOperator" [Operator String] m
-  , HasReader "TypeOperator" [Operator String] m
-  , Show e
-  )
-  => HasPratt (WithPattern m proxy e) (ParsePatternType e) m where
-  type Token (WithPattern m proxy e) (ParsePatternType e) = OperatorClass String (Either e (ParsePatternType e))
-  next _ = try (OpNorm . Right <$> wild <?> "Wild Pattern")
-       <|> (OpNorm . Left  <$> try (pratt @proxy (void . lookAhead $ reservedOp "->") (-100)) <?> "View Expression")
-       <|> (OpNorm . Right <$> variable <?> "Identifier")
-       <|> (OpRep . Left  <$> special <?> "Pair Operator")
-       <|> try (OpRep . Right <$> (syms <|> try operator) <?> "Pattern Operator")
-       <|> (OpNorm . Right <$> vlabel <?> "Variant Label")
-       <|> (OpNorm . Right <$> num <?> "Literal Match Number")
-       <|> (OpNorm . Right <$> str <?> "Literal Match String")
-      where
-        variable = (char '?' <|> char '!') *> identifier <&> PatRef . Symbol
-        vlabel = identifier <&> PatSym . Symbol
-        wild = symbol "_" $> PatWild <* notFollowedBy identifier
-        num = try floating <|> nat
-        nat = integer <&> PatPrm . inj . LiteralInteger . Literal
-        floating = float <&> PatPrm . inj . LiteralNumber . Literal
-        str = stringLiteral <&> PatPrm . inj . LiteralText . Literal . pack
-        withSpecial v@(l, r) = (reservedOp (pack l) <|> reserved (pack l)) $> Left v
-                           <|> (reservedOp (pack r) <|> reserved (pack r)) $> Right v
-        special = foldr1 (<|>) $ withSpecial <$> [("(", ")"), ("{", "}")]
-        syms = fmap unpack . foldl1 (<|>) $ reservedOp <$> [":", "@", "->"]
+-- * compound syntax
 
-  peek witness = lookAhead $ next witness
+instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
+         , PrattToken (WithPattern e m as) (Pattern lit ext label name expr) m
+         , PatternC e m
+         )
+  => PrattToken (WithPattern e m (a :- as)) (Pattern lit ext label name expr) m where
+  tokenize _ parser end = try (tokenize (Proxy @(WithPattern e m a)) parser end)
+                      <|> tokenize (Proxy @(WithPattern e m as)) parser end
 
-  getPower _ = \case
-    (OpNorm _) -> return (999, 999)
-    (OpRep (Left _)) -> return (999, 999)
-    (OpRep (Right op)) -> getOperator op <&> getBindPower
+instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
+         , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
+  => PrattToken (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
+  tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
+                        $ tokenize (Proxy @(WithPattern e m a)) parser end
 
-  nud _ end = withOperator (either (patternView @proxy end) return) \case
-    (Left (Left  (l, r))) -> case l of
-      "{" -> record @proxy @e
-      "->" -> fail "view pattern projector should be paired with expression: expression -> pat"
-      _ -> patUnit <|> try (tuple @proxy @e)
-                   <|> (pratt  @(WithPattern m proxy e) (void . lookAhead . reservedOp $ pack r) (-100) <* reservedOp (pack r))
-    (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
-    (Right s) -> getOperator s >>= \op@(Operator assoc _ r _) ->
-      case assoc of
-        Infix -> fail $ "expect prefix or unifix operator but got infix operator " <> show op
-        Postfix -> fail $ "expect prefix or unifix operator but got postfix operator " <> show op
-        _ -> do right <- pratt @(WithPattern m proxy e) end r
-                return $ PatSum (PatRef $ Op s) [right]
+instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
+         , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
+  => PrattToken (msg ?- WithPattern e m a) (Pattern lit ext label name expr) m where
+  tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
+                        $ tokenize (Proxy @(WithPattern e m (msg ?- a))) parser end
 
-  led _ end left = withOperator (either (patternView @proxy end) (patternSum @e left)) \case
-    (Left (Left  (l, r))) -> case l of
-      "{" -> record @proxy @e >>= patternSum @e left
-      _ ->  patUnit
-        <|> try (tuple @proxy @e)
-        <|> (pratt @(WithPattern m proxy e) (void . lookAhead . reservedOp $ pack r) (-100) <* reservedOp (pack r))
-           >>= patternSum @e left
-    (Left (Right (l, r))) -> fail $ "mismatched operator " <> show r <> ", forget " <> show l <> " ?"
-    (Right s) -> getOperator s >>= \(Operator assoc _ r _) ->
-      case assoc of
-        Prefix -> fail $ "expect unifix, postfix or infix operator but got prefix operator " <> s
-        Infix -> case s of
-          "@" -> case left of
-              PatWild -> PatBind (Symbol "_") <$> pratt @(WithPattern m proxy e) end r
-              PatRef name -> PatBind name <$> pratt @(WithPattern m proxy e) end r
-              _ -> fail "expect plain identifier on the left of '@' for binder syntax"
-          "->" -> fail "view pattern projector should be paired with expression: expression -> pat"
-          ":" -> case left of
-              PatAnno _ -> fail $ "Can't annotate again for pattern, " <> show left
-              -- PatSym _ -> fail "Can't annotate symbol for polymorphic variant"
-              _ -> do PatAnno . (left :@) <$> pratt @(TypParser.WithType m) (lookAhead end) (-100)
-          _ -> do right <- pratt @(WithPattern m proxy e) end (-100)
-                  return $ PatSum (PatRef $ Op s) [left, right]
-        _ -> return $ PatSum (PatRef $ Op s) [left]
+instance ( ParserDSL (WithPattern e m a) (Pattern lit ext label name expr) m
+         , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
+  => ParserDSL (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
+  syntax _ end = dbg' (symbolVal $ Proxy @msg)
+               $ syntax (Proxy @(WithPattern e m a)) end
 
-patternView
-  :: forall proxy e m err.
-    ( MonadFail m, ShowErrorComponent err
-    , MonadParsec err Text m
-    , HasPratt (WithPattern m proxy e) (ParsePatternType e) m
-    )
-  => m () -> e -> m (ParsePatternType e)
-patternView end e = reservedOp "->" *> pratt @(WithPattern m proxy e) end (-100) <&> PatView e
+-- | wild pattern
+instance PatternC e m
+  => PrattToken (WithPattern e m "wild") (Pattern lit ext label name expr) m where
+  tokenize _ _ _ = reserved "_" $> literal PatWild <?> "Wild pattern"
 
-patternSum :: forall e m. (MonadFail m)
-           => ParsePatternType e -> ParsePatternType e -> m (ParsePatternType e)
-patternSum left right =
-  case left of
-    PatRef _ -> return $ PatSum left [right]
-    PatSym _ -> return $ PatSum left [right]
-    PatSum v vs -> return $ PatSum v (vs <> [right])
-    _ -> fail "expect sum pattern, but it is not"
+-- | variable binding pattern
+instance (PatternC e m, name ~ Symbol)
+  => PrattToken (WithPattern e m "variable") (Pattern lit ext label name expr) m where
+  tokenize _ _ _ = do
+    var <- (char '?' <|> char '!') *> identifier <&> PatVar . Symbol
+    return $ literal var
 
-record :: forall proxy e m err. ( MonadFail m, ShowErrorComponent err
-  , MonadParsec err Text m, HasPratt proxy e m, HasPratt (WithPattern m proxy e) (ParsePatternType e) m)
-       => m (ParsePatternType e)
-record = do
-  let rlabel = Symbol <$> identifier <|> Op <$> operator
-      lpattern = pratt @(WithPattern m proxy e) (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
-      field = (,) <$> rlabel <*> (reservedOp "=" *> lpattern)
-  sections <- sepBy1 field (reservedOp ",")
-  void $ reservedOp "}"
-  return (PatRec sections)
+-- | group operator for pattern
+instance PatternC e m
+  => PrattToken (WithPattern e m "group") (Pattern lit ext label name expr) m where
+  tokenize _ parser _ = parens (parser (lookAhead $ reservedOp ")" $> ()) Go) <&> literal
 
--- | parser group for parenthesis
-tuple
-  :: forall proxy e err m.
-    ( MonadFail m, ShowErrorComponent err, MonadParsec err Text m, Show e
-    , HasPratt proxy e m
-    , HasReader "TypeOperator" [Operator String] m
-    , HasReader "PatternOperator" [Operator String] m)
-    => m (ParsePatternType e)
-tuple = do
-  p1 <- pratt @(WithPattern m proxy e) (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100) <* reservedOp ","
-  ps <- sepBy1 (pratt @(WithPattern m proxy e) (void . lookAhead $ reservedOp "," <|> reservedOp ")") (-100)) (reservedOp ",") <* reservedOp ")"
-  return $ PatTup (p1: ps)
-patUnit :: (MonadParsec err Text m, ShowErrorComponent err) => m (ParsePatternType e)
-patUnit = reservedOp ")" $> PatUnit
+-- | symbol constructor
+instance (PatternC e m, label ~ Label)
+  => PrattToken (WithPattern e m "variant") (Pattern lit ext label name expr) m where
+  tokenize _ _ _ = identifier <&> literal . flip PatSym [] . Label  <?> "Constructor pattern"
 
-getOperator :: (MonadFail m, HasReader "PatternOperator" [Operator String] m)
-            => String -> m (Operator String)
-getOperator "@" = return $ Operator Infix 999 999 "@"
-getOperator "->" = return $ Operator Infix (-10) (-15) "->"
-getOperator ":" = return $ Operator Infix (-15) (-20) ":"
-getOperator op = do
-  stat <- ask @"PatternOperator"
-  case find (\(Operator _ _ _ n) -> n == op) stat of
-    Just a -> return a
-    Nothing -> fail $ "Operator " <> show op <> " is undefined in term level."
+-- | operator symbol constructor
+instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator String] m)
+  => PrattToken (WithPattern e m "operator") (Pattern lit ext label name expr) m where
+  tokenize _ parser _ = do
+    pos <- getOffset
+    op <- operator
+    Operator fixity l r _ <- asks @"PatternOperator" (find (\(Operator _ _ _ n) -> n == op)) >>= \case
+      Just a -> return a
+      Nothing -> setOffset pos >> do fail $ "Operator is not defined in term level: " <> op
+    let nud' end =
+          if fixity `elem` [Prefix, Unifix]
+             then parser end (Power r) <&> PatSym (Label op) . pure
+             else fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Prefix or Unifix"
+        led' end left =
+          case fixity of
+            Infix -> parser end (Power r) <&> PatSym (Label op) . (left:) . pure
+            Unifix -> return (PatSym (Label op) [left])
+            Postfix -> return (PatSym (Label op) [left])
+            _ -> fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
+    return (Semantic nud' led' (return $ Power l))
+
+-- | `@` pattern
+instance (PatternC e m, name ~ Symbol, label ~ Label, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
+  => PrattToken (WithPattern e m "binding") (Pattern lit ext label name expr) m where
+  tokenize _ parser _ = do
+    var <- (char '?' <|> char '!') *> fmap Symbol identifier' <* char '@'
+    pat <- parens (parser (lookAhead $ reservedOp ")" $> ()) Go)
+       <|> reserved "_" $> PatWild  -- wild pattern
+       <|> (char '?' <|> char '!') *> fmap (PatVar . Symbol) identifier  -- variable
+       <|> PatSym . Label <$> identifier <*> return []  -- a constructor
+       <|> (float <&> PatPrm . inj . LiteralNumber . Literal)
+       <|> (integer <&> PatPrm . inj . LiteralInteger . Literal)
+       <|> (stringLiteral <&> PatPrm . inj . LiteralText . Literal . pack)
+       <|> (fmap PatTup . parens $ sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
+    return $ literal (PatBind var pat)
+
+-- | record pattern
+instance (PatternC e m, label ~ Label)
+  => PrattToken (WithPattern e m "record") (Pattern lit ext label name expr) m where
+  tokenize _ parser _ = do
+    let field = identifier <|> operator <&> Label
+        pair = (,) <$> field <*> (reservedOp "=" *> parser (lookAhead $ (reservedOp "," <|> reservedOp "}") $> ()) Go)
+    sections <- braces $ sepBy1 pair (reservedOp ",")
+    return $ literal (PatRec sections)
+
+-- | tuple pattern
+instance (PatternC e m)
+  => PrattToken (WithPattern e m "tuple") (Pattern lit ext label name expr) m where
+  tokenize _ parser _ = do
+    tup <- try (symbol "(" >> symbol ")" $> PatUnit)
+       <|> (fmap PatTup . parens $ sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
+    return $ literal tup
+
+-- | view pattern
+instance (PatternC e m, ParserDSL proxy expr m)
+  => PrattToken (WithPattern e m (Layer "view" proxy expr)) (Pattern lit ext label name expr) m where
+  tokenize _ parser end = do
+    e <- runDSL @proxy (lookAhead (reservedOp "->") $> ()) <* reservedOp "->"
+    pat <- parser end Go
+    return $ literal (PatView e pat)
+
+-- ** extension for pattern
+
+-- | type annotation for pattern
+instance (PatternC e m, (:@) typ :<: ext, PrattToken proxy typ m)
+  => PrattToken (WithPattern e m (Layer "annotation" proxy typ)) (Pattern lit ext label name expr) m where
+  tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
+    where
+      nud' _ = fail "Pattern annotation expect a pattern first"
+      led' end left = do
+        typ :: typ <- pratt @proxy end Go
+        return . PatExt . inj $ left :@ typ

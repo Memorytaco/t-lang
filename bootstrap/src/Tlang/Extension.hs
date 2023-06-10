@@ -14,6 +14,7 @@ module Tlang.Extension
     -- ** reexport other extensions
   , module Type
   , module Expr
+  , module Decl
   )
 where
 
@@ -22,6 +23,7 @@ import Data.List (intercalate)
 
 import Tlang.Extension.Type as Type
 import Tlang.Extension.Expr as Expr
+import Tlang.Extension.Decl as Decl
 
 -- ** a cluster of literals
 

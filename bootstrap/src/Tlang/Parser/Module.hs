@@ -1,10 +1,8 @@
 module Tlang.Parser.Module
-  ( 
-  
+  (
+  -- ** module relevant parser
     module'
-  , ParseModuleType
   , moduleHeader
-
   )
 where
 
@@ -26,14 +24,15 @@ import Control.Applicative (liftA2)
 
 import Capability.State (HasState, modify)
 
-type ParseModuleType decls = Module decls Symbol
-
 moduleName :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m ModuleName
 moduleName = liftA2 ModuleName init last <$> (Frag <$> identifier) `sepBy1` string "/"
 
 -- | parsing module header
+--
 -- a header is composed by
+--
 -- 1. a module name
+--
 -- 2. use statements
 moduleHeader :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m)
              => m ([Use Symbol], ModuleName)
@@ -85,7 +84,6 @@ module' ms declaraton = do
     itemOf = (??) @UserItem
     lookUpModule :: ModuleName -> [Module decls Symbol] -> Maybe (Module decls Symbol)
     lookUpModule name = find $ (== name) . mmName
-    -- putIntoEnv :: (Monad m) => UserItem a -> StateT ([Operator String], [Operator String]) m ()
     putIntoEnv (UserItem _ ops _) = forM_ ops \op@(Operator _ _ _ s) ->
       if head s == ':' then modify @"TypeOperator" (op:)
                        else modify @"TermOperator" (op:)

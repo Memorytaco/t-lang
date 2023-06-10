@@ -138,6 +138,7 @@ instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
 infixr 5 ::>
 
 makeBaseFunctor $ fixQ [d|
-  instance (Traversable inj, Traversable bind, Traversable cons) => Recursive (Type name cons bind inj rep)
-  instance (Traversable f) => Recursive (Kind f name)
+  instance (Functor inj, Functor bind, Functor cons) => Recursive (Type name cons bind inj rep)
+  instance (Functor f) => Recursive (Kind f name)
   |]
+deriving instance (Show name, Show rep, Show r, Show (cons r), Show (bind r), Show (inj r)) => Show (TypeF name cons bind inj rep r)

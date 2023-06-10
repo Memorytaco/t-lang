@@ -1,20 +1,28 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Tlang.Parser.Decl
-  ( declaration
-  , DeclareExtension
+  (
+
+  -- ** direct method to define `Decl`
+    declaration
+
+  -- ** Decl related type level DSL
+  , WithDecl
+  , WithDataDef
   )
 where
 
-import Tlang.AST
-import Tlang.Parser.Class (pratt)
+import Tlang.AST hiding (Type)
+import qualified Tlang.AST as AST (Type)
+
+import Tlang.Parser.Class
 import Tlang.Parser.Lexer
-import Tlang.Parser.Expr (ParseExprType, WithExpr)
-import Tlang.Parser.Type (ParseType, WithType)
 
 import Control.Monad (void)
 import Data.Functor ((<&>), ($>))
 import Data.Text (Text)
-import Text.Megaparsec
+import Text.Megaparsec hiding (Label)
 import Data.Maybe (fromMaybe)
+import Data.Kind (Type)
 
 import Tlang.Extension.Decl
 import Tlang.Generic
@@ -30,103 +38,134 @@ type ParserM e m =
   , HasReader "PatternOperator" [Operator String] m
   )
 
-userFFI :: forall m e decls. (ParserM e m, UserFFI ParseType :<: decls)
-        => m () -> m (Decl decls Symbol)
-userFFI end = do
-  void $ reserved "foreign"
-  items <- optional $ brackets (commaSep ffItem)
-  name <- Symbol <$> identifier
-  void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
-  sig <- pratt @(WithType m) (lookAhead end) (-100)
-  end $> declare (UserFFI (fromMaybe [] items) sig name)
-  where
-    ffItem = str <|> int <|> sym <|> list <|> record
-      where
-        str = FFItemS <$> stringLiteral
-        int = FFItemI <$> integer
-        sym = FFItemF <$> identifier <*> many ffItem
-        list = FFItemA <$> brackets (commaSep ffItem)
-        record =
-          let field = (,) <$> stringLiteral <*> (reservedOp "=" >> ffItem)
-           in braces $ FFItemR <$> commaSep field
+data WithDecl (e :: Type) (m :: Type -> Type) (a :: k)
 
-userValue :: forall e m decls. (ParserM e m, UserValue ParseExprType (Maybe ParseType) :<: decls)
-          => m () -> m (Decl decls Symbol)
-userValue end = do
-  void $ reserved "let"
-  name <- Symbol <$> identifier <|> Op <$> operator
-  sig <- optional $ reservedOp ":" *> pratt @(WithType m) ((void . lookAhead $ reservedOp "=") <|> end) (-100)
-  void $ reservedOp "=" <|> fail "let declaration requires a value definition"
-  expr <- pratt @(WithExpr m) (lookAhead end) (-100)
-  end $> declare (UserValue expr sig name)
+-- | define sequence operator
+instance (ParserM e m, ParserDSL (WithDecl e m a) (Decl decl info) m, ParserDSL (WithDecl e m b) (Decl decl info) m)
+  => ParserDSL (WithDecl e m (a :- b)) (Decl decl info) m where
+  syntax _ end = try (runDSL @(WithDecl e m a) end) <|> runDSL @(WithDecl e m b) end
 
-userType :: forall e m decls. (ParserM e m, UserType ParseType [Bound Symbol ParseType] :<: decls)
-         => m () -> m (Decl decls Symbol)
-userType end = do
-  void $ reserved "type"
-  alias <- name
-  vars <- manyTill typVar (void $ reservedOp "=")
-  body <- pratt @(WithType m) (lookAhead end) (-100)
-  end $> declare (UserType body vars alias)
-  where
-    name = Symbol <$> identifier <|> do
-      op <- lookAhead operator
-      if head op == ':'
-         then Op <$> operator
-         else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    typVar :: m (Bound Symbol ParseType)
-    typVar = identifier <&> (:> TypPht) . Symbol
+-- | foreign interface
+instance (ParserM e m, PrattToken proxy typ m, info ~ Symbol, UserFFI typ :<: decl)
+  => ParserDSL (WithDecl e m (Layer "ffi" proxy typ)) (Decl decl info) m where
+  syntax _ end = do
+    void $ reserved "foreign"
+    items <- optional $ brackets (commaSep ffItem)
+    name <- Symbol <$> identifier
+    void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
+    sig <- pratt @proxy @typ (lookAhead end) Go
+    end $> declare (UserFFI (fromMaybe [] items) sig name)
+    where
+      ffItem = str <|> int <|> sym <|> list <|> record
+        where
+          str = FFItemS <$> stringLiteral
+          int = FFItemI <$> integer
+          sym = FFItemF <$> identifier <*> many ffItem
+          list = FFItemA <$> brackets (commaSep ffItem)
+          record =
+            let field = (,) <$> stringLiteral <*> (reservedOp "=" >> ffItem)
+             in braces $ FFItemR <$> commaSep field
 
-type UserDataExtension = UserEnum Label :+: UserStruct Label :+: UserCoerce :+: UserPhantom
+-- | top level definition
+instance (ParserM e m, PrattToken tProxy typ m, ParserDSL eProxy expr m, info ~ Symbol, UserValue expr (Maybe typ) :<: decl)
+  => ParserDSL (WithDecl e m (Layer "define" (tProxy :- eProxy) (typ :- expr))) (Decl decl info) m where
+  syntax _ end = do
+    void $ reserved "let"
+    name <- Symbol <$> identifier <|> Op <$> operator
+    sig <- optional $ reservedOp ":" *> pratt @tProxy @typ ((void . lookAhead $ reservedOp "=") <|> end) Go
+    void $ reservedOp "=" <|> fail "let declaration requires a value definition"
+    expr <- runDSL @eProxy @expr (lookAhead end)
+    end $> declare (UserValue expr sig name)
 
-userDataExt
-  :: forall exts e m
-  .  ( UserEnum Label :<: exts
-     , UserStruct Label :<: exts
-     , UserCoerce :<: exts
-     , UserPhantom :<: exts
-     , ParserM e m
-     )
-  => m () -> m (UserData [Bound Symbol ParseType] exts ParseType Symbol)
+instance ( ParserM e m, PrattToken proxy typ m
+         , info ~ Symbol, typ ~ AST.Type Symbol tcons tbind tinj trep
+         , UserType typ [Bound Symbol typ] :<: decl
+         )
+  => ParserDSL (WithDecl e m (Layer "type" proxy typ)) (Decl decl info) m where
+  syntax _ end = do
+    void $ reserved "type"
+    alias <- name
+    vars <- manyTill typVar (void $ reservedOp "=")
+    body <- pratt @proxy @typ (lookAhead end) Go
+    end $> declare (UserType body vars alias)
+    where
+      name = Symbol <$> identifier <|> do
+        op <- lookAhead operator
+        if head op == ':'
+           then Op <$> operator
+           else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
+      typVar :: m (Bound Symbol typ)
+      typVar = identifier <&> (:> TypPht) . Symbol
 
-userDataExt end = do
-  void $ reserved "data"
-  dataName <- name
-  vars <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
-  let dataOf :: forall ext _m fs a. (ext :<: fs, Monad _m)
-             => _m (ext a) -> _m (UserData [Bound Symbol ParseType] fs a Symbol)
-      dataOf = fmap $ injData vars dataName
-  dataDef <- dataOf userStruct <|> dataOf userEnums <|> dataOf userCoerce <|> dataOf (return UserPhantom)
-  end $> dataDef
-  where
-    typVar = (:> TypPht) . Symbol <$> identifier 
-    name = Symbol <$> identifier <|> do
-      op <- lookAhead operator
-      if head op == ':'
-         then Op <$> operator
-         else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
-    fieldName = identifier <|> operator <&> Tlang.AST.Label
-    userStruct = braces do
-      let field = do
-            constructor <- fieldName <* reservedOp ":"
-            typ <- pratt @(WithType m) (void . lookAhead $ reservedOp "," <|> reservedOp "}") (-100)
-            return (UserStruct constructor typ)
-      cs1 <- field <* optional (reservedOp ",")
-      css <-  commaSep field
-      return $ UserStructs cs1 css
-    userEnum = reservedOp "|" *> (UserEnum <$> fieldName <*> many field)
-      where
+data WithDataDef (e :: Type) (m :: Type -> Type) (a :: k)
+
+instance (ParserM e m, PrattToken proxy typ m, UserStruct Label :<: ext)
+  => ParserDSL (WithDataDef e m (Layer "struct" proxy typ)) (UserDataDef ext typ) m where
+  syntax _ end = braces do
+    let fieldName = identifier <|> operator <&> Label
+        field = do
+          constructor <- fieldName <* reservedOp ":"
+          typ <- pratt @proxy @typ (void . lookAhead $ reservedOp "," <|> reservedOp "}") Go
+          return (UserStruct constructor typ)
+    cs1 <- field <* optional (reservedOp ",")
+    css <- commaSep field
+    end $> UserDataDef (inj $ UserStructs cs1 css)
+
+instance (ParserM e m, PrattToken proxy typ m, UserEnum Label :<: ext, typ ~ AST.Type Symbol tcons tbind tinj trep)
+  => ParserDSL (WithDataDef e m (Layer "enum" proxy typ)) ((UserDataDef ext typ)) m where
+  syntax _ end = do
+    let fieldName = identifier <|> operator <&> Label
         field = TypRef . Symbol <$> identifier
-            <|> parens (pratt @(WithType m) (void . lookAhead $ reservedOp ")") (-100))
-    userEnums = UserEnums <$> userEnum <*> many userEnum
-    userCoerce = reservedOp "=" >> UserCoerce <$> pratt @(WithType m) (lookAhead end) (-100)
+            <|> parens (pratt @proxy @typ (void . lookAhead $ reservedOp ")") Go)
+        userEnum = reservedOp "|" >> UserEnum <$> fieldName <*> many field
+    UserEnums <$> userEnum <*> userEnum `manyTill` end <&> UserDataDef . inj
 
-userData
-  :: ( ParserM e m
-     , UserData [Bound Symbol ParseType] UserDataExtension ParseType :<: decls
-     )
-  => m () -> m (Decl decls Symbol)
-userData end = declare <$> userDataExt @UserDataExtension end
+instance (ParserM e m, PrattToken proxy typ m, UserCoerce :<: ext)
+  => ParserDSL (WithDataDef e m (Layer "coerce" proxy typ)) ((UserDataDef ext typ)) m where
+  syntax _ end = reservedOp "=" *> pratt @proxy @typ (lookAhead end $> ()) Go
+           <&> UserDataDef . inj . UserCoerce
+
+instance (ParserM e m, PrattToken proxy typ m, UserPhantom :<: ext)
+  => ParserDSL (WithDataDef e m (Layer "phantom" proxy typ)) ((UserDataDef ext typ)) m where
+  syntax _ end = end $> UserDataDef (inj UserPhantom)
+
+-- | sequence parsing
+instance ( ParserM e m
+         , ParserDSL (WithDataDef e m a) (UserDataDef ext typ) m
+         , ParserDSL (WithDataDef e m b) (UserDataDef ext typ) m
+         )
+  => ParserDSL (WithDataDef e m (a :- b)) (UserDataDef ext typ) m where
+  syntax _ end = runDSL @(WithDataDef e m a) end
+           <|> runDSL @(WithDataDef e m b) end
+
+instance ( ParserM e m
+         , info ~ Symbol, UserData [Bound Symbol typ] def :<: decl
+         , typ ~ AST.Type Symbol tcons tbind tinj trep
+         , ParserDSL proxy def m
+         )
+  => ParserDSL (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
+  syntax _ end = do
+    dataName <- reserved "data" *> name
+    vars :: [Bound Symbol typ] <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
+    body <- runDSL @proxy @def (lookAhead end)
+    end $> declare (UserData dataName vars body)
+    where
+    name = Symbol <$> identifier <|> do
+      op <- lookAhead operator
+      if head op == ':'
+         then Op <$> operator
+         else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> op <> "\" ?"
+    typVar = (:> TypPht) . Symbol <$> identifier
+
+instance ( ParserM e m, info ~ Symbol, UserItem :<: decl
+         , HasState "TermOperator" [Operator String] m
+         , HasState "TypeOperator" [Operator String] m
+         )
+  => ParserDSL (WithDecl e m "fixity") (Decl decl info) m where
+  syntax _ end = do
+    op@(Operator _ _ _ s) <- defFixity end
+    if head s == ':' then modify @"TypeOperator" (op:) else modify @"TermOperator" (op:)
+    return . declare $ UserItem (ItemSpace "default") [op] (Op s)
 
 defFixity :: ParserM e m => m () -> m (Operator String)
 defFixity end = (defUnifix <|> defInfix) <* end
@@ -137,7 +176,7 @@ defFixity end = (defUnifix <|> defInfix) <* end
          then fail "precedence number is restricted from 0 to 10, including 0 and 10"
          else pure (fixity * 10)
 
-    defUnifix = reserved "unifix" *> ((,) <$> precedence <*> precedence >>= \(lbp, rbp) -> Operator Unifix lbp rbp <$> operator)
+    defUnifix = reserved "unifix" *> ((,) <$> precedence <*> precedence >>= \(l, r) -> Operator Unifix l r <$> operator)
             <|> reserved "prefix" *> (precedence >>= \bp -> Operator Prefix bp bp <$> operator)
             <|> reserved "postfix" *> (precedence >>= \bp -> Operator Postfix bp bp <$> operator)
 
@@ -145,32 +184,27 @@ defFixity end = (defUnifix <|> defInfix) <* end
             <|> reserved "infixr" *> (precedence >>= \bp -> Operator Infix bp (bp-1) <$> operator)
             <|> reserved "infix" *> (precedence >>= \bp -> Operator Infix bp bp <$> operator)
 
-type DeclareExtension typ
-  = UserItem
-  :+: UserType typ [Bound Symbol typ]
-  :+: UserFFI typ
-  :+: UserValue ParseExprType (Maybe typ)
-  :+: UserData [Bound Symbol typ] UserDataExtension typ
-
-declaration
+declaration'
   :: ( ParserM e m
      , HasState "TypeOperator" [Operator String] m
      , HasState "TermOperator" [Operator String] m
+     , ParserDSL proxy (Decl decl Symbol) m
      )
-  => m () -> m (Decl (DeclareExtension ParseType) Symbol)
-declaration end = do
+  => Proxy proxy -> m () -> m (Decl decl Symbol)
+declaration' wit end = do
   opty <- get @"TypeOperator"
   optm <- get @"TermOperator"
-  local @"TypeOperator" (const opty) $ local @"TermOperator" (const optm) $ local @"PatternOperator" (const optm) $
-    userFFI end <|> userValue end <|> userType end <|> userData end <|> do
-      op@(Operator _ _ _ s) <- defFixity end
-      if head s == ':' then modify @"TypeOperator" (op:) else modify @"TermOperator" (op:)
-      return . declare $ UserItem (ItemSpace "default") [op] (Op s)
+  local @"TypeOperator" (const opty)
+    $ local @"TermOperator" (const optm)
+    $ local @"PatternOperator" (const optm)
+    $ syntax wit end
 
--- play :: (Monad f, Monad m)
---      => ( ParsecT Void Text (StateT ([Operator String], [Operator String]) m) (Decl (DeclareExtension ParseType) Symbol)
---      -> ParsecT Void Text (StateT s f) c)
---      -> s -> Text -> f (Either String c)
--- play deco op txt =
---   let m = flip evalStateT op $ runParserT (deco $ declaration @Void) "stdin" txt
---    in first errorBundlePretty <$> m
+declaration
+  :: forall proxy decl e m
+   . ( ParserM e m
+     , HasState "TypeOperator" [Operator String] m
+     , HasState "TermOperator" [Operator String] m
+     , ParserDSL proxy (Decl decl Symbol) m
+     )
+  => m () -> m (Decl decl Symbol)
+declaration = declaration' (Proxy @proxy)

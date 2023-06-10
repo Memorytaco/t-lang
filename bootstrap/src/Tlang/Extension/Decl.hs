@@ -10,11 +10,11 @@ module Tlang.Extension.Decl
   (
   -- ** user data type definition
     UserData (..)
+  , UserDataDef (..)
   , UserEnum (..)
   , UserStruct (..)
   , UserCoerce (..)
   , UserPhantom (..)
-  , injData
 
   -- ** type alias definition
   , UserType (..)
@@ -40,10 +40,8 @@ import Tlang.AST.Decl
 -- ** extensions for data type definition
 
 -- | Core definition for data, extended with declaration on type.
-data UserData vars ext typ info = UserData vars info (ext typ) deriving (Show, Eq, Functor, Foldable, Traversable)
-
-injData :: ext :<: exts => vars -> info -> ext typ -> UserData vars exts typ info
-injData vars info = UserData vars info . inj
+data UserData vars def info = UserData info vars def deriving (Show, Eq, Functor, Foldable, Traversable)
+newtype UserDataDef ext a = UserDataDef (ext a) deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | a default definition for use in AST parsing
 data UserEnum field typ
@@ -112,8 +110,8 @@ newtype ItemSpace = ItemSpace String deriving (Show, Eq)
 -- ** Definition of `Decl` related type class instance
 
 -- *** `DeclInfo` related
-instance DeclInfo (UserData vars ext typ) where
-  getInfo (UserData _ info _) = info
+instance DeclInfo (UserData vars def) where
+  getInfo (UserData info _ _) = info
 instance DeclInfo (UserType typ vars) where
   getInfo (UserType _ _ info) = info
 instance DeclInfo (UserFFI typ) where

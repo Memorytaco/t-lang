@@ -30,8 +30,10 @@ data Apply expr
   = Apply expr expr [expr]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
+-- | @.selector@, field projector
 newtype Selector name e = Selector name deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
-data Constructor name e = Constructor name (Maybe e) deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+-- | @`Variant@ for polymorphic variant, variant constructor
+data Constructor name e = Constructor name [e] deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | type instantiation
 data Inst name typ
@@ -45,7 +47,7 @@ data Inst name typ
   | InstSeq (Inst name typ) (Inst name typ)
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
-newtype VisibleType typ e = VisibleType typ deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+data VisibleType typ e = VisibleType typ e deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | type application, this alters inner types of expression for codegen.
 -- like reduce type variable of `Lambda`

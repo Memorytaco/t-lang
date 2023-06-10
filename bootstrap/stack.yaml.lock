@@ -185,12 +185,12 @@ packages:
   original:
     hackage: libffi-0.2.1@sha256:72b41cefb799f3d3509c6cec8ecbf5023cf442c53a601aaaacee5872c722908b,2745
 - completed:
-    hackage: megaparsec-9.2.2@sha256:c306a135ec25d91d252032c6128f03598a00e87ea12fcf5fc4878fdffc75c768,3219
+    hackage: megaparsec-9.4.0@sha256:f93fb70d9c75f780aabea9276e45d2c68995cc4e7c4a082d33606ff03824093e,3219
     pantry-tree:
-      sha256: db9715d6910e64d3bbfce69895042a66fcdcd64a54805563834bf0821562b74f
-      size: 1518
+      sha256: e5284381ff1d279a3c1a7fab27409ab17d9b2918bea425d7fff452cdf107ed23
+      size: 1591
   original:
-    hackage: megaparsec-9.2.2@sha256:c306a135ec25d91d252032c6128f03598a00e87ea12fcf5fc4878fdffc75c768,3219
+    hackage: megaparsec-9.4.0
 - completed:
     hackage: case-insensitive-1.2.1.0@sha256:9dfd3171fc7698cf8d931727d3af3a7b389135b583e46b5adac1f9d2026fff61,2244
     pantry-tree:
