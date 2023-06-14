@@ -12,6 +12,7 @@ where
 import Tlang.AST (Operator)
 import Data.Bifunctor (first, second)
 import Data.List (nub)
+import Data.Text (Text)
 
 data ShellConfig = ShellConfig
   { env :: SearchEnv
@@ -19,18 +20,18 @@ data ShellConfig = ShellConfig
 
 data SearchEnv
   = SearchEnv
-    { libPath :: [String]
-    , srcPath :: [String]
+    { libPath :: [Text]
+    , srcPath :: [Text]
     } deriving (Show, Eq)
 
 data ShellState = ShellState
   { lineCount :: Int
-  , operators :: ([Operator String], [Operator String])
+  , operators :: ([Operator Text], [Operator Text])
   } deriving (Show, Eq)
 
-addTermOperator :: Operator String -> ShellState -> ShellState
+addTermOperator :: Operator Text -> ShellState -> ShellState
 addTermOperator op stat = stat { operators = first (nub . (op:)) $ operators stat }
-addTermOperators :: [Operator String] -> ShellState -> ShellState
+addTermOperators :: [Operator Text] -> ShellState -> ShellState
 addTermOperators ops stat = stat { operators = first (nub . (ops <>)) $ operators stat }
-addTypeOperator :: Operator String -> ShellState -> ShellState
+addTypeOperator :: Operator Text -> ShellState -> ShellState
 addTypeOperator op stat = stat { operators = second (nub . (op:)) $ operators stat }

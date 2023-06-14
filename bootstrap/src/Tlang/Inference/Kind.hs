@@ -36,7 +36,7 @@ import Control.Applicative ((<|>))
 
 -- | indexed type variable.
 -- we keep original symbol name for error message and recovery from deBruijn notation
-type NameIndex = Either Symbol Integer
+type NameIndex = Either Name Integer
 
 -- | kind annotation will be enclosed into Shift closure
 -- typ1 : k1 == Closure typ1 ([k1] :! 0)
@@ -47,15 +47,7 @@ type NormalKind = Kind Identity Integer
 type Context = [GraftKind]
 -- | The type is represented with deBruijn notation. Constraint will take effect over grafted type variable or index
 -- - `r` is for any concrete type representation
-type DeBruijnType inj rep = StandardType NameIndex Label (Bound Integer) inj rep
-
--- cookAll :: MonadFail m => [Symbol] -> [Symbol :== Type Label Symbol () None Identity r] -> m [Symbol :== DeBruijnType (TypeMetaVar GraftKind) (DefaultConstraint term) Identity r]
--- cookAll syms decs = cata go decs
---   where go F.Nil = return []
---         go (F.Cons (name :== typ) ms) = do
---           iTyp <- toDebruijn (Just name :== typ) (symbols <> syms, [])
---           (name :== iTyp :) <$> ms
---         symbols = fmap (\(a :== _) -> a) decs
+type DeBruijnType inj = StandardType Label (Bound Integer) inj NameIndex 
 
 assignNames :: forall a b m. MonadState Integer m
             => [a :== b] -> m [GraftKind :@ a :== b]
@@ -70,25 +62,25 @@ assignNames = cata go
 -- | traverse into type structure and build the variable index. Also, it detects recursive type depending on whether it is named type.
 toDebruijn
   :: forall v f r m. (MonadFail m, Traversable f)
-  => (Maybe Symbol :== StandardType Symbol Label (Bound Symbol) f r) -- ^ It can lift named or unnamed type into deBruijn representation
-  -> ([Symbol], [Symbol])   -- ^ type environment, contains type name. (global environment, local environment)
-  -> m (DeBruijnType f r)   -- ^ return the standard representation
+  => (Maybe Name :== StandardType Label (Bound Name) f Name) -- ^ It can lift named or unnamed type into deBruijn representation
+  -> ([Name], [Name])   -- ^ type environment, contains type name. (global environment, local environment)
+  -> m (DeBruijnType f)   -- ^ return the standard representation
 toDebruijn (name :== tree) = runReaderT (cata go tree)
   where
-    go :: Base (StandardType Symbol Label (Bound Symbol) f r) (ReaderT ([Symbol], [Symbol]) m (DeBruijnType f r))
-       -> ReaderT ([Symbol], [Symbol]) m (DeBruijnType f r)
+    go :: Base (StandardType Label (Bound Name) f Name) (ReaderT ([Name], [Name]) m (DeBruijnType f))
+       -> ReaderT ([Name], [Name]) m (DeBruijnType f)
     go TypPhtF = pure TypPht
-    go (TypRepF r) = pure $ TypRep r
-    go (TypRefF s) = do
+    -- go (TypRepF r) = pure $ TypRep r
+    go (TypVarF s) = do
       ix'maybe <- asks $ lookup s . flip zip [1..] . snd
       genv <- asks fst
       case Right <$> ix'maybe of
         Nothing -> case (s `elem` genv, name == Just s) of
-                     (_, True) -> return . TypRef $ Left s
-                     (True, _) -> return . TypRef $ Left s
+                     (_, True) -> return . TypVar $ Left s
+                     (True, _) -> return . TypVar $ Left s
                      (False, False) ->
                        fail $ "type variable " <> show s <> " doesn't occur in scop"
-        Just v -> return $ TypRef v
+        Just v -> return $ TypVar v
     go (TypLetF binder mt) = do
       let handler = handleAll <$> (prj binder) <|> handleAbs <$> (prj binder)
       case handler of
@@ -97,7 +89,7 @@ toDebruijn (name :== tree) = runReaderT (cata go tree)
       where
         handleAll (Forall bound) = handleBound (injTypeBind @(Forall (Bound Integer)) . Forall) bound mt
         handleAbs (Scope bound) = handleBound (injTypeBind @(Scope (Bound Integer)) . Scope) bound mt
-    go (TypLitF lit) = do
+    go (TypPrmF lit) = do
       let handler = handleSum <$> (prj lit) <|> handleRec <$> (prj lit) <|> handleTup <$> (prj lit) <|> handleLitNat <$> (prj lit) <|> handleLitText <$> (prj lit)
       case handler of
         Just m -> m
@@ -266,34 +258,34 @@ unify = checkOccurrence . unifySubst <=< refold shrink rollup
               KindLiftF (UnGraft mk) -> mk
 
 -- | traverse around annotated type tree
-onAnnotate :: (anno1 -> anno2) -> DeBruijnType ((:@) anno1) r -> DeBruijnType ((:@) anno2) r
+onAnnotate :: (anno1 -> anno2) -> DeBruijnType ((:@) anno1) -> DeBruijnType ((:@) anno2)
 onAnnotate f = cata \case
   TypPhtF -> TypPht
   TypRepF r -> TypRep r
-  TypLitF lit -> TypLit lit
-  TypRefF r -> TypRef r
+  TypPrmF lit -> TypPrm lit
+  TypVarF r -> TypVar r
   TypLetF b t -> TypLet b t
   TypConF r rn -> TypCon r rn
   TypInjF (r :@ rk) -> TypInj (r :@ f rk)
 
 -- | unsolved and solved deBurijn type with arbitrary constraint
-type GroundEnv r =
-  ( [(GraftKind :@ Symbol) :== DeBruijnType Identity r]
-  , [(NormalKind :@ Symbol) :== DeBruijnType ((:@) NormalKind) r]
+type GroundEnv =
+  ( [(GraftKind :@ Name) :== DeBruijnType Identity]
+  , [(NormalKind :@ Name) :== DeBruijnType ((:@) NormalKind)]
   )
 
 -- | kinding problem with name
-infer :: forall r m. (MonadFail m, MonadState (GroundEnv r) m)
-      => (GraftKind :@ Symbol :== DeBruijnType Identity r) -> Integer
-      -> m (Integer, DeBruijnType ((:@) NormalKind) r)
+infer :: forall m. (MonadFail m, MonadState GroundEnv m)
+      => (GraftKind :@ Name :== DeBruijnType Identity) -> Integer
+      -> m (Integer, DeBruijnType ((:@) NormalKind))
 infer (name :@ sig :== tree) i = do
   env <- let mp = fmap \(a :== b) -> a in gets $ bimap ((name :@ sig :) . mp) mp
   lenv <- gets fst
 
   let lookupSym a = find (\(b :@ _ :== _) -> a == b)
       gen t i = runRWST (genConstraint (pure . runIdentity) t) env ([], i)
-      loopGen :: [GraftKind :@ Symbol] -> Integer
-              -> StateT ([Symbol], [GraftKind :@ Symbol :== DeBruijnType ((:@) GraftKind) r], [GraftKind :<> GraftKind]) m Integer
+      loopGen :: [GraftKind :@ Name] -> Integer
+              -> StateT ([Name], [GraftKind :@ Name :== DeBruijnType ((:@) GraftKind)], [GraftKind :<> GraftKind]) m Integer
       loopGen [] ix = return ix
       loopGen ((nm :@ nsig) :xs) ix = do
         let (_ :== rtyp) = fromJust $ lookupSym nm lenv
@@ -334,9 +326,9 @@ infer (name :@ sig :== tree) i = do
 -- data F f g a = (f g * f a * g a) ;;
 
 -- | kinding problem with no type name
-kinding :: forall r m. (MonadFail m, MonadReader [NormalKind :@ Symbol] m)
-        => (DeBruijnType Identity r, Integer)
-        -> m (DeBruijnType ((:@) NormalKind) r, Integer)
+kinding :: forall r m. (MonadFail m, MonadReader [NormalKind :@ Name] m)
+        => (DeBruijnType Identity, Integer)
+        -> m (DeBruijnType ((:@) NormalKind), Integer)
 kinding (tree, i) = do
   env <- ask
   ((constraints, typ :@ k), (_, ni), []) <- runRWST (genConstraint (pure . runIdentity) tree) ([], env) ([], i)
@@ -348,15 +340,15 @@ kinding (tree, i) = do
 -- 1. (symbol to be solved, symbol solved already)
 -- 2. mutual meta variable
 -- 3. local context
-type ConstraintMonad m a = RWST ([GraftKind :@ Symbol], [NormalKind :@ Symbol]) [GraftKind :@ Symbol] (Context, Integer) m a
-type AnnotatedType r = GraftKind :@ DeBruijnType ((:@) GraftKind) r
+type ConstraintMonad m a = RWST ([GraftKind :@ Name], [NormalKind :@ Name]) [GraftKind :@ Name] (Context, Integer) m a
+type AnnotatedType = GraftKind :@ DeBruijnType ((:@) GraftKind)
 
 genConstraint
-  :: forall r m f. (MonadFail m, Traversable f)
+  :: forall m f. (MonadFail m, Traversable f)
   -- allow to choose whatever effect we would like to handle different shape of `TypInj`
-  => (f (AnnotatedType r) -> ConstraintMonad m (AnnotatedType r))
-  -> DeBruijnType f r -- ^ the unsolved type term
-  -> ConstraintMonad m ([GraftKind :<> GraftKind], AnnotatedType r)
+  => (f AnnotatedType -> ConstraintMonad m AnnotatedType)
+  -> DeBruijnType f -- ^ the unsolved type term
+  -> ConstraintMonad m ([GraftKind :<> GraftKind], AnnotatedType)
 genConstraint natural = pass . fmap (, nub) . cata go
   where
     -- | new meta kind variable
@@ -369,19 +361,9 @@ genConstraint natural = pass . fmap (, nub) . cata go
     stack ma v = do
       s1 <- gets fst
       modify (first (v:)) >> ma <* modify (first $ const s1)
-    {- collect kind signature constraint from type constraint
-    -- stripConstraint = cata \case
-    --         SatisfiableF b -> (Satisfiable b, [])
-    --         AndF lr rr -> (And (fst lr) (fst rr), snd lr <> snd rr)
-    --         ProjectF n (r, s) -> (Project n r, s)
-    --         PredicateF (Rigid ((t1 :@ _, s1) :<> a)) -> (Predicate (Rigid $ t1 :<> a), s1)
-    --         PredicateF (Flexible ((t1 :@ _, s1) :< a)) -> (Predicate (Flexible $ t1 :< a), s1)
-    --         InstantiateF t (t1 :@ _, s) -> (Instantiate t t1, s)
-    --         IntroduceF t (t1 :@ _, s1) (r, s2) -> (Introduce t t1 r, s1 <> s2)
-    -}
     {- find symbol in environment and record unsolved signature
     -}
-    lookupSymbol :: Symbol -> ConstraintMonad m GraftKind
+    lookupSymbol :: Name -> ConstraintMonad m GraftKind
     lookupSymbol sym = do
       (lenv, renv) <- ask
       case find (\(s :@ _) -> s == sym) renv of
@@ -395,11 +377,11 @@ genConstraint natural = pass . fmap (, nub) . cata go
           Just r@(_ :@ k) -> tell [r] >> return k
           Nothing -> fail $ "Can't find signature for " <> show sym
 
-    go :: (a ~ ([GraftKind :<> GraftKind], AnnotatedType r))
-       => Base (DeBruijnType f r) (ConstraintMonad m a) -> ConstraintMonad m a
+    go :: (a ~ ([GraftKind :<> GraftKind], AnnotatedType))
+       => Base (DeBruijnType f) (ConstraintMonad m a) -> ConstraintMonad m a
     go TypPhtF = return . pure $ TypPht `annotate` KindType
-    go (TypRepF r) = return . pure $ TypRep r `annotate` KindType
-    go (TypLitF litr) = do
+    -- go (TypRepF mr) = return . pure $ TypRep r `annotate` KindType
+    go (TypPrmF litr) = do
       let handler = handleTup <$> (prj litr)
                 <|> handleRec <$> (prj litr)
                 <|> handleSum <$> (prj litr)
@@ -447,9 +429,9 @@ genConstraint natural = pass . fmap (, nub) . cata go
     --   (subst, term :@ k) <- stack mt n
     --   return (s <> (k :<> KindType : subst), TypPie c term `annotate` KindType)
 
-    go (TypRefF v@(Right i)) = do
+    go (TypVarF v@(Right i)) = do
       item <- gets $ (!! fromInteger (i - 1)) . fst
-      return . pure $ TypRef v `annotate` item
+      return . pure $ TypVar v `annotate` item
 
     {- single recursive type is explicitly marked since it doesn't complicate the kind inference process.
     -- same technique used as for mutual recursive type.
@@ -458,7 +440,7 @@ genConstraint natural = pass . fmap (, nub) . cata go
     {- for mutual recursive type, we attach new generated metavariable to all unsolved type, and keep recording the constraint
     -- and unify the whole constraints at some point.
     -}
-    go (TypRefF v@(Left sym)) = lookupSymbol sym >>= \sig -> return . pure $ TypRef v `annotate` sig
+    go (TypVarF v@(Left sym)) = lookupSymbol sym >>= \sig -> return . pure $ TypVar v `annotate` sig
     go (TypConF mt mtn) = do
       (s1, term1 :@ k1) <- mt
       ((sn, kn), termn) <- mapM (\(s, t :@ k) -> ((s, [k]), t)) <$> sequence mtn

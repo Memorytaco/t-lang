@@ -9,10 +9,9 @@ module Driver.Graph
 where
 
 import Tlang.Parser (pratt, Power (..))
-import Driver.Parser (driveParser, TypeLang)
+import Driver.Parser (driveParser, TypeLang, TypeAST)
 import Text.Megaparsec
 import Data.Void (Void)
-import Data.Functor.Identity (Identity (..))
 
 import Tlang.AST
 import Tlang.Inference.Graph
@@ -30,19 +29,19 @@ import Driver.Transform
 
 -- | save graph as png file
 saveGraph :: (Show label, Show name, Labellable name, Ord name)
-          => (Node, Gr (GNode (GNodeLabel lit label rep name)) (GEdge name))
+          => (Node, Gr (GNode (GNodeLabel lit label name)) (GEdge name))
           -> FilePath -> IO ()
 saveGraph (root, g) name = do
   dot <- runDotGraph g root
   void $ runGraphviz dot Png (name <> ".png")
   writeDotFile (name <> ".dot") dot
 
-parseTypeGrpah :: Text -> IO PlayGP
+parseTypeGrpah :: Text -> IO PlayG
 parseTypeGrpah typ = do
-   res <- driveParser (typOperator, []) (pratt @(TypeLang Void _) @(TypeAST Identity) eof Go) "stdin" typ
+   res <- driveParser (typOperator, []) (pratt @(TypeLang Void _) @TypeAST eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
-        ((_, g :: PlayGP), _) <- runToGraph [] 0 t
+        ((_, g :: PlayG), _) <- runToGraph [] 0 t
         writeFile "graph.dot" $ exportViaShow g
         return g
      (Left (err :: ParseErrorBundle Text Void), _) -> putStrLn (errorBundlePretty err) >> error "see previous message"

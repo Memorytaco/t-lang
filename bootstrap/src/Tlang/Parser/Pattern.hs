@@ -68,10 +68,10 @@ instance PatternC e m
   tokenize _ _ _ = reserved "_" $> literal PatWild <?> "Wild pattern"
 
 -- | variable binding pattern
-instance (PatternC e m, name ~ Symbol)
+instance (PatternC e m, name ~ Name)
   => PrattToken (WithPattern e m "variable") (Pattern lit ext label name expr) m where
   tokenize _ _ _ = do
-    var <- (char '?' <|> char '!') *> identifier <&> PatVar . Symbol
+    var <- (char '?' <|> char '!') *> identifier <&> PatVar . Name
     return $ literal var
 
 -- | group operator for pattern
@@ -85,38 +85,38 @@ instance (PatternC e m, label ~ Label)
   tokenize _ _ _ = identifier <&> literal . flip PatSym [] . Label  <?> "Constructor pattern"
 
 -- | operator symbol constructor
-instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator String] m)
+instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator Text] m)
   => PrattToken (WithPattern e m "operator") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
     pos <- getOffset
     op <- operator
     Operator fixity l r _ <- asks @"PatternOperator" (find (\(Operator _ _ _ n) -> n == op)) >>= \case
       Just a -> return a
-      Nothing -> setOffset pos >> do fail $ "Operator is not defined in term level: " <> op
+      Nothing -> setOffset pos >> do fail $ "Operator is not defined in term level: " <> show op
     let nud' end =
           if fixity `elem` [Prefix, Unifix]
              then parser end (Power r) <&> PatSym (Label op) . pure
-             else fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Prefix or Unifix"
+             else fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Prefix or Unifix"
         led' end left =
           case fixity of
             Infix -> parser end (Power r) <&> PatSym (Label op) . (left:) . pure
             Unifix -> return (PatSym (Label op) [left])
             Postfix -> return (PatSym (Label op) [left])
-            _ -> fail $ "Wrong position of " <> op <> " : it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
+            _ -> fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
     return (Semantic nud' led' (return $ Power l))
 
 -- | `@` pattern
-instance (PatternC e m, name ~ Symbol, label ~ Label, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
+instance (PatternC e m, name ~ Name, label ~ Label, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
   => PrattToken (WithPattern e m "binding") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
-    var <- (char '?' <|> char '!') *> fmap Symbol identifier' <* char '@'
+    var <- (char '?' <|> char '!') *> fmap Name identifier' <* char '@'
     pat <- parens (parser (lookAhead $ reservedOp ")" $> ()) Go)
        <|> reserved "_" $> PatWild  -- wild pattern
-       <|> (char '?' <|> char '!') *> fmap (PatVar . Symbol) identifier  -- variable
+       <|> (char '?' <|> char '!') *> fmap (PatVar . Name) identifier  -- variable
        <|> PatSym . Label <$> identifier <*> return []  -- a constructor
        <|> (float <&> PatPrm . inj . LiteralNumber . Literal)
        <|> (integer <&> PatPrm . inj . LiteralInteger . Literal)
-       <|> (stringLiteral <&> PatPrm . inj . LiteralText . Literal . pack)
+       <|> (stringLiteral <&> PatPrm . inj . LiteralText . Literal)
        <|> (fmap PatTup . parens $ sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
     return $ literal (PatBind var pat)
 

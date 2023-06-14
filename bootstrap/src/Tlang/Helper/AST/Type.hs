@@ -13,7 +13,6 @@ import Tlang.Generic
 
 import Data.Bifunctor (first)
 import Data.Functor.Identity (Identity (..))
-import Data.Functor.Foldable
 
 getMonoType
   :: (Traversable inj, Forall b :<: bind)
@@ -29,14 +28,14 @@ getTypeLit
   :: forall lit name cons bind inj rep. lit :<: cons
   => Type name cons bind inj rep
   -> Maybe (lit (Type name cons bind inj rep))
-getTypeLit (TypLit lit) = prj lit
+getTypeLit (TypPrm lit) = prj lit
 getTypeLit _ = Nothing
 
 injTypeLit
   :: lit :<: cons
   => lit (Type name cons bind inj rep)
   -> Type name cons bind inj rep
-injTypeLit lit = TypLit (inj lit)
+injTypeLit lit = TypPrm (inj lit)
 
 injTypeBind
   :: binder :<: bind
@@ -64,14 +63,14 @@ instance TypeEff Identity where
   typEff (Identity t) = t
 
 elimTypEff
-  :: forall any eff bind cons name a. (TypeEff eff, TypeEff any, Traversable any, Traversable eff, Traversable bind, Traversable cons)
-  => Type name cons bind eff a
-  -> Type name cons bind any a
+  :: forall any eff bind cons rep a. (Functor rep, TypeEff eff, TypeEff any, Functor any, Functor bind, Functor cons)
+  => Type rep cons bind eff a
+  -> Type rep cons bind any a
 elimTypEff = cata \case
   TypPhtF -> TypPht
   TypRepF r -> TypRep r
-  TypRefF n -> TypRef n
-  TypLitF fr -> TypLit fr
+  TypVarF n -> TypVar n
+  TypPrmF fr -> TypPrm fr
   TypConF r rs -> TypCon r rs
   TypLetF fr r -> TypLet fr r
   TypInjF eff -> elimTypEff $ typEff eff

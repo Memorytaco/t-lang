@@ -16,7 +16,8 @@ where
 import Text.Megaparsec
 import Text.Megaparsec.Char
 import qualified Text.Megaparsec.Char.Lexer as Lex
-import Data.Text (Text)
+import Data.Functor ((<&>))
+import Data.Text (Text, pack)
 
 type TextParser e m = (ShowErrorComponent e, MonadParsec e Text m)
 
@@ -36,26 +37,27 @@ reserved, reservedOp :: (TextParser e m) => Text -> m Text
 reserved t = lexeme . try $ string t <* notFollowedBy alphaNumChar
 reservedOp t = lexeme . try $ string t <* notFollowedBy (oneOf ("!#$%&*+-./:;<=>?@\\^|~" :: String))
 
-operator :: (TextParser e m, MonadFail m) => m String
+operator :: (TextParser e m, MonadFail m) => m Text
 operator = lexeme $ do
   let reservedOps = [";;", ":", ",", "\\", "|", "[", "]", "{", "}", "(", ")", "()", "[]", "{}", "@", "=>"]
-  ops <- some (oneOf ("(){}[]!#$%&*+,-./:;<=>?@\\^_|~" :: String))
+  -- ops <- some (oneOf ("(){}[]!#$%&*+,-./:;<=>?@\\^_|~" :: [Char]))
+  ops <- pack <$> some (symbolChar <|> punctuationChar)
   if ops `elem` reservedOps
      then fail $ "unexpected reserved operator " <> show ops
      else return ops
 
-identifier' :: (TextParser e m, MonadFail m) => m String
+identifier' :: (TextParser e m, MonadFail m) => m Text
 identifier' = do
   name <- do
     c <- char '_' <|> letterChar <?> "identifier prefix"
     cs <- many (char '_' <|> alphaNumChar) <?> "identifier suffix"
-    return (c : cs)
+    return $ pack (c : cs)
   let reservedNames = ["let", "in", "data", "module"]
   if name `notElem` reservedNames
      then return name
-     else fail $ "unexpected reserved name " <> name
+     else fail $ "unexpected reserved name " <> show name
 
-identifier :: (TextParser e m, MonadFail m) => m String
+identifier :: (TextParser e m, MonadFail m) => m Text
 identifier = lexeme identifier'
 
 float :: (TextParser e m, RealFloat a) => m a
@@ -67,8 +69,8 @@ braces    = between (symbol "{") (symbol "}")
 angles    = between (reservedOp "<") (reservedOp ">")
 brackets  = between (symbol "[") (symbol "]")
 
-stringLiteral :: TextParser e m => m String
-stringLiteral = lexeme $ char '"' *> manyTill Lex.charLiteral (char '"')
+stringLiteral :: TextParser e m => m Text
+stringLiteral = lexeme $ char '"' *> manyTill Lex.charLiteral (char '"') <&> pack
 
 commaSep, semiSep :: (TextParser e m) => m a -> m [a]
 commaSep = flip sepBy (reservedOp ",")

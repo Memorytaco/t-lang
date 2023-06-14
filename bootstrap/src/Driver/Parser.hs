@@ -10,6 +10,7 @@ module Driver.Parser
   , DeclLang
   , TypeLang
   , ExprLang, PatLang
+  , TypeAST
   , ASTPat
   , ASTGPat
   , ASTExpr
@@ -47,33 +48,34 @@ import GHC.Generics (Generic)
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
 
-type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ :+: PatGroup) Label Symbol
-type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ) Label Symbol
+type TypeAST = StandardType Label (Bound Name) Identity Name
+type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ :+: PatGroup) Label Name
+type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ) Label Name
 
 type ASTExpr typ = Expr
-  (Let (ASTPat typ) :+: Lambda (ASTGPat typ) (Bounds Symbol typ)
-                    :+: Lambda (Grp (ASTPat typ)) (Bounds Symbol typ)
+  (Let (ASTPat typ) :+: Lambda (ASTGPat typ) (Bounds Name typ)
+                    :+: Lambda (Grp (ASTPat typ)) (Bounds Name typ)
                     :+: Apply)
   ( Tuple :+: Record Label :+: LiteralText :+: LiteralInteger :+: LiteralNumber
-    :+: VisibleType typ :+: Selector Symbol :+: Constructor Symbol)
+    :+: VisibleType typ :+: Selector Label :+: Constructor Label)
   ((:@) typ)
-  Symbol
+  Name
 
 type ASTDeclExt typ expr = UserItem
-  :+: UserType typ [Bound Symbol typ]
+  :+: UserType typ [Bound Name typ]
   :+: UserFFI typ
   :+: UserValue expr (Maybe typ)
-  :+: UserData [Bound Symbol typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
-type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Symbol
+  :+: UserData [Bound Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
+type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Name
 
-type PredefExprVal = ASTExpr (TypeAST Identity)
-type PredefDeclExtVal = ASTDeclExt (TypeAST Identity) PredefExprVal
-type PredefDeclVal = ASTDecl (TypeAST Identity) PredefExprVal
+type PredefExprVal = ASTExpr TypeAST
+type PredefDeclExtVal = ASTDeclExt TypeAST PredefExprVal
+type PredefDeclVal = ASTDecl TypeAST PredefExprVal
 
 -- | operator space for recording every available operator
 data OperatorSpace = OperatorSpace
-  { termOperator :: [Operator String]
-  , typeOperator :: [Operator String]
+  { termOperator :: [Operator Text]
+  , typeOperator :: [Operator Text]
   } deriving (Show, Eq, Generic)
 
 type ParserMonad' e m = ParsecT e Text (StateT OperatorSpace (ReaderT OperatorSpace m))
@@ -82,15 +84,15 @@ newtype ParserMonad e m a = ParserMonad
   { runParserMonad ::
       ParsecT e Text (StateT OperatorSpace (ReaderT OperatorSpace m)) a
   } deriving newtype (Functor, Applicative, Monad, MonadFail, Alternative, MonadPlus, MonadParsec e Text, MonadParsecDbg e Text)
-    deriving (HasState "TermOperator" [Operator String], HasSink "TermOperator" [Operator String])
+    deriving (HasState "TermOperator" [Operator Text], HasSink "TermOperator" [Operator Text])
         via Rename "termOperator" (Field "termOperator" () (MonadState (ParserMonad' e m)))
-    deriving (HasState "TypeOperator" [Operator String], HasSink "TypeOperator" [Operator String])
+    deriving (HasState "TypeOperator" [Operator Text], HasSink "TypeOperator" [Operator Text])
         via Rename "typeOperator" (Field "typeOperator" () (MonadState (ParserMonad' e m)))
-    deriving (HasReader "TermOperator" [Operator String], HasSource "TermOperator" [Operator String])
+    deriving (HasReader "TermOperator" [Operator Text], HasSource "TermOperator" [Operator Text])
         via Rename "termOperator" (Field "termOperator" () (MonadReader (ParserMonad' e m)))
-    deriving (HasReader "PatternOperator" [Operator String], HasSource "PatternOperator" [Operator String])
+    deriving (HasReader "PatternOperator" [Operator Text], HasSource "PatternOperator" [Operator Text])
         via Rename "termOperator" (Field "termOperator" () (MonadReader (ParserMonad' e m)))
-    deriving (HasReader "TypeOperator" [Operator String], HasSource "TypeOperator" [Operator String])
+    deriving (HasReader "TypeOperator" [Operator Text], HasSource "TypeOperator" [Operator Text])
         via Rename "typeOperator" (Field "typeOperator" () (MonadReader (ParserMonad' e m)))
 
 -- runDSL @(WholeExpr Void _ (ASTPat (TypeAST Identity) :- ASTGPat (TypeAST Identity) :- TypeAST Identity)) @(ASTExpr (TypeAST Identity)) eof
@@ -98,7 +100,7 @@ newtype ParserMonad e m a = ParserMonad
 -- | an all in one monad for language parser
 driveParser
   :: Monad m
-  => ([Operator String], [Operator String])
+  => ([Operator Text], [Operator Text])
   -> ParserMonad e m a
   -> String -> Text
   -> m (Either (ParseErrorBundle Text e) a, OperatorSpace)
@@ -123,7 +125,7 @@ type DeclLang e m pExpr pType expr typ = WithDecl e m
   :- "fixity"
   )
 
-type PredefDeclLang m = DeclLang Void m (PredefExprLang m) (TypeLang Void m) PredefExprVal (TypeAST Identity)
+type PredefDeclLang m = DeclLang Void m (PredefExprLang m) (TypeLang Void m) PredefExprVal TypeAST
 
 -- | type language
 type TypeLang e m = WithType e m
@@ -162,11 +164,11 @@ type PatLang e m typ expr ltyp lexpr = WithPattern e m
   )
 
 data WholeExpr (e :: D.Type) (m :: D.Type -> D.Type) (t :: D.Type)
-type PredefExprLang m = WholeExpr Void m (ASTPat (TypeAST Identity) :- ASTGPat (TypeAST Identity) :- TypeAST Identity)
+type PredefExprLang m = WholeExpr Void m (ASTPat TypeAST :- ASTGPat TypeAST :- TypeAST)
 
 instance ( MonadFail m, MonadParsec e Text m
-         , name ~ Symbol
-         , HasReader "TermOperator" [Operator String] m
+         , name ~ Name
+         , HasReader "TermOperator" [Operator Text] m
          , PrattToken (TypeLang e m) typ m
          , PrattToken (PatLang e m typ (Expr struct prim inj name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
            (pat (Expr struct prim inj name)) m
@@ -186,7 +188,7 @@ instance ( MonadFail m, MonadParsec e Text m
 
 -- | declaration driver
 parseDecl :: Monad m
-          => ([Operator String], [Operator String])
+          => ([Operator Text], [Operator Text])
           -> ParserMonad Void m ()
           -> String -> Text
           -> m (Either (ParseErrorBundle Text Void) PredefDeclVal, OperatorSpace)

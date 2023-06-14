@@ -15,6 +15,7 @@ module Tlang.AST.Operator
 where
 
 import Data.Bifunctor (Bifunctor (..))
+import Data.Text (Text)
 
 data Operator a = Operator OperatorKind Integer Integer a deriving stock (Eq, Functor)
 
@@ -48,11 +49,11 @@ instance Show s => Show (Operator s) where
   show (Operator _ _ _ s) = show s
 
 -- | builtin term level operator
-termOperator :: [Operator String]
+termOperator :: [Operator Text]
 termOperator = []
 
 -- | builtin type level operator
-typOperator :: [Operator String]
+typOperator :: [Operator Text]
 typOperator =
   [ Operator Infix   0   (-5)   "*"
   , Operator Infix (-10) (-15)  "->"

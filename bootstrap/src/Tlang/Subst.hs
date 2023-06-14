@@ -126,30 +126,30 @@ instance Rule () (Kind (Closure ()) (Graft String Integer)) where
   normalize t = t
 
 type NameIndex = Either Symbol Integer
-instance Rule () (StandardType NameIndex Label (Bound Integer) ((:@) k) rep) where
+instance Rule () (StandardType Label (Bound Integer) ((:@) k) NameIndex) where
   rewrite TypPht _ = TypPht
   rewrite t@(TypRep _) _ = t
-  rewrite t@(TypRef (Left _)) _ = t
-  rewrite (TypRef (Right n)) (_ :! s) = TypRef . Right $ n + s
-  rewrite (TypRef (Right 1)) (Cons _ t _) = t
-  rewrite (TypRef (Right n)) (Cons _ _ s) = rewrite (TypRef (Right $ n - 1)) s
+  rewrite t@(TypVar (Left _)) _ = t
+  rewrite (TypVar (Right n)) (_ :! s) = TypVar . Right $ n + s
+  rewrite (TypVar (Right 1)) (Cons _ t _) = t
+  rewrite (TypVar (Right n)) (Cons _ _ s) = rewrite (TypVar (Right $ n - 1)) s
   rewrite t (Assoc _ (_ :! 1) (Cons _ _ s)) = rewrite t s
   rewrite t (Assoc _ (_ :! n) (Cons _ _ s)) = rewrite t $ Assoc () (() :! (n - 1)) s
   rewrite t (Assoc _ s1 s2) = rewrite t s1 `rewrite` s2
-  rewrite (TypLit lit) s =
+  rewrite (TypPrm lit) s =
     let handler = handleTup <$> prj lit
               <|> handleSum <$> prj lit
               <|> handleRec <$> prj lit
      in case handler of
           Just v -> v
-          Nothing -> TypLit lit
+          Nothing -> TypPrm lit
     where
       handleTup (Tuple ts) = injTypeLit @Tuple . Tuple $ flip rewrite s <$> ts
       handleSum (Variant lts) = injTypeLit @(Variant Label) . Variant $ fmap (flip rewrite s <$>) <$> lts
       handleRec (Record lts) = injTypeLit @(Record Label) . Record $ fmap (`rewrite` s) <$> lts
   rewrite (TypCon h hs) s = TypCon (rewrite h s) $ flip rewrite s <$> hs
   rewrite (TypLet fb t) s = TypLet (flip rewrite s <$> fb)
-                          $ rewrite t (Cons () (TypRef $ Right 1) (Assoc () s (() :! 1)))
+                          $ rewrite t (Cons () (TypVar $ Right 1) (Assoc () s (() :! 1)))
   rewrite (TypInj ft) s = TypInj (flip rewrite s <$> ft)
   lmap = error "need to use another calculus"
   normalize = error "need to use another calculus"

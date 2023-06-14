@@ -7,7 +7,6 @@ where
 {- this module handles visualizing graphic type based on dot.
 -}
 
-import Tlang.AST
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
 
@@ -19,15 +18,15 @@ import Control.Monad.Reader
 import Data.List (nub, sortBy)
 
 runDotGraph :: (Show label, Show name, Labellable name, Ord name, Monad m)
-            => Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
+            => Gr (GNode (GNodeLabel lit label name)) (GEdge name)
             -> Node -> m (DotGraph Node)
 runDotGraph g root = do
   mDot <- runReaderT (dotGraph root) g
   return $ digraph' mDot
 
 dotGraph
-  :: forall m lit label rep name
-  . (Ord name, Show name, Labellable name, Show label, MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  :: forall m lit label name
+  . (Ord name, Show name, Labellable name, Show label, MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m)
   => Node -> m (Dot Node)
 dotGraph root = do
   nodes <- asks labNodes

@@ -12,7 +12,6 @@ module Tlang.Rep.Concrete
   )
 where
 
-import Tlang.Rep.Primitive
 import Tlang.Rep.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
 import Tlang.TH (fixQ)
 import qualified LLVM.AST.Type as AST (Type (..))
@@ -21,36 +20,31 @@ import Data.Maybe (fromMaybe)
 import Data.Functor.Foldable
 import Data.Functor.Foldable.TH
 
-data DataRep t f where
+-- | runtime representation for type
+data DataRep t a where
   -- | We have PrimitiveT contained, and it is a concrete type
-  RepLift :: PrimitiveT t (DataRep t f) -> DataRep t f
+  RepLift :: t (DataRep t a) -> DataRep t a
   -- | Introduce whatever type system using `f`
-  DataRep :: f (DataRep t f) -> DataRep t f
+  DataRep :: a -> DataRep t a
+  deriving (Functor)
 
-deriving instance (Show (t (PrimitiveT t (DataRep t f))), Show (f (DataRep t f))) => Show (DataRep t f)
-deriving instance (Eq (PrimitiveT t (DataRep t f)), Eq (f (DataRep t f))) => Eq (DataRep t f)
-deriving instance (Ord (PrimitiveT t (DataRep t f)), Ord (f (DataRep t f))) => Ord (DataRep t f)
+instance (Show (t (DataRep t a)), Show a) => Show (DataRep t a) where
+  show (RepLift v) = show v
+  show (DataRep a) = show a
+deriving instance (Eq (t (DataRep t a)), Eq a) => Eq (DataRep t a)
+deriving instance (Ord (t (DataRep t a)), Ord a) => Ord (DataRep t a)
 
 -- | A hint provided by user to determin which type we will use, but the result is not guarenteed
 data SeqT a where
   SeqVector :: a -> Integer -> SeqT a
   SeqArray  :: a -> Maybe Integer -> SeqT a
-  deriving (Functor, Foldable, Traversable)
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
 
-deriving instance (Eq a) => Eq (SeqT a)
-deriving instance (Ord a) => Ord (SeqT a)
-
-instance
-  ( LLVMTypeEncode (f (DataRep t f))
-  , LLVMTypeEncode (t (PrimitiveT t (DataRep t f)))
-  ) => LLVMTypeEncode (DataRep t f) where
+instance ( LLVMTypeEncode (t (DataRep t a)), LLVMTypeEncode a) => LLVMTypeEncode (DataRep t a) where
     encode (RepLift a) = encode a
     encode (DataRep a) = encode a
 
-instance
-  ( LLVMTypeClass (f (DataRep t f))
-  , LLVMTypeClass (t (PrimitiveT t (DataRep t f)))
-  ) => LLVMTypeClass (DataRep t f) where
+instance (LLVMTypeClass (t (DataRep t a)), LLVMTypeClass a) => LLVMTypeClass (DataRep t a) where
     classOf (RepLift a) = classOf a
     classOf (DataRep a) = classOf a
 
@@ -68,5 +62,4 @@ instance (LLVMTypeClass a, LLVMTypeEncode a) => LLVMTypeEncode (SeqT a) where
                                Primitive -> AST.VectorType (fromInteger i) $ encode a
   encode (SeqArray a i) = AST.ArrayType (fromInteger $ fromMaybe 0 i) $ encode a
 
-type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor $ fixQ [d| instance (FoldFunctor t, FoldFunctor f) => Recursive (DataRep t f) |]
+makeBaseFunctor $ fixQ [d| instance (Functor t) => Recursive (DataRep t a) |]

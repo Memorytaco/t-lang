@@ -20,10 +20,11 @@ module Tlang.AST.Module
 where
 
 import Tlang.AST.Decl
+import Data.Text (Text)
 
 -- | module path fragment
 newtype Frag
-  = Frag String
+  = Frag Text
   deriving (Show, Eq, Ord)
 
 -- | a `ModuleName` is composed by multiple `Frag`.

@@ -12,6 +12,7 @@ module Tlang.Transform.TypeGraph
   , BinderGraph (..)
   , LiteralGraph (..)
   , InjGraph (..)
+  , RuntimeRepGraph (..)
   -- ** companion type family for extending environment
   , ConstrainGraph
   )
@@ -23,6 +24,7 @@ import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
 import Tlang.Generic ((:+:) (..), (:<:))
+import Tlang.Rep (Rep (..))
 
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, ask, local)
@@ -60,6 +62,13 @@ class LiteralGraph literal info | literal -> info where
     => literal (m (Hole nodes info, CoreG nodes edges info))
     -> m (Hole nodes info, CoreG nodes edges info)
 
+-- | for handling representation, type constructor
+class RuntimeRepGraph rep info | rep -> info where
+  handleRep
+    :: ConstrainGraph rep nodes edges info m
+    => rep (m (Hole nodes info, CoreG nodes edges info))
+    -> m (Hole nodes info, CoreG nodes edges info)
+
 -- | for handling type extension
 class InjGraph injector info | injector -> info where
   handleInj
@@ -95,26 +104,28 @@ localName name = ask @"variable" >>= return . lookup name
 -- | transform a syntactic type into its graphic representation
 -- TODO: we need to handle type alias for global type names
 toGraph
-  :: ( HasState "node" Int m, BinderGraph bind Int, LiteralGraph cons Int, InjGraph inj Int
-     , HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
-     , ConstrainGraph cons nodes edges Int m, ConstrainGraph bind nodes edges Int m, ConstrainGraph inj nodes edges Int m
-     , Eq name, Ord (edges (Link edges)), Traversable inj, Traversable bind, Traversable cons
+  :: ( HasState "node" Int m, HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
+     , BinderGraph bind Int, RuntimeRepGraph rep Int, LiteralGraph prm Int, InjGraph inj Int
+     , ConstrainGraph prm nodes edges Int m, ConstrainGraph bind nodes edges Int m
+     , ConstrainGraph rep nodes edges Int m, ConstrainGraph inj nodes edges Int m
+     , Eq name, Ord (edges (Link edges))
+     , Functor rep, Functor inj, Functor bind, Functor prm
      -- nodes constraint
-     , Uno (NodeRep rep) :<: nodes, Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
+     , Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
      , Uno NodeApp :<: nodes
      -- edges constraint
      , Uno Sub :<: edges
      )
-  => Type.Type name cons bind inj rep -> m (Hole nodes Int, CoreG nodes edges Int)
+  => Type.Type rep prm bind inj name -> m (Hole nodes Int, CoreG nodes edges Int)
 toGraph = cata go
   where
     go Type.TypPhtF = node <&> hole' (Uno NodeBot) <&> \v -> (v, Vertex v)
-    go (Type.TypRepF r) = node <&> hole' (Uno $ NodeRep r) <&> \v -> (v, Vertex v)
-    go (Type.TypRefF name) = localName name >>= \case
+    go (Type.TypRepF v) = handleRep v
+    go (Type.TypVarF name) = localName name >>= \case
       Just a -> return a
       -- TOOD: handle type alias, allow a context for nominal type
       Nothing -> node <&> hole' (Uno $ NodeRef False name) <&> \v -> (v, Vertex v)
-    go (Type.TypLitF v) = handleLiteral v
+    go (Type.TypPrmF v) = handleLiteral v
     go (Type.TypConF m ms) = do
       ns <- sequence $ m: ms
       let len = toInteger $ length ns
@@ -238,3 +249,9 @@ type instance ConstrainGraph Identity nodes edges info m = ()
 -- | `Identity` injector does nothing
 instance InjGraph Identity Int where
   handleInj (Identity m) = m
+
+-- *** handle RuntimeRep
+
+type instance ConstrainGraph Rep nodes edges info m = ()
+instance RuntimeRepGraph Rep Int where
+  handleRep (Rep _) = error "TODO: implement"

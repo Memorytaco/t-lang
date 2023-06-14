@@ -48,6 +48,7 @@ import Data.Coerce (coerce)
 import Data.Maybe (fromJust)
 import Control.Applicative ((<|>))
 import Data.Functor.Const (Const (..))
+import Data.Text (pack)
 
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext
@@ -60,8 +61,8 @@ import Tlang.Graph.Operation
 -- | simplify, forall (a <> g). a == g
 -- FIXME: complete the ruleset
 simplify :: Node
-         -> Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
-         -> Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
+         -> Gr (GNode (GNodeLabel lit label name)) (GEdge name)
+         -> Gr (GNode (GNodeLabel lit label name)) (GEdge name)
 simplify r g =
   case cleanable g of
     [] -> g
@@ -73,14 +74,14 @@ simplify r g =
 
 runRestore
   :: forall label lit m cons rep bind.
-    (Show label, MonadFail m, Forall (Bound Symbol) :<: bind, Scope (Bound Symbol) :<: bind
+    (Show label, MonadFail m, Forall (Bound Name) :<: bind, Scope (Bound Name) :<: bind
    , Const lit :<: cons, Record label :<: cons, Variant label :<: cons, Tuple :<: cons)
   => Node
-  -> Gr (GNode (GNodeLabel lit label rep Symbol)) (GEdge Symbol)
-  -> ([(Node, Symbol)], Int)
-  -> m (Type Symbol cons bind Identity rep, ([(Node, Symbol)], Int))
+  -> Gr (GNode (GNodeLabel lit label Name)) (GEdge Name)
+  -> ([(Node, Name)], Int)
+  -> m (Type rep cons bind Identity Name, ([(Node, Name)], Int))
 runRestore node g s = do
-  (typ, stat, ()) <- runRWST (restore (Symbol . show) node) g s
+  (typ, stat, ()) <- runRWST (restore (Name . pack . show) node) g s
   return (typ, stat)
 
 -- | convert a graphic type back to normal representation
@@ -88,17 +89,17 @@ runRestore node g s = do
 -- t == restore . toGraph t
 -- FIXME: when somewhere occurs node like forall a.a, it will enter dead loop.
 restore
-  :: ( MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
+  :: ( MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
      , MonadState ([(Node, name)], Int) m, Show label, MonadFail m
      , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
      , Tuple :<: cons, Record label :<: cons, Variant label :<: cons, Const lit :<: cons
      )
-  => (Node -> name) -> Node -> m (Type name cons bind inj rep)
+  => (Node -> name) -> Node -> m (Type rep cons bind inj name)
 restore schema root = do
   -- we check out whether this node has been bound somewhere
   localNames <- gets fst
   case lookup root localNames of
-    Just name -> return (TypRef name)  -- if so, return the bounded name and it is done.
+    Just name -> return (TypVar name)  -- if so, return the bounded name and it is done.
     Nothing -> do -- otherwise, generate sub structure
       label <- ask >>= \g -> return . lab' $ context g root
       -- we construct local symbol first, mutate local name binding
@@ -109,9 +110,8 @@ restore schema root = do
       body <- case label of
         GType NodeUni -> return . injTypeLit $ Tuple []
         GType NodeBot -> return TypPht
-        GType (NodeRep rep) -> return (TypRep rep)
         GType (NodeLit lit) -> return (injTypeLit $ Const lit)
-        GType (NodeRef name) -> return (TypRef name)
+        GType (NodeRef name) -> return (TypVar name)
         GType NodeSum -> do
           labelNodes <- getStructure root >>= \subs -> mapM nodeLabel subs
           pairs <- forM labelNodes \(node, nlabel) ->
@@ -191,7 +191,7 @@ restore schema root = do
 -- | add redundant binding edges to graphic type
 -- FIXME: add constructor node and remove application node
 -- TODO: add concepts of arity and variance of node
-augGraph :: (MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m, MonadFail m)
+augGraph :: (MonadState (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m, MonadFail m)
          => Node -> m ()
 augGraph root = do
   g <- get
@@ -214,8 +214,8 @@ augGraph root = do
 -- here is one: forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c
 -- | first order term unification, operates on function nodes, return the proper unified node
 (~=~)
-  :: ( MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name), [Node]) m, MonadFail m
-     , Eq name, Eq rep, Eq lit, Ord label
+  :: ( MonadState (Gr (GNode (GNodeLabel lit label name)) (GEdge name), [Node]) m, MonadFail m
+     , Eq name, Eq lit, Ord label
      )
   => Node -> Node -> m Node
 (~=~) n1 n2
@@ -284,7 +284,7 @@ augGraph root = do
           _ -> fail "Expect Field node, but get something other than NodeHas"
     -- | redirect all incoming structure edges of node1 to node2, return the second node
     (==>)
-      :: (MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name), [Node]) m, Eq name)
+      :: (MonadState (Gr (GNode (GNodeLabel lit label name)) (GEdge name), [Node]) m, Eq name)
       => Node -> Node -> m Node
     (==>) src dst = gets (sEdgeIn . fst) <*> pure src >>= mapM_ \case
         e@(ancestor, _, GSub i) -> do
@@ -354,20 +354,20 @@ augGraph root = do
 -}
 
 runExpansion
-  :: (Eq rep, Eq lit, Eq name, Eq label, MonadFail m)
-  => Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)
+  :: (Eq lit, Eq name, Eq label, MonadFail m)
+  => Gr (GNode (GNodeLabel lit label name)) (GEdge name)
   -> (Node, Node) -> Node
-  -> m ((Node, [(Node, Node)]), Gr (GNode (GNodeLabel lit label rep name)) (GEdge name))
+  -> m ((Node, [(Node, Node)]), Gr (GNode (GNodeLabel lit label name)) (GEdge name))
 runExpansion r a b = do
   (res, stat, ()) <- runRWST (expandat a b) r r
   return (res, stat)
 
 -- | expand a type scheme under a gen node
 expandat
-  :: forall m lit label rep name
-  .  ( MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
-     , MonadState (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
-     , Eq rep, Eq lit, Eq name, Eq label, MonadFail m)
+  :: forall m lit label name
+  .  ( MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
+     , MonadState (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
+     , Eq lit, Eq name, Eq label, MonadFail m)
   => (Node, Node) -> Node -> m (Node, [(Node, Node)])
 expandat (rootG, scheme) target = do
   preAssert
@@ -377,7 +377,7 @@ expandat (rootG, scheme) target = do
     directS g = nub . fmap fst . filter (isStructureEdge . snd) . lsuc g
     dupScheme :: m [(Node, Node)]
     dupScheme = do
-      labof <- lab'' <$> (ask :: m (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)))
+      labof <- lab'' <$> (ask :: m (Gr (GNode (GNodeLabel lit label name)) (GEdge name)))
       oNodes :: [Node] <- do
         n1 <- interiorS rootG
         nds <- union n1 <$> frontierS rootG
@@ -415,7 +415,7 @@ expandat (rootG, scheme) target = do
 
 -- | get **constraint interior node** including it self.
 interiorC
-  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m)
   => Node -> m [Node]
 interiorC root = go [root] []
   where
@@ -430,7 +430,7 @@ interiorC root = go [root] []
 
 -- | get **structural interior node**
 interiorS
-  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m)
   => Node -> m [Node]
 interiorS root = do
   cs <- interiorC root
@@ -439,7 +439,7 @@ interiorS root = do
 
 -- | get reachable structure node
 interiorI
-  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m)
   => Node -> m [Node]
 interiorI root = go [root] []
   where
@@ -454,7 +454,7 @@ interiorI root = go [root] []
 
 -- | get **structural frontier node**
 frontierS
-  :: (MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m)
+  :: (MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m)
   => Node -> m [Node]
 frontierS root = do
   interiors <- interiorS root
@@ -463,7 +463,7 @@ frontierS root = do
   where
     with g = nub . fmap fst . filter (isStructureEdge . snd) . lsuc g
 
-permission :: MonadReader (Gr (GNode (GNodeLabel lit label rep name)) (GEdge name)) m
+permission :: MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
            => Node -> Node -> m Perm
 permission _root _n = do
   void ask

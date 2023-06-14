@@ -5,12 +5,10 @@ module Tlang.AST
     None (..)
   , Symbol (..)
   , Label (..)
+  , Name (..)
 
   , StandardType
-  , StandardRepType
-  , StandardMixType
 
-  , TypeAST
   , TypLitExt
   , TypBindExt
 
@@ -36,25 +34,33 @@ import Data.GraphViz
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext
 import Tlang.Generic
-import Tlang.Rep (DataRep, SeqT)
+import Tlang.Rep (Rep (..))
+
+import Data.Text (Text, unpack)
+import Data.String (IsString (..))
 
 type TypLitExt label = Tuple :+: Record label :+: Variant label :+: Ext.LiteralNatural :+: Ext.LiteralText
 type TypBindExt bound = Forall bound :+: Scope bound
 
 -- | original type definition
-type StandardType name label b inj = Type name (TypLitExt label) (TypBindExt b) inj
--- | type representation for standard type definition
-type StandardRepType name label b inj = DataRep SeqT (StandardType name label b inj)
-type StandardMixType name label b inj = StandardType name label b inj (StandardRepType name label b inj)
-
--- | representation used for Type in AST
-type TypeAST inj = StandardType Symbol Label (Bound Symbol) inj (StandardRepType Symbol Label (Bound Symbol) inj)
+type StandardType label b = Type Rep (TypLitExt label) (TypBindExt b)
 
 -- | a place holder for every parametric data type
 data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | used to represent type name reference, both for operator and normal name
 data Symbol = Symbol String | Op String deriving (Eq)
+
+-- | a wrapper for name reference
+newtype Name = Name Text deriving (Eq, Ord) deriving IsString via Text
+instance Show Name where
+  show (Name text) = unpack text
+
+-- | label for variant and record
+newtype Label = Label Text deriving (Eq, Ord) deriving IsString via Text
+instance Show Label where
+  show (Label text) = unpack text
+
 instance Show Symbol where
   show (Symbol s) = s
   show (Op s) = s
@@ -68,9 +74,4 @@ instance Ord Symbol where
 instance Labellable Symbol where
   toLabelValue (Symbol name) = toLabelValue name
   toLabelValue (Op name) = toLabelValue name
-
--- | label for variant and record
-newtype Label = Label String deriving (Eq, Ord)
-instance Show Label where
-  show (Label s) = s
 

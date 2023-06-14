@@ -1,18 +1,16 @@
 module Driver.Transform
   ( PlayG
-  , PlayGP
   , runToGraph
   )
 where
 
-import Tlang.Transform.TypeGraph (toGraph, ConstrainGraph, InjGraph, BinderGraph, LiteralGraph)
+import Tlang.Transform.TypeGraph (toGraph, ConstrainGraph, InjGraph, BinderGraph, LiteralGraph, RuntimeRepGraph)
 import Tlang.Unification.Type
-import Tlang.AST (Symbol, Type, Label, Bound, StandardRepType)
+import Tlang.AST (Name, Type, Label)
 import Tlang.Graph.Extension.Type
 import Tlang.Graph.Core
 import Tlang.Generic ((:+:), (:<:))
 
-import Control.Monad.Identity (Identity)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (StateT (..))
 import Capability.Reader (HasReader, MonadReader (..))
@@ -22,15 +20,12 @@ import Capability.State (HasState, MonadState (..))
 
 import Data.Text (Text)
 
-type PlayG r
+type PlayG
   = CoreG (   Uno NodeBot :+: Uno (NodeLit Integer) :+: Uno (NodeLit Text)
-          :+: Uno NodeTup :+: Uno NodeSum :+: Uno NodeRec :+: Uno (NodeRef Symbol)
-          :+: Uno NodeApp :+: Uno (NodeHas Label) :+: Uno (NodeRep r)
+          :+: Uno NodeTup :+: Uno NodeSum :+: Uno NodeRec :+: Uno (NodeRef Name)
+          :+: Uno NodeApp :+: Uno (NodeHas Label)
           )
-          (Uno Sub :+: Uno (Bind Symbol)) Int
-
--- | Graph for handling type generated fro parser
-type PlayGP = PlayG (StandardRepType Symbol Label (Bound Symbol) Identity)
+          (Uno Sub :+: Uno (Bind Name)) Int
 
 newtype TypeToGraphM name nodes edges m a = TypeToGraphM
   { runTypeToGraphM ::
@@ -42,17 +37,18 @@ newtype TypeToGraphM name nodes edges m a = TypeToGraphM
     deriving (HasState "node" Int, HasSource "node" Int, HasSink "node" Int)
           via MonadState (ReaderT [(name, (Hole nodes Int, CoreG nodes edges Int))] (StateT Int m))
 
-runToGraph :: ( ConstrainGraph cons nodes edges Int (TypeToGraphM name nodes edges m)
+runToGraph :: ( ConstrainGraph prm nodes edges Int (TypeToGraphM name nodes edges m)
               , ConstrainGraph bind nodes edges Int (TypeToGraphM name nodes edges m)
               , ConstrainGraph inj nodes edges Int (TypeToGraphM name nodes edges m)
-              , InjGraph inj Int, LiteralGraph cons Int, BinderGraph bind Int
+              , ConstrainGraph rep nodes edges Int (TypeToGraphM name nodes edges m)
+              , InjGraph inj Int, LiteralGraph prm Int, BinderGraph bind Int, RuntimeRepGraph rep Int
               , Monad m, Ord (edges (Link edges))
-              , Traversable inj, Traversable bind, Traversable cons
-              , Uno (NodeRep rep) :<: nodes, Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
+              , Functor inj, Functor bind, Functor prm, Functor rep
+              , Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
               , Uno NodeApp :<: nodes, Uno Sub :<: edges, Eq name
               )
            => [(name, (Hole nodes Int, CoreG nodes edges Int))]
-           -> Int -> Type name cons bind inj rep
+           -> Int -> Type rep prm bind inj name
            -> m ((Hole nodes Int, CoreG nodes edges Int), Int)
 runToGraph r seed t = runStateT (runReaderT (runTypeToGraphM $ toGraph t) r) seed
 

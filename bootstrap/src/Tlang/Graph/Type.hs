@@ -58,10 +58,9 @@ data GNode typ
   deriving (Show, Eq, Ord, Functor)
 
 -- | actual label for Type, doesn't support predicate constraint
-data GNodeLabel lit label rep name
+data GNodeLabel lit label name
   = NodeUni -- unit type node, arity 0
   | NodeBot -- special bottom node, arity 0
-  | NodeRep rep -- representation node, arity 0
   | NodeLit lit -- literal type node, arity 0
   | NodeRef name  -- type ref node, used to hold concrete type, arity 0
   | NodeSum -- has multiple labels, and each label may have one type
@@ -76,10 +75,9 @@ data GNodeLabel lit label rep name
 -- | mark arity info of constructor
 newtype NodeArity = NodeArity [Variance] deriving (Show, Eq)
 
-instance (Labellable name, Show label) => Labellable (GNodeLabel lit label rep name) where
+instance (Labellable name, Show label) => Labellable (GNodeLabel lit label name) where
   toLabelValue NodeUni = StrLabel "()"
   toLabelValue NodeBot = StrLabel "⊥"
-  toLabelValue (NodeRep _) = StrLabel "&"
   toLabelValue (NodeLit _) = StrLabel "$"
   toLabelValue (NodeRef name) = toLabelValue name
   -- toLabelValue (NodeCons name _) = toLabelValue name

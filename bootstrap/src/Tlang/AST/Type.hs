@@ -20,69 +20,72 @@ import Tlang.TH (fixQ)
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
-data Type name cons bind inj rep
+data Type rep prm bind inj name
   = TypPht                                      -- ^ empty type (bottom type) or "forall a. a" type
-  | TypRep rep                                  -- ^ type representation, the concrete one, will always be with kind '*'
+  | TypVar name                                 -- ^ refer to named type or type variable
+  | TypRep (rep (Type rep prm bind inj name))  -- ^ type representation, the concrete one, will always be with kind '*'
                                                 --   It has syntax level support
-  | TypRef name                                 -- ^ refer to named type or type variable
-  | TypLit (cons (Type name cons bind inj rep)) -- ^ type level literal constructor. natural number, string and all that.
+  | TypPrm (prm (Type rep prm bind inj name)) -- ^ type level Primitive prmtructor. natural number, string, record and so on.
                                                 --   It also include sub structure like records and variants.
                                                 --   Everything that could __literally__ written in source code.
-  | TypCon (Type name cons bind inj rep)        -- ^ type application or type constructor
-           [Type name cons bind inj rep]
-  | TypLet (bind (Type name cons bind inj rep)) -- ^ a uniform way to represent arbitrary binding logic
-           (Type name cons bind inj rep)
-  | TypInj (inj (Type name cons bind inj rep))  -- ^ Allow artibrary injection, to provide further information of syntax tree
+  | TypCon (Type rep prm bind inj name)        -- ^ type application or type prmtructor
+           [Type rep prm bind inj name]
+  | TypLet (bind (Type rep prm bind inj name)) -- ^ a uniform way to represent arbitrary binding logic
+           (Type rep prm bind inj name)
+  | TypInj (inj (Type rep prm bind inj name))  -- ^ Allow artibrary injection, to provide further information of syntax tree
   deriving (Functor, Foldable, Traversable)
 
-instance (Functor cons, Functor bind, Functor inj) => Applicative (Type name cons bind inj) where
-  pure = TypRep
-  TypPht <*> _ = TypPht
-  TypRep f <*> a = f <$> a
-  TypRef v <*> _ = TypRef v
-  TypLit ff <*> a = TypLit ((<*> a) <$> ff)
-  TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
-  TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
-  TypInj ff <*> a = TypInj ((<*> a) <$> ff)
+-- instance (Functor prm, Functor bind, Functor inj, Functor rep) => Applicative (Type rep prm bind inj) where
+--   pure = TypVar
+--   TypPht <*> _ = TypPht
+--   TypVar v <*> a = TypVar $ v <$> a
+--   TypRep f <*> a = TypRep $ (<*> a) <$> f
+--   TypPrm ff <*> a = TypPrm ((<*> a) <$> ff)
+--   TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
+--   TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
+--   TypInj ff <*> a = TypInj ((<*> a) <$> ff)
 
-instance (Functor cons, Functor bind, Functor inj) => Monad (Type name cons bind inj) where
-  TypPht >>= _ = TypPht
-  TypRef v >>= _ = TypRef v
-  TypLit fa >>= f = TypLit ((>>= f) <$> fa)
-  TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
-  TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
-  TypRep a >>= f = f a
-  TypInj fa >>= f = TypInj ((>>= f) <$> fa)
-
-deriving instance
-  ( Eq (inj  (Type name cons bind inj rep))
-  , Eq (bind (Type name cons bind inj rep))
-  , Eq (cons (Type name cons bind inj rep))
-  , Eq name, Eq rep
-  ) => Eq (Type name cons bind inj rep)
+-- instance (Functor prm, Functor bind, Functor inj) => Monad (Type name prm bind inj) where
+--   TypPht >>= _ = TypPht
+--   TypVar v >>= _ = TypVar v
+--   TypPrm fa >>= f = TypPrm ((>>= f) <$> fa)
+--   TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
+--   TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
+--   TypRep a >>= f = f a
+--   TypInj fa >>= f = TypInj ((>>= f) <$> fa)
 
 deriving instance
-  ( Ord (inj  (Type name cons bind inj rep))
-  , Ord (bind (Type name cons bind inj rep))
-  , Ord (cons (Type name cons bind inj rep))
-  , Ord name, Ord rep
-  ) => Ord (Type name cons bind inj rep)
+  ( Eq (inj  (Type rep prm bind inj name))
+  , Eq (bind (Type rep prm bind inj name))
+  , Eq (prm (Type rep prm bind inj name))
+  , Eq (rep (Type rep prm bind inj name))
+  , Eq name
+  ) => Eq (Type rep prm bind inj name)
+
+deriving instance
+  ( Ord (inj  (Type rep prm bind inj name))
+  , Ord (bind (Type rep prm bind inj name))
+  , Ord (prm (Type rep prm bind inj name))
+  , Ord (rep (Type rep prm bind inj name))
+  , Ord name
+  ) => Ord (Type rep prm bind inj name)
 
 instance
-  ( Show name, Show rep
-  , Show (inj (Type name cons bind inj rep))
-  , Show (bind (Type name cons bind inj rep))
-  , Show (cons (Type name cons bind inj rep))
-  ) => Show (Type name cons bind inj rep) where
+  ( Show name
+  , Show (rep (Type rep prm bind inj name))
+  , Show (inj (Type rep prm bind inj name))
+  , Show (bind (Type rep prm bind inj name))
+  , Show (prm (Type rep prm bind inj name))
+  ) => Show (Type rep prm bind inj name) where
   show TypPht = "⊥"
   show (TypRep t) = show t
-  show (TypLit lit) = show lit
-  show (TypRef name) = show name
+  show (TypPrm lit) = show lit
+  show (TypVar name) = show name
   show (TypLet binder body) = "let { " <> show binder <> " = " <> show body <> " }"
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
   show (TypInj anno) = show anno
 
--- | type constraint
+-- | type prmtraint
 data TypeAssert msg typ
   = TACons typ typ [typ]  -- ^ actual worker, predicate
   | TAAnd (TypeAssert msg typ) [TypeAssert msg typ] -- ^ and connective
@@ -119,9 +122,9 @@ $(deriveBifunctor ''(:==))
 data Kind f name
   = KindType                      -- ^ concrete type, language's builtin type kind.
   | KindRef name                  -- ^ type kinds other than KindRef and KindType,
-                                  --   and represent any type level thing, literal, value, lifted constructor, etc.
+                                  --   and represent any type level thing, literal, value, lifted prmtructor, etc.
   | KindAbs name (Kind f name)    -- ^ quantified kind variable, well, this is...
-  | Kind f name ::> Kind f name   -- ^ something like "* -> *", means this is a type constructor or something else.
+  | Kind f name ::> Kind f name   -- ^ something like "* -> *", means this is a type prmtructor or something else.
   | KindLift (f (Kind f name))    -- ^ extend functionality
 
 deriving instance (Eq (f (Kind f name)), Eq name) => Eq (Kind f name)
@@ -138,7 +141,7 @@ instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
 infixr 5 ::>
 
 makeBaseFunctor $ fixQ [d|
-  instance (Functor inj, Functor bind, Functor cons) => Recursive (Type name cons bind inj rep)
+  instance (Functor rep, Functor inj, Functor bind, Functor prm) => Recursive (Type rep prm bind inj name)
   instance (Functor f) => Recursive (Kind f name)
   |]
-deriving instance (Show name, Show rep, Show r, Show (cons r), Show (bind r), Show (inj r)) => Show (TypeF name cons bind inj rep r)
+deriving instance (Show name, Show (rep r), Show r, Show (prm r), Show (bind r), Show (inj r)) => Show (TypeF rep prm bind inj name r)

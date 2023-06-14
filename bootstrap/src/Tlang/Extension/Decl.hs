@@ -37,6 +37,8 @@ import Tlang.Generic ((:<:) (..))
 import Tlang.AST.Class.Decl
 import Tlang.AST.Decl
 
+import Data.Text (Text)
+
 -- ** extensions for data type definition
 
 -- | Core definition for data, extended with declaration on type.
@@ -81,11 +83,11 @@ data UserFFI typ info
 
 -- | customised attribute
 data FFItem
-  = FFItemF String [FFItem]     -- ^ custom value, with optional arguments
-  | FFItemS String              -- ^ string value
+  = FFItemF Text [FFItem]       -- ^ custom value, with optional arguments
+  | FFItemS Text                -- ^ string value
   | FFItemI Integer             -- ^ Integer value
   | FFItemA [FFItem]            -- ^ sequence items, take a list form
-  | FFItemR [(String, FFItem)]  -- ^ associated value, take a record form
+  | FFItemR [(Text, FFItem)]    -- ^ associated value, take a record form
   deriving (Show, Eq)
 
 -- ** extensions for value definition
@@ -100,7 +102,7 @@ data UserValue val typ info
 -- | lexical item definition, definition of lexical operator (For Now, more to come in future)
 -- TODO: figure out a way to manipulate lexemes and rules
 data UserItem a
-  = UserItem ItemSpace [Operator String] a
+  = UserItem ItemSpace [Operator Text] a
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | lexical item namespace, to group lexical items together
