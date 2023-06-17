@@ -15,16 +15,27 @@ import Tlang.TH (fixQ)
 data typ :@ term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
 $(deriveBifunctor ''(:@))
 
--- | expression parametrised with primitives, structures and any annotation
-data Expr struct prim inj name
-  = ExRef name                                  -- ^ variable or term info reference
-  | ExPrm (prim (Expr struct prim inj name))    -- ^ primitive expresion
-  | ExStc (struct (Expr struct prim inj name))  -- ^ structure for expression, where effects happen
-  | ExInj (inj (Expr struct prim inj name))     -- ^ extensible ability for expression
+-- | a `Free` like structure for defining `Expr`
+--
+-- `Val` is simply a syntactic constant to `Expr` (e.g. a name reference, a variable)
+data Expr f a
+  = Val a
+  | Expr (f (Expr f a))
+  deriving (Functor)
 
-deriving instance (Show (struct (Expr struct prim inj name)), Show (inj (Expr struct prim inj name)), Show (prim (Expr struct prim inj name)), Show name) => Show (Expr struct prim inj name)
-deriving instance (Eq (struct (Expr struct prim inj name)), Eq (inj (Expr struct prim inj name)), Eq (prim (Expr struct prim inj name)), Eq name) => Eq (Expr struct prim inj name)
+deriving instance (Show (f (Expr f a)), Show a) => Show (Expr f a)
+deriving instance (Eq (f (Expr f a)), Eq a) => Eq (Expr f a)
+
+instance Functor f => Applicative (Expr f) where
+  pure = Val
+  (Val f) <*> (Val a) = Val (f a)
+  f <*> Expr fv = Expr ((f <*>) <$> fv)
+  (Expr fv) <*> a = Expr ((<*> a) <$> fv)
+
+instance Functor f => Monad (Expr f) where
+  Val a >>= f = f a
+  Expr fma >>= f = Expr ((>>= f) <$> fma)
 
 makeBaseFunctor $ fixQ [d|
-  instance (Functor inj, Functor prim, Functor struct) => Recursive (Expr struct prim inj name)
+  instance (Functor f) => Recursive (Expr f a)
   |]

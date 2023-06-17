@@ -27,66 +27,66 @@ import Tlang.Generic ((:<:) (..))
 data WithExpr (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
 type ExprC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
-cons :: (Apply :<: struct) => Expr struct prim inj name -> Expr struct prim inj name -> Expr struct prim inj name
-cons x@(ExStc p) v = case prj @Apply p of
-                     Just (Apply a b as) -> ExStc . inj $ Apply a b (as <> [v])
-                     Nothing -> ExStc . inj $ Apply x v []
-cons a b = ExStc . inj $ Apply a b []
+cons :: (Apply :<: f) => Expr f name -> Expr f name -> Expr f name
+cons x@(Expr p) v = case prj @Apply p of
+                     Just (Apply a b as) -> Expr . inj $ Apply a b (as <> [v])
+                     Nothing -> Expr . inj $ Apply x v []
+cons a b = Expr . inj $ Apply a b []
 
-literal :: (Apply :<: struct, Monad m) => Expr struct prim inj name -> Semantic m (Expr struct prim inj name)
+literal :: (Apply :<: f, Monad m) => Expr f name -> Semantic m (Expr f name)
 literal a = Semantic (const $ return a) (\_ left -> return $ cons left a) (return Infinite)
 
 -- * compound syntax
 
-instance ( PrattToken (WithExpr e m a) (Expr struct prim inj name) m
-         , PrattToken (WithExpr e m b) (Expr struct prim inj name) m
+instance ( PrattToken (WithExpr e m a) (Expr f name) m
+         , PrattToken (WithExpr e m b) (Expr f name) m
          , ExprC e m
          )
-  => PrattToken (WithExpr e m (a :- b)) (Expr struct prim inj name) m where
+  => PrattToken (WithExpr e m (a :- b)) (Expr f name) m where
   tokenize _ parser end = try (tokenize (Proxy @(WithExpr e m a)) parser end)
                       <|> tokenize (Proxy @(WithExpr e m b)) parser end
 
-instance ( PrattToken (WithExpr e m a) (Expr struct prim inj name) m
+instance ( PrattToken (WithExpr e m a) (Expr f name) m
          , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => PrattToken (WithExpr e m (msg ?- a)) (Expr struct prim inj name) m where
+  => PrattToken (WithExpr e m (msg ?- a)) (Expr f name) m where
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
                         $ tokenize (Proxy @(WithExpr e m a)) parser end
 
-instance ( ParserDSL (WithExpr e m a) (Expr struct prim inj name) m
+instance ( ParserDSL (WithExpr e m a) (Expr f name) m
          , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => ParserDSL (WithExpr e m (msg ?- a)) (Expr struct prim inj name) m where
+  => ParserDSL (WithExpr e m (msg ?- a)) (Expr f name) m where
   syntax _ end = dbg' (symbolVal $ Proxy @msg)
                $ syntax (Proxy @(WithExpr e m a)) end
 
-instance ( ParserDSL (WithExpr e m (msg ?- a)) (Expr struct prim inj name) m
+instance ( ParserDSL (WithExpr e m (msg ?- a)) (Expr f name) m
          , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => ParserDSL (msg ?- WithExpr e m a) (Expr struct prim inj name) m where
+  => ParserDSL (msg ?- WithExpr e m a) (Expr f name) m where
   syntax _ end = dbg' (symbolVal $ Proxy @msg)
                $ syntax (Proxy @(WithExpr e m (msg ?- a))) end
 
 -- | expression identifier
-instance (ExprC e m, name ~ Name, Apply :<: struct)
-  => PrattToken (WithExpr e m "identifier") (Expr struct prim inj name) m where
-  tokenize _ _ _ = identifier <&> ExRef . Name <&> literal
+instance (ExprC e m, name ~ Name, Apply :<: f)
+  => PrattToken (WithExpr e m "identifier") (Expr f name) m where
+  tokenize _ _ _ = identifier <&> Val . Name <&> literal
 
 -- | literal text
-instance (ExprC e m, Apply :<: struct, LiteralText :<: prim)
-  => PrattToken (WithExpr e m "text") (Expr struct prim inj name) m where
-  tokenize _ _ _ = stringLiteral <&> ExPrm . inj . LiteralText . Literal <&> literal
+instance (ExprC e m, Apply :<: f, LiteralText :<: f)
+  => PrattToken (WithExpr e m "text") (Expr f name) m where
+  tokenize _ _ _ = stringLiteral <&> Expr . inj . LiteralText . Literal <&> literal
 
 -- | literal integer
-instance (ExprC e m, Apply :<: struct, LiteralInteger :<: prim)
-  => PrattToken (WithExpr e m "integer") (Expr struct prim inj name) m where
-  tokenize _ _ _ = integer <&> ExPrm . inj . LiteralInteger . Literal <&> literal
+instance (ExprC e m, Apply :<: f, LiteralInteger :<: f)
+  => PrattToken (WithExpr e m "integer") (Expr f name) m where
+  tokenize _ _ _ = integer <&> Expr . inj . LiteralInteger . Literal <&> literal
 
 -- | literal floating
-instance (ExprC e m, Apply :<: struct, LiteralNumber :<: prim)
-  => PrattToken (WithExpr e m "number") (Expr struct prim inj name) m where
-  tokenize _ _ _ = float <&> ExPrm . inj . LiteralNumber . Literal <&> literal
+instance (ExprC e m, Apply :<: f, LiteralNumber :<: f)
+  => PrattToken (WithExpr e m "number") (Expr f name) m where
+  tokenize _ _ _ = float <&> Expr . inj . LiteralNumber . Literal <&> literal
 
 -- | operators for expression
-instance (ExprC e m, Name ~ name, Apply :<: struct, HasReader "TermOperator" [Operator Text] m)
-  => PrattToken (WithExpr e m "operator") (Expr struct prim inj name) m where
+instance (ExprC e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operator Text] m)
+  => PrattToken (WithExpr e m "operator") (Expr f name) m where
   tokenize _ parser _ = do
     pos <- getOffset
     op <- operator
@@ -95,84 +95,84 @@ instance (ExprC e m, Name ~ name, Apply :<: struct, HasReader "TermOperator" [Op
       Nothing -> setOffset pos >> do fail $ "Operator is not defined in term level: " <> show op
     let nud' end =
           if fixity `elem` [Prefix, Unifix]
-             then parser end (Power r) <&> cons (ExRef $ Name op)
+             then parser end (Power r) <&> cons (Val $ Name op)
              else fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Prefix or Unifix"
         led' end left =
           case fixity of
-            Infix -> parser end (Power r) <&> ExStc . inj . Apply (ExRef $ Name op) left . pure
-            Unifix -> return (cons (ExRef $ Name op) left)
-            Postfix -> return (cons (ExRef $ Name op) left)
+            Infix -> parser end (Power r) <&> Expr . inj . Apply (Val $ Name op) left . pure
+            Unifix -> return (cons (Val $ Name op) left)
+            Postfix -> return (cons (Val $ Name op) left)
             _ -> fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
     return (Semantic nud' led' (return $ Power l))
 
 -- | group operator for expression
-instance (ExprC e m, Apply :<: struct)
-  => PrattToken (WithExpr e m "group") (Expr struct prim inj name) m where
+instance (ExprC e m, Apply :<: f)
+  => PrattToken (WithExpr e m "group") (Expr f name) m where
   tokenize _ parser _ = parens (parser (lookAhead $ reservedOp ")" $> ()) Go) <&> literal
 
 -- | tuple expression
-instance (ExprC e m, Apply :<: struct, Tuple :<: prim)
-  => PrattToken (WithExpr e m "tuple") (Expr struct prim inj name) m where
+instance (ExprC e m, Apply :<: f, Tuple :<: f)
+  => PrattToken (WithExpr e m "tuple") (Expr f name) m where
   tokenize _ parser _ = do
     fields <- parens $ parser (void . lookAhead $ reservedOp "," <|> reservedOp ")") Go `sepBy` reservedOp ","
-    return $ literal (ExPrm . inj $ Tuple fields)
+    return $ literal (Expr . inj $ Tuple fields)
 
 -- | record expression
-instance (ExprC e m, Apply :<: struct, Record Label :<: prim)
-  => PrattToken (WithExpr e m "record") (Expr struct prim inj name) m where
+instance (ExprC e m, Apply :<: f, Record Label :<: f)
+  => PrattToken (WithExpr e m "record") (Expr f name) m where
   tokenize _ parser _ = do
     let field = (,) <$> fmap Label identifier <* reservedOp "=" <*> parser (void . lookAhead $ reservedOp "," <|> reservedOp "}") Go
     fields <- braces (field `sepBy` reservedOp ",")
-    return $ literal (ExPrm . inj $ Record fields)
+    return $ literal (Expr . inj $ Record fields)
 
 -- | selector expression
-instance (ExprC e m, Apply :<: struct, Selector Label :<: prim)
-  => PrattToken (WithExpr e m "selector") (Expr struct prim inj name) m where
-  tokenize _ _ _ = char '.' *> identifier <&> ExPrm . inj . Selector . Label <&> literal
+instance (ExprC e m, Apply :<: f, Selector Label :<: f)
+  => PrattToken (WithExpr e m "selector") (Expr f name) m where
+  tokenize _ _ _ = char '.' *> identifier <&> Expr . inj . Selector . Label <&> literal
 
 -- | variant constructor
-instance (ExprC e m, Apply :<: struct, Constructor Label :<: prim)
-  => PrattToken (WithExpr e m "constructor") (Expr struct prim inj name) m where
+instance (ExprC e m, Apply :<: f, Constructor Label :<: f)
+  => PrattToken (WithExpr e m "constructor") (Expr f name) m where
   tokenize _ parser _ = do
     let item = do
           var <- identifier' <* symbol "|" <&> Label <?> "Expr: constructor label"
           fields <- parser (void . lookAhead $ reservedOp "," <|> reservedOp "]") Go `sepBy` reservedOp ","
                 <?> "Expr: constructor fields"
-          return (ExPrm . inj $ Constructor var fields)
+          return (Expr . inj $ Constructor var fields)
     variant <- (char '[' *> item <* symbol "]" <?> "Expr: constructor syntax")
-           <|> (char '`' >> fmap (ExPrm . inj) . Constructor . Label <$> identifier <*> pure [])
+           <|> (char '`' >> fmap (Expr . inj) . Constructor . Label <$> identifier <*> pure [])
     return $ literal variant
 
 -- | type annotation
-instance (ExprC e m, (:@) typ :<: inj, PrattToken proxy typ m)
-  => PrattToken (WithExpr e m (Layer "annotation" proxy typ)) (Expr struct prim inj name) m where
+instance (ExprC e m, (:@) typ :<: f, PrattToken proxy typ m)
+  => PrattToken (WithExpr e m (Layer "annotation" proxy typ)) (Expr f name) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
       nud' _ = fail "Type annotation expect an expression first"
       led' end left = do
         typ :: typ <- pratt @proxy end Go
-        return . ExInj . inj $ left :@ typ
+        return . Expr . inj $ left :@ typ
 
 -- | let expression
-instance (ExprC e m, Apply :<: struct, Let pat :<: struct, PrattToken proxy (pat (Expr struct prim inj name)) m)
-  => PrattToken (WithExpr e m (Layer "let" proxy (Hint pat))) (Expr struct prim inj name) m where
+instance (ExprC e m, Apply :<: f, Let pat :<: f, PrattToken proxy (pat (Expr f name)) m)
+  => PrattToken (WithExpr e m (Layer "let" proxy (Hint pat))) (Expr f name) m where
   tokenize _ parser end = do
-    pat :: pat (Expr struct prim inj name) <-
+    pat :: pat (Expr f name) <-
       reserved "let" >> pratt @proxy (lookAhead (reservedOp "=") $> ()) Go <* reservedOp "=" <?> "Let Expression Head"
     value <- parser (lookAhead (reserved "in") $> ()) Go <* reserved "in"
     ret <- parser end Go
-    return . literal . ExStc . inj $ Let pat value ret
+    return . literal . Expr . inj $ Let pat value ret
 
 -- | block lambda for expression
-instance ( ExprC e m, Apply :<: struct
+instance ( ExprC e m, Apply :<: f
          , PatGroup :<: pext
-         , PrattToken proxy (Pattern plit pext plabel pname (Expr struct prim inj name)) m
-         , Lambda (Pattern plit pext plabel pname) (Bounds Name (Type trep tcons tbind tinj tname)) :<: struct
+         , PrattToken proxy (Pattern plit pext plabel pname (Expr f name)) m
+         , Lambda (Pattern plit pext plabel pname) (Bounds Name (Type trep tcons tbind tinj tname)) :<: f
          )
   => PrattToken (WithExpr e m (Layer ("block" :- Type trep tcons tbind tinj tname) proxy (Hint (Pattern plit pext plabel pname))))
-                (Expr struct prim inj name) m where
+                (Expr f name) m where
   tokenize _ parser _ = do
-    let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr struct prim inj name))
+    let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr f name))
                      (void . lookAhead . choice $ reservedOp <$> [",", "=", "|"]) Go
         gPat = iPat `sepBy1` reservedOp "," <&> PatExt . inj . PatGrp <?> "group pattern"
         sPat = gPat `sepBy1` reservedOp "|" <&> PatExt . inj . PatSeq <?> "sequence pattern" <|> fail "expect a pattern definition"
@@ -182,17 +182,17 @@ instance ( ExprC e m, Apply :<: struct
           heads <- Lambda . Bounds . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type trep tcons tbind tinj tname)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
-    brackets (lambda <&> ExStc . inj <?> "block lambda") <&> literal
+    brackets (lambda <&> Expr . inj <?> "block lambda") <&> literal
 
 -- | one line lambda for expression
-instance ( ExprC e m, Apply :<: struct
-         , PrattToken proxy (pat (Expr struct prim inj name)) m
-         , Lambda (Grp pat) (Bounds Name (Type trep tcons tbind tinj tname)) :<: struct
+instance ( ExprC e m, Apply :<: f
+         , PrattToken proxy (pat (Expr f name)) m
+         , Lambda (Grp pat) (Bounds Name (Type trep tcons tbind tinj tname)) :<: f
          )
   => PrattToken (WithExpr e m (Layer ("line" :- Type trep tcons tbind tinj tname) proxy (Hint (Grp pat))))
-                (Expr struct prim inj name) m where
+                (Expr f name) m where
   tokenize _ parser end = do
-    let iPat = pratt @proxy @(pat (Expr struct prim inj name))
+    let iPat = pratt @proxy @(pat (Expr f name))
                      (void . lookAhead . choice $ reservedOp <$> [",", "=>"]) Go
                <?> "Lambda Parameter pattern"
         gPat = iPat `sepBy1` reservedOp "," <&> Grp
@@ -201,17 +201,17 @@ instance ( ExprC e m, Apply :<: struct
           heads <- Lambda . Bounds . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type trep tcons tbind tinj tname)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> return []
-    reservedOp "\\" *> (lambda <&> ExStc . inj) <&> literal
+    reservedOp "\\" *> (lambda <&> Expr . inj) <&> literal
 
 -- | type application
 instance ( ExprC e m
          , PrattToken proxy (Type trep tcons tbind tinj tname) m
-         , VisibleType (Type trep tcons tbind tinj tname) :<: prim
+         , VisibleType (Type trep tcons tbind tinj tname) :<: f
          , tname ~ Name, Tuple :<: tcons, LiteralText :<: tcons, LiteralNatural :<: tcons
          , Record Label :<: tcons
          )
   => PrattToken (WithExpr e m (Layer "@type" proxy (Type trep tcons tbind tinj tname)))
-                (Expr struct prim inj name) m where
+                (Expr f name) m where
   tokenize _ _ _ = char '@' >> do
     typ <- parens (pratt @proxy @(Type trep tcons tbind tinj tname) (lookAhead (reservedOp ")") $> ()) Go)
       <|> TypVar . Name <$> identifier
@@ -221,6 +221,6 @@ instance ( ExprC e m
       <|> TypPrm . inj . LiteralText . Literal <$> stringLiteral -- text
       <|> TypPrm . inj <$> record (pratt @proxy)
     let nud' _ = fail "Type application requires one argument"
-        led' _ left = return . ExPrm . inj $ VisibleType typ left
+        led' _ left = return . Expr . inj $ VisibleType typ left
     return $ Semantic nud' led' (return Infinite)
 

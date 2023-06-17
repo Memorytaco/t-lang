@@ -53,13 +53,14 @@ type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((
 type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ) Label Name
 
 type ASTExpr typ = Expr
-  (Let (ASTPat typ) :+: Lambda (ASTGPat typ) (Bounds Name typ)
-                    :+: Lambda (Grp (ASTPat typ)) (Bounds Name typ)
-                    :+: Apply)
-  ( Tuple :+: Record Label :+: LiteralText :+: LiteralInteger :+: LiteralNumber
-    :+: VisibleType typ :+: Selector Label :+: Constructor Label)
-  ((:@) typ)
-  Name
+  ( Let (ASTPat typ)
+  :+: Lambda (ASTGPat typ) (Bounds Name typ)
+  :+: Lambda (Grp (ASTPat typ)) (Bounds Name typ)
+  :+: Apply :+: Tuple :+: Record Label
+  :+: LiteralText :+: LiteralInteger :+: LiteralNumber
+  :+: VisibleType typ :+: Selector Label :+: Constructor Label
+  :+: (:@) typ
+  ) Name
 
 type ASTDeclExt typ expr = UserItem
   :+: UserType typ [Bound Name typ]
@@ -170,20 +171,20 @@ instance ( MonadFail m, MonadParsec e Text m
          , name ~ Name
          , HasReader "TermOperator" [Operator Text] m
          , PrattToken (TypeLang e m) typ m
-         , PrattToken (PatLang e m typ (Expr struct prim inj name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
-           (pat (Expr struct prim inj name)) m
-         , PrattToken (PatLang e m typ (Expr struct prim inj name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
-           (bpat (Expr struct prim inj name)) m
+         , PrattToken (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
+           (pat (Expr f name)) m
+         , PrattToken (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
+           (bpat (Expr f name)) m
          , PrattToken (ExprLang e m typ pat bpat (TypeLang e m)
-                        (PatLang e m typ (Expr struct prim inj name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
+                        (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
                       )
-           (Expr struct prim inj name) m
+           (Expr f name) m
          , MonadParsecDbg e Text m
          )
-  => ParserDSL (WholeExpr e m (pat :- bpat :- typ)) (Expr struct prim inj name) m where
+  => ParserDSL (WholeExpr e m (pat :- bpat :- typ)) (Expr f name) m where
   syntax _ end =
     pratt @(ExprLang e m typ pat bpat (TypeLang e m)
-            (PatLang e m typ (Expr struct prim inj name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ))))
+            (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ))))
           (lookAhead end) Go <* end
 
 -- | declaration driver

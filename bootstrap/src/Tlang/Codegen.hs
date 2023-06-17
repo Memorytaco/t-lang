@@ -59,8 +59,8 @@ ret :: Monad m => Maybe Operand -> CodegenT r s e m ()
 ret val = emitTerm $ Ret val []
 
 -- | emit a function definition
--- function :: Monad m => String -> Type -> [(Type, String)] -> [BasicBlock] -> LLVM s e m Operand
--- function (mkName -> name) retty pairs blocks = do
+-- function :: Monad m => Name -> Type -> [(Type, String)] -> [BasicBlock] -> LLVM s e m Operand
+-- function name retty pairs blocks = do
 --   let def = GlobalDefinition functionDefaults
 --           { name = name
 --           , parameters = ((\(ty, nm) -> Parameter ty (mkName nm) []) <$> pairs, False)

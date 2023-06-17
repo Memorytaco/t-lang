@@ -13,7 +13,7 @@ import Tlang.AST
 import Text.Megaparsec hiding (Label)
 import Text.Megaparsec.Char (char)
 import Text.Megaparsec.Debug (MonadParsecDbg (..), dbg')
-import Data.Text (Text, pack)
+import Data.Text (Text)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Data.List (find)

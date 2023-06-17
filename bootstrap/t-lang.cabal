@@ -83,6 +83,7 @@ library
       Tlang.Rep.Primitive
       Tlang.Subst
       Tlang.TH
+      Tlang.Transform.Class
       Tlang.Transform.TypeGraph
       Tlang.Unification
       Tlang.Unification.Kind

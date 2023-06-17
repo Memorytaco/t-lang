@@ -70,23 +70,20 @@ class ConstraintGen f a info | f a -> info where
 
 -- ** runner for constraint generator
 genConstraint
-   :: ( target ~ (Mode, ExprF stcs prms injs name |: Hole nodes Int) -- ^ annotate each expression with type node
-      , ConstraintGen prms target Int, ConstrainGraphic prms target m nodes edges Int
-      , ConstraintGen stcs target Int, ConstrainGraphic stcs target m nodes edges Int
-      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
+   :: ( target ~ (Mode, ExprF f name |: Hole nodes Int) -- ^ annotate each expression with type node
+      , ConstraintGen f target Int, ConstrainGraphic f target m nodes edges Int
       , Uno Sub :<: edges, Uno (Bind name) :<: edges, Uno Instance :<: edges, Uno Unify :<: edges
       , Uno NodeBot :<: nodes, Uno G :<: nodes
-      , Ord (edges (Link edges))
-      , Traversable prms, Traversable stcs, Traversable injs
+      , Ord (edges (Link edges)), Traversable f
       , Show name, Eq name
       , HasState "node" Int m
       , HasThrow "fail" ConstraintGenErr m
       , HasReader "local" [(name, (Uno Unify :+: Uno Instance) |: (Mode, Hole nodes Int))] m
       )
-   => Expr stcs prms injs name -> m (StageConstraint nodes edges Int target)
+   => Expr f name -> m (StageConstraint nodes edges Int target)
 genConstraint = cata go
   where
-    go (ExRefF name) = do
+    go (ValF name) = do
       val'maybe <- asks @"local" (lookup name)
       g <- node' (Uno $ G 1)
       var <- node' (Uno $ NodeBot)
@@ -96,22 +93,20 @@ genConstraint = cata go
              ]
       case val'maybe of
         Just ((mode, n) :| Inl (Uno Unify)) ->
-          return $ StageConstraint (mode, g :| ExRefF name) g
+          return $ StageConstraint (mode, g :| ValF name) g
             (overlays [gr, n -<< Uno Unify >>- var, var -<< Uno Unify >>- n]) mempty
         Just ((mode, n) :| Inr (Uno (Instance i))) ->
-          return $ StageConstraint (mode, g :| ExRefF name) g
+          return $ StageConstraint (mode, g :| ValF name) g
             (overlays [gr, n -<< Uno (Instance i) >>- var]) mempty
         Nothing -> failConstraintMsg $ "name not in scope: " <> show name
-    go (ExPrmF v) = stageConstraint v
-    go (ExStcF v) = stageConstraint v
-    go (ExInjF v) = stageConstraint v
+    go (ExprF v) = stageConstraint v
 
 -- ** instances
 
 -- | Constraint for `Apply`
-type instance ConstrainGraphic Apply (Mode, ExprF stcs prms injs name |: Hole ns Int) m nodes edges info
+type instance ConstrainGraphic Apply (Mode, ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
-    , Apply :<: stcs
+    , Apply :<: f
     , Uno (Bind name) :<: edges, Uno Sub :<: edges, Uno Instance :<: edges, Uno Unify :<: edges
     , Uno G :<: nodes, Uno NodeBot :<: nodes, Uno NodeArr :<: nodes, Uno NodeApp :<: nodes
     , HasThrow "fail" ConstraintGenErr m
@@ -120,7 +115,7 @@ type instance ConstrainGraphic Apply (Mode, ExprF stcs prms injs name |: Hole ns
     , Eq (nodes (Hole nodes Int))
     )
 -- | Constraint for `Apply`
-instance ConstraintGen Apply (Mode, ExprF stcs prms injs name |: Hole nodes Int) Int where
+instance ConstraintGen Apply (Mode, ExprF f name |: Hole nodes Int) Int where
   stageConstraint (Apply ma mb ms) = do
     -- get results from subnodes
     StageConstraint (mode'a, a) r'a gr'a dep'a <- ma
@@ -129,7 +124,7 @@ instance ConstraintGen Apply (Mode, ExprF stcs prms injs name |: Hole nodes Int)
     -- start generating constraint
     start <- genApp (mode'a, r'a, gr'a) (mode'b, r'b, gr'b)
     (mode, g, gr) <- foldM genApp start ((\(StageConstraint (mode, _) r gr _) -> (mode, r, gr)) <$> ss)
-    return $ StageConstraint (mode, g :| (ExStcF . inj . Apply a b $ snd . _atInfo <$> ss)) g gr
+    return $ StageConstraint (mode, g :| (ExprF . inj . Apply a b $ snd . _atInfo <$> ss)) g gr
       (dep'a <> dep'b <> mconcat (_atDep <$> ss))
     where
 
@@ -171,35 +166,35 @@ getInstance ix n@(Hole v _) gr =
 type instance
   ConstrainGraphic
     (Let (Pattern plit pinj label name))
-    (Mode, ExprF stcs prms injs name |: Hole ns Int)
+    (Mode, ExprF f name |: Hole ns Int)
     m nodes edges info
   = ( ns ~ nodes
     )
-instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF stcs prms injs name |: Hole nodes Int) Int where
+instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint = undefined
 
 -- | expression literal
-type instance ConstrainGraphic (Literal t) (ExprF stcs prms injs name |: Hole ns Int) m nodes edges info
+type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
-    , Literal t :<: prms
+    , Literal t :<: f
     , Uno G :<: nodes, Uno (NodeLit t) :<: nodes
     , Uno Sub :<: edges, Uno (Bind name) :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
 -- | expression literal
-instance ConstraintGen (Literal t) (ExprF stcs prms injs name |: Hole nodes Int) Int where
+instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (Literal t) = do
     g <- node' (Uno $ G 1)
     n <- node' (Uno $ NodeLit t)
-    return $ StageConstraint (g :| ExPrmF (inj $ Literal t))
+    return $ StageConstraint (g :| ExprF (inj $ Literal t))
       g (overlays [g -<< Uno (Sub 1) >>- n, n -<< Uno (Bind Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 -- | expression Tuple literal
-type instance ConstrainGraphic Tuple (Mode, ExprF stcs prms injs name |: Hole ns Int) m nodes edges info
+type instance ConstrainGraphic Tuple (Mode, ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
-    , Tuple :<: prms
+    , Tuple :<: f
     , Uno G :<: nodes, Uno NodeTup :<: nodes
     , Uno Sub :<: edges, Uno (Bind name) :<: edges
     , Ord (edges (Link edges)), Eq (nodes (Hole nodes Int))
@@ -207,7 +202,7 @@ type instance ConstrainGraphic Tuple (Mode, ExprF stcs prms injs name |: Hole ns
     , HasThrow "fail" ConstraintGenErr m
     )
 -- | expression Tuple literal
-instance ConstraintGen Tuple (Mode, ExprF stcs prms injs name |: Hole nodes Int) Int where
+instance ConstraintGen Tuple (Mode, ExprF f name |: Hole nodes Int) Int where
   stageConstraint (Tuple sma) = do
     let len = toInteger $ length sma
     g <- node' (Uno $ G 1)
@@ -220,7 +215,7 @@ instance ConstraintGen Tuple (Mode, ExprF stcs prms injs name |: Hole nodes Int)
         , g' -<< Uno (Bind Flexible 1 $ Nothing @name) >>- g
         , gr'
         ]
-    return $ StageConstraint (Poly, g :| ExPrmF (inj . Tuple $ snd . _atInfo . snd <$> sia))
+    return $ StageConstraint (Poly, g :| ExprF (inj . Tuple $ snd . _atInfo . snd <$> sia))
       g (overlays [gr, g -<< Uno (Sub 1) >>- tup, tup -<< Uno (Bind Flexible 1 $ Nothing @name) >>- g])
       (mconcat $ _atDep . snd <$> sia)
 
@@ -237,17 +232,15 @@ node' :: forall nodes sub m. (HasState "node" Int m, sub :<: nodes) => sub (Hole
 node' v = node <&> hole' v
 
 genPatternConstraint
-  :: forall lits injs label name a a' target m nodes edges stcs prms einjs
+  :: forall lits injs label name a a' target m nodes edges f
   .  ( -- for pattern
        target ~ (PatternData lits injs nodes label name a)
      , ConstraintGen lits target Int, ConstrainGraphic lits target m nodes edges Int
      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
 
       -- for expression
-     , a ~ (Expr stcs prms einjs name), a' ~ (Mode, Base a |: Hole nodes Int)
-     , ConstraintGen prms a' Int, ConstrainGraphic prms a' m nodes edges Int
-     , ConstraintGen stcs a' Int, ConstrainGraphic stcs a' m nodes edges Int
-     , ConstraintGen einjs a' Int, ConstrainGraphic einjs a' m nodes edges Int
+     , a ~ Expr f name, a' ~ (Mode, Base a |: Hole nodes Int)
+     , ConstraintGen f a' Int, ConstrainGraphic f a' m nodes edges Int
 
      , Uno Sub :<: edges, Uno (Bind name) :<: edges, Uno Instance :<: edges, Uno Unify :<: edges
      , Uno NodeBot :<: nodes, Uno G :<: nodes, Uno NodeArr :<: nodes, Uno NodeApp :<: nodes
@@ -256,7 +249,7 @@ genPatternConstraint
      , Eq (nodes (Hole nodes Int))
      , Show name, Eq name
      , Traversable lits, Traversable injs
-     , Traversable stcs, Traversable prms, Traversable einjs
+     , Traversable f
      , HasState "node" Int m
      , HasThrow "fail" ConstraintGenErr m
      , HasReader "local" [(name, (Uno Unify :+: Uno Instance) |: (Mode, Hole nodes Int))] m

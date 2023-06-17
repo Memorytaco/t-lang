@@ -41,12 +41,10 @@ data PrimitiveT seq a where
   Struct  :: [PrimitiveT seq a] -> Bool -> PrimitiveT seq a
   -- | Allow other elements to be merged into primitive type
   Embed  :: a -> PrimitiveT seq a
+  deriving (Functor, Foldable, Traversable)
 
-deriving instance Functor t => Functor (PrimitiveT t)
 deriving instance (Eq a, Eq (t (PrimitiveT t a))) => Eq (PrimitiveT t a)
 deriving instance (Ord a, Ord (t (PrimitiveT t a))) => Ord (PrimitiveT t a)
-deriving instance Foldable t => Foldable (PrimitiveT t)
-deriving instance Traversable t => Traversable (PrimitiveT t)
 
 -- | Primitive scala type, the very basic type building block.
 data ScalaType
@@ -154,5 +152,4 @@ valueSpace (Bit i) = 2 ^ i
 ptr :: PrimitiveT t a -> PrimitiveT t a
 ptr = flip Ptr Nothing
 
-type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor $ fixQ [d| instance (FoldFunctor t) => Recursive (PrimitiveT t a) |]
+makeBaseFunctor $ fixQ [d| instance (Functor t) => Recursive (PrimitiveT t a) |]
