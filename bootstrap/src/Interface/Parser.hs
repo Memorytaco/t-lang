@@ -18,10 +18,16 @@ import Text.Megaparsec hiding (runParser)
 import Text.Megaparsec.Char
 import Data.Void (Void)
 
+import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
+import LLVM.Context (withContext)
+import qualified Data.ByteString as B
+
 import Interface.Config
 import Tlang.Parser (runDSL)
+import Tlang.Emit (genExpr)
 
 import Driver.Parser
+import Driver.CodeGen
 
 newtype ShellParser m a = ShellParser
   { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () ShellState m) a
@@ -53,6 +59,17 @@ toplevel = do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         (Right res, _) -> LangDef res <$> getInput
+    Just "gen" ->
+      getInput >>= driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" >>= \case
+        (Left err, _) -> do
+          liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
+          customFailure SubParseError
+        (Right res, _) -> do
+          module' <- runModule "repl" emptyIRBuilder $ runCodeGen emptyState emptyData (withEntryTop . fmap snd $ genExpr res)
+          liftIO $ withContext \ctx -> withModuleFromAST ctx module' \rmodule -> do
+            moduleLLVMAssembly rmodule >>= B.putStr
+          return LangNone
+          -- LangDef res <$> getInput
     Just cmd -> customFailure $ UnknownCommand cmd
     Nothing -> do
       resinput <- getInput

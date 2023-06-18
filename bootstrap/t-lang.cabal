@@ -28,6 +28,7 @@ library
   exposed-modules:
       CLI.Parser
       Driver
+      Driver.CodeGen
       Driver.Graph
       Driver.Inference
       Driver.Parser
@@ -47,7 +48,6 @@ library
       Tlang.AST.Pattern
       Tlang.AST.Type
       Tlang.Codegen
-      Tlang.Codegen.Core
       Tlang.Constraint
       Tlang.Emit
       Tlang.Extension

@@ -47,7 +47,7 @@ type NormalKind = Kind Identity Integer
 type Context = [GraftKind]
 -- | The type is represented with deBruijn notation. Constraint will take effect over grafted type variable or index
 -- - `r` is for any concrete type representation
-type DeBruijnType inj = StandardType Label (Bound Integer) inj NameIndex 
+type DeBruijnType inj = StandardType Label (Bound Integer) inj NameIndex
 
 assignNames :: forall a b m. MonadState Integer m
             => [a :== b] -> m [GraftKind :@ a :== b]

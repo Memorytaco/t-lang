@@ -14,6 +14,7 @@ where
 
 import qualified LLVM.AST as LLVM
 import qualified LLVM.AST.Type as LLVM
+import qualified LLVM.AST.Typed as LLVM
 import qualified LLVM.IRBuilder.Constant as LLVMC
 import LLVM.AST.Operand (Operand)
 import LLVM.IRBuilder
@@ -25,9 +26,9 @@ import Tlang.Extension
 import Data.Maybe (fromMaybe)
 import Data.Kind (Constraint, Type)
 import Data.Functor.Foldable (cata)
-import Capability.Reader (HasReader, asks)
+import Capability.Reader (HasReader, asks, ask, local)
 import Capability.State (HasState, gets, modify, get)
-import Control.Monad (when, foldM)
+import Control.Monad (when, foldM, forM, join)
 import Data.Text (unpack)
 import qualified Data.Map as Map
 
@@ -39,7 +40,7 @@ class OperandGen f where
 
 genExpr :: ( HasReader "local" [(name, (LLVM.Type, Operand))] m
            , HasState "global" [(name, (LLVM.Type, Operand))] m
-           , MonadFail m, Traversable m
+           , MonadFail m
            , Show name, Eq name
            , MonadModuleBuilder m, MonadIRBuilder m
            , OperandGen f, CodeGenEnv m f, Functor f
@@ -47,11 +48,11 @@ genExpr :: ( HasReader "local" [(name, (LLVM.Type, Operand))] m
         => Expr f name -> m (LLVM.Type, Operand)
 genExpr = cata go
   where
-    go (ValF name) =
-      let localm = sequence $ asks @"local" (lookup name)
-          globalm = sequence $ gets @"global" (lookup name)
-          msg = fail $ "No definition for name " <> show name
-       in fromMaybe (fromMaybe msg globalm) localm
+    go (ValF name) = gets @"global" (lookup name) >>= \case
+      Just a -> return a
+      Nothing -> asks @"local" (lookup name) >>= \case
+        Just a -> return a
+        Nothing -> fail $ "No definition for name " <> show name
     go (ExprF fv) = genOperand fv
 
 type instance CodeGenEnv m (f :+: g) = (CodeGenEnv m f, CodeGenEnv m g)
@@ -117,30 +118,89 @@ instance OperandGen Tuple where
     store ptr 1 final
     (typ,) <$> load typ ptr 1
 
-type instance CodeGenEnv m (Let binder) = (CodeGenEnv m binder, HasState "unnamed" Word m)
+type instance CodeGenEnv m (Let binder) =
+  ( CodeGenEnv m binder, HasState "unnamed" Word m
+  , HasReader "destruct" [(LLVM.Type, Operand)] m
+  , HasReader "context" (m (LLVM.Type, Operand)) m
+  )
 instance OperandGen binder => OperandGen (Let binder) where
-  genOperand _ = do
-    error "no defined"
+  genOperand (Let binder ma mv) = ma >>= \a ->
+    local @"destruct" (const [a]) . local @"context" (const mv)
+    $ genOperand binder
+
+type instance CodeGenEnv m (Grp g) =
+  ()
+instance OperandGen (Grp g) where
+  genOperand _ = error "not implemented"
+
+type instance CodeGenEnv m (Pattern lit ext label name) =
+  ( HasState "unnamed" Word m
+  , HasReader "destruct" [(LLVM.Type, Operand)] m
+  , HasReader "isPattern" Bool m
+  , HasReader "context" (m (LLVM.Type, Operand)) m
+  , HasReader "local" [(name, (LLVM.Type, Operand))] m
+  , HasState "pattern" [(name, (LLVM.Type, Operand))] m
+  , MonadFail m, Functor lit, Functor ext
+  , CodeGenEnv m lit
+  )
+-- | a pattern itself is no more than a parser combinator targeting
+-- binary value and equipped with some effects
+--
+-- the generated code for a pattern should return whether this is a
+-- successful matching and outer most pattern should take care
+-- of value returned by sub patterns, then it should apply
+-- accumulated effects to its branch value.
+--
+instance OperandGen lit => OperandGen (Pattern lit ext label name) where
+  genOperand v = do
+    (binds, _) <- cata go v
+    ask @"context" >>= local @"local" (binds <>)
+    where
+      ret a = (LLVM.i1, LLVMC.bit a)
+      getValue = ask @"destruct" >>= \case
+        a:_ -> return a
+        _ -> fail "Internal error: pattern var doesn't have destructor value"
+      go PatWildF = return ([], ret 1)
+      go PatUnitF = return ([], ret 0)  -- FIXME: complete definition
+      go (PatVarF name) = getValue >>= \a -> return ([(name, a)], ret 1)
+      go (PatPrmF lv) = error "undefined literal match" -- local @"isPattern" (const True) $ genOperand lv
+      go (PatTupF ls) = do
+        (typ, val) <- getValue
+        typs <- case typ of
+          LLVM.StructureType _ typs ->
+            if length typs == length ls
+               then return typs
+               else fail "mismatched runtime type for tuple"
+          _ -> fail "mismatched runtime type for tuple"
+        let operands = extractValue val . pure <$> [0.. (fromInteger . toInteger $ length ls - 1)]
+        res <- forM (zip operands ls) \(mval, mend) -> do
+          v <- mval
+          t <- LLVM.typeOf v >>= \case
+            Right t -> return t
+            Left err -> fail $ "LLVM: " <> err
+          local @"destruct" (const [(t, v)]) mend
+        return (join $ fst <$> res, ret 1)
+      go _ = error "not yet defined pattern code"
 
 type instance CodeGenEnv m (Record Label) = ()
 instance OperandGen (Record Label) where
   genOperand _ = do
-    error "record no defined"
+    error "record not defined"
 
-type instance CodeGenEnv m (Selector Label) = ()
-instance OperandGen (Selector Label) where
+type instance CodeGenEnv m (Selector l) = ()
+instance OperandGen (Selector l) where
   genOperand _ = do
-    error "selector no defined"
+    error "selector not defined"
 
-type instance CodeGenEnv m (Constructor Label) = ()
-instance OperandGen (Constructor Label) where
+type instance CodeGenEnv m (Constructor l) = ()
+instance OperandGen (Constructor l) where
   genOperand _ = do
-    error "constructor no defined"
+    error "constructor not defined"
 
 type instance CodeGenEnv m (Lambda pattern' prefix) = ()
 instance OperandGen pattern' => OperandGen (Lambda pattern' prefix) where
   genOperand _ = do
-    error "lambda no defined"
+    error "lambda not defined"
 
 type instance CodeGenEnv m ((:@) typ) = ()
 instance OperandGen ((:@) typ) where

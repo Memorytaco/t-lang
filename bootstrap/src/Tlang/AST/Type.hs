@@ -35,24 +35,24 @@ data Type rep prm bind inj name
   | TypInj (inj (Type rep prm bind inj name))  -- ^ Allow artibrary injection, to provide further information of syntax tree
   deriving (Functor, Foldable, Traversable)
 
--- instance (Functor prm, Functor bind, Functor inj, Functor rep) => Applicative (Type rep prm bind inj) where
---   pure = TypVar
---   TypPht <*> _ = TypPht
---   TypVar v <*> a = TypVar $ v <$> a
---   TypRep f <*> a = TypRep $ (<*> a) <$> f
---   TypPrm ff <*> a = TypPrm ((<*> a) <$> ff)
---   TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
---   TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
---   TypInj ff <*> a = TypInj ((<*> a) <$> ff)
+instance (Functor prm, Functor bind, Functor inj, Functor rep) => Applicative (Type rep prm bind inj) where
+  pure = TypVar
+  TypPht <*> _ = TypPht
+  TypVar f <*> a = f <$> a
+  TypRep ff <*> a = TypRep $ (<*> a) <$> ff
+  TypPrm ff <*> a = TypPrm $ (<*> a) <$> ff
+  TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
+  TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
+  TypInj ff <*> a = TypInj ((<*> a) <$> ff)
 
--- instance (Functor prm, Functor bind, Functor inj) => Monad (Type name prm bind inj) where
---   TypPht >>= _ = TypPht
---   TypVar v >>= _ = TypVar v
---   TypPrm fa >>= f = TypPrm ((>>= f) <$> fa)
---   TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
---   TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
---   TypRep a >>= f = f a
---   TypInj fa >>= f = TypInj ((>>= f) <$> fa)
+instance (Functor prm, Functor bind, Functor inj, Functor rep) => Monad (Type rep prm bind inj) where
+  TypPht >>= _ = TypPht
+  TypVar v >>= f = f v
+  TypPrm fa >>= f = TypPrm ((>>= f) <$> fa)
+  TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
+  TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
+  TypRep fa >>= f = TypRep ((>>= f) <$> fa)
+  TypInj fa >>= f = TypInj ((>>= f) <$> fa)
 
 deriving instance
   ( Eq (inj  (Type rep prm bind inj name))
