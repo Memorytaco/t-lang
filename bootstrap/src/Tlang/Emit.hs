@@ -114,7 +114,7 @@ instance OperandGen Tuple where
     let typ = LLVM.StructureType False $ fst <$> vals
     ptr <- alloca typ Nothing 1
     empty <- load typ ptr 1
-    final <- foldM (\b (val, ix) -> insertValue b val [ix]) empty (zip (snd <$> vals) [1..])
+    final <- foldM (\b (val, ix) -> insertValue b val [ix]) empty (zip (snd <$> vals) [0..])
     store ptr 1 final
     (typ,) <$> load typ ptr 1
 

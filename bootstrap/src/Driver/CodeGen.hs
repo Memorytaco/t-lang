@@ -130,9 +130,8 @@ liftTop = CodeGenT . lift . lift
 
 withEntry :: (IsString name, Monad m) => CodeGenT m name Operand -> LLVM m Operand
 withEntry m = do
-  name <- LLVM.fresh `LLVM.named` "main"
   LLVM . IRBuilderT . lift
-    $ LLVM.function name [(LLVM.i32, LLVM.ParameterName "argc"), (LLVM.ptr, LLVM.ParameterName "argv")] LLVM.i32
+    $ LLVM.function "main" [(LLVM.i32, LLVM.ParameterName "argc"), (LLVM.ptr, LLVM.ParameterName "argv")] LLVM.i32
     \case
     [argc, argv] -> do
       let start = LLVM.fresh `LLVM.named` "start" >>= LLVM.emitBlockStart
