@@ -144,7 +144,7 @@ instance (ExprC e m, Apply :<: f, Constructor Label :<: f)
     return $ literal variant
 
 -- | type annotation
-instance (ExprC e m, (:@) typ :<: f, PrattToken proxy typ m)
+instance (ExprC e m, (@:) typ :<: f, PrattToken proxy typ m)
   => PrattToken (WithExpr e m (Layer "annotation" proxy typ)) (Expr f name) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
@@ -167,9 +167,9 @@ instance (ExprC e m, Apply :<: f, Let pat :<: f, PrattToken proxy (pat (Expr f n
 instance ( ExprC e m, Apply :<: f
          , PatGroup :<: pext
          , PrattToken proxy (Pattern plit pext plabel pname (Expr f name)) m
-         , Lambda (Pattern plit pext plabel pname) (Bounds Name (Type trep tcons tbind tinj tname)) :<: f
+         , Lambda (Pattern plit pext plabel pname) (Bounds Name (Type tbind trep tname a)) :<: f
          )
-  => PrattToken (WithExpr e m (Layer ("block" :- Type trep tcons tbind tinj tname) proxy (Hint (Pattern plit pext plabel pname))))
+  => PrattToken (WithExpr e m (Layer ("block" :- Type tbind trep tname a) proxy (Hint (Pattern plit pext plabel pname))))
                 (Expr f name) m where
   tokenize _ parser _ = do
     let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr f name))
@@ -180,16 +180,16 @@ instance ( ExprC e m, Apply :<: f
              <|> fail "expect equation"
         lambda = do
           heads <- Lambda . Bounds . fromMaybe [] <$> optional
-            (try $ ((:> (TypPht :: Type trep tcons tbind tinj tname)) . Name <$> identifier) `manyTill`  reservedOp ";;")
+            (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
     brackets (lambda <&> Expr . inj <?> "block lambda") <&> literal
 
 -- | one line lambda for expression
 instance ( ExprC e m, Apply :<: f
          , PrattToken proxy (pat (Expr f name)) m
-         , Lambda (Grp pat) (Bounds Name (Type trep tcons tbind tinj tname)) :<: f
+         , Lambda (Grp pat) (Bounds Name (Type tbind trep tname a)) :<: f
          )
-  => PrattToken (WithExpr e m (Layer ("line" :- Type trep tcons tbind tinj tname) proxy (Hint (Grp pat))))
+  => PrattToken (WithExpr e m (Layer ("line" :- Type tbind trep tname a) proxy (Hint (Grp pat))))
                 (Expr f name) m where
   tokenize _ parser end = do
     let iPat = pratt @proxy @(pat (Expr f name))
@@ -199,27 +199,27 @@ instance ( ExprC e m, Apply :<: f
         branch = (,) <$> gPat <*> (reservedOp "=>" *> parser (void $ lookAhead end) Go)
         lambda = do
           heads <- Lambda . Bounds . fromMaybe [] <$> optional
-            (try $ ((:> (TypPht :: Type trep tcons tbind tinj tname)) . Name <$> identifier) `manyTill`  reservedOp ";;")
+            (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> return []
     reservedOp "\\" *> (lambda <&> Expr . inj) <&> literal
 
 -- | type application
 instance ( ExprC e m
-         , PrattToken proxy (Type trep tcons tbind tinj tname) m
-         , VisibleType (Type trep tcons tbind tinj tname) :<: f
-         , tname ~ Name, Tuple :<: tcons, LiteralText :<: tcons, LiteralNatural :<: tcons
-         , Record Label :<: tcons
+         , PrattToken proxy (Type tbind trep tname a) m
+         , VisibleType (Type tbind trep tname a) :<: f
+         , a ~ Name, Tuple :<: trep, LiteralText :<: trep, LiteralNatural :<: trep
+         , Record Label :<: trep
          )
-  => PrattToken (WithExpr e m (Layer "@type" proxy (Type trep tcons tbind tinj tname)))
+  => PrattToken (WithExpr e m (Layer "@type" proxy (Type tbind trep tname a)))
                 (Expr f name) m where
   tokenize _ _ _ = char '@' >> do
-    typ <- parens (pratt @proxy @(Type trep tcons tbind tinj tname) (lookAhead (reservedOp ")") $> ()) Go)
+    typ <- parens (pratt @proxy @(Type tbind trep tname a) (lookAhead (reservedOp ")") $> ()) Go)
       <|> TypVar . Name <$> identifier
-      <|> TypPrm . inj . Tuple <$> parens
+      <|> Type . inj . Tuple <$> parens
             (pratt @proxy (lookAhead (reservedOp "," <|> reservedOp ")") $> ()) Go `sepBy` reservedOp ",")   -- tuple
-      <|> TypPrm . inj . LiteralNatural . Literal <$> integer -- integer
-      <|> TypPrm . inj . LiteralText . Literal <$> stringLiteral -- text
-      <|> TypPrm . inj <$> record (pratt @proxy)
+      <|> Type . inj . LiteralNatural . Literal <$> integer -- integer
+      <|> Type . inj . LiteralText . Literal <$> stringLiteral -- text
+      <|> Type . inj <$> record (pratt @proxy)
     let nud' _ = fail "Type application requires one argument"
         led' _ left = return . Expr . inj $ VisibleType typ left
     return $ Semantic nud' led' (return Infinite)

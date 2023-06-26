@@ -53,7 +53,6 @@ import Data.Text (pack)
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext
 import Tlang.Generic
-import Tlang.Helper.AST.Type (injTypeLit, injTypeBind)
 
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
@@ -73,16 +72,19 @@ simplify r g =
        in filter (\n -> n /= r && null (sOut lg n <> sIn lg n)) total
 
 runRestore
-  :: forall label lit m cons rep bind.
+  :: forall label lit m rep bind a.
     (Show label, MonadFail m, Forall (Bound Name) :<: bind, Scope (Bound Name) :<: bind
-   , Const lit :<: cons, Record label :<: cons, Variant label :<: cons, Tuple :<: cons)
+   , Const lit :<: rep, Record label :<: rep, Variant label :<: rep, Tuple :<: rep)
   => Node
   -> Gr (GNode (GNodeLabel lit label Name)) (GEdge Name)
   -> ([(Node, Name)], Int)
-  -> m (Type rep cons bind Identity Name, ([(Node, Name)], Int))
+  -> m (Type bind rep Name Name, ([(Node, Name)], Int))
 runRestore node g s = do
   (typ, stat, ()) <- runRWST (restore (Name . pack . show) node) g s
   return (typ, stat)
+
+injTypeLit :: sub :<: rep => sub (Type bind rep name a) -> Type bind rep name a
+injTypeLit = Type . inj
 
 -- | convert a graphic type back to normal representation
 -- it satisfies:
@@ -92,9 +94,10 @@ restore
   :: ( MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
      , MonadState ([(Node, name)], Int) m, Show label, MonadFail m
      , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
-     , Tuple :<: cons, Record label :<: cons, Variant label :<: cons, Const lit :<: cons
+     , Tuple :<: rep, Record label :<: rep, Variant label :<: rep, Const lit :<: rep
+     , Eq name
      )
-  => (Node -> name) -> Node -> m (Type rep cons bind inj name)
+  => (Node -> name) -> Node -> m (Type bind rep name name)
 restore schema root = do
   -- we check out whether this node has been bound somewhere
   localNames <- gets fst
@@ -141,12 +144,16 @@ restore schema root = do
         modify (first $ filter (\(n, _) -> n /= node))
         typ <- restore schema node
         case perm of
-          Rigid -> return (name :~ typ)
-          Flexible -> return (name :> typ)
-          Explicit -> return (name :> typ)
-      let generalize = foldr (flip (.)) id $ injTypeBind . Forall <$> bindings
+          Rigid -> return (name, name :~ typ)
+          Flexible -> return (name, name :> typ)
+          Explicit -> return (name, name :> typ)
+      let shift val term = do
+            var <- term
+            if var == val
+               then return (New var)
+               else return . Inc $ return var
       modify (first $ const oldBounds) -- restore the local binding
-      return $ generalize body  -- return the final type
+      return $ foldr (\(name, bnd) bod -> TypBnd (inj $ Forall bnd) $ shift name bod) body bindings  -- return the final type
   where
     -- | generate new name using index and one schema
     newName decorate = do

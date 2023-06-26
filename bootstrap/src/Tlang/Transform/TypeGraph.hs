@@ -9,10 +9,8 @@ module Tlang.Transform.TypeGraph
     toGraph
 
   -- ** three helpers for handling different structure, it is extendable
-  , BinderGraph (..)
-  , LiteralGraph (..)
-  , InjGraph (..)
-  , RuntimeRepGraph (..)
+  , FoldBinderTypeGraph (..)
+  , FoldTypeGraph (..)
   -- ** companion type family for extending environment
   , ConstrainGraph
   )
@@ -27,7 +25,7 @@ import Tlang.Generic ((:+:) (..), (:<:))
 import Tlang.Rep (Rep (..))
 
 import Capability.State (HasState, get, modify)
-import Capability.Reader (HasReader, ask, local)
+import Capability.Reader (HasReader, asks, local)
 import Control.Monad (forM, foldM)
 import Control.Monad.Identity (Identity (..))
 
@@ -37,6 +35,7 @@ import Data.Text (Text)
 
 -- ** for type
 import qualified Tlang.AST.Type as Type
+import Tlang.AST.Type (type (>|) (..))
 import Tlang.AST.Type (Bound (..))
 
 -- ** for signature
@@ -48,92 +47,85 @@ type ConstrainGraph :: (Type -> Type) -> (Type -> Type) -> (Type -> Type) -> Typ
 type family ConstrainGraph source nodes edges info m :: Constraint
 
 -- | for handling binder structure
-class BinderGraph binder info | binder -> info where
-  handleBinder
+class FoldBinderTypeGraph binder info | binder -> info where
+  foldBinderTypeGraph
     :: ConstrainGraph binder nodes edges info m
     => binder (m (Hole nodes info, CoreG nodes edges info))
     -> m (Hole nodes info, CoreG nodes edges info)
     -> m (Hole nodes info, CoreG nodes edges info)
 
--- | for handling literal, type constructor
-class LiteralGraph literal info | literal -> info where
-  handleLiteral
-    :: ConstrainGraph literal nodes edges info m
-    => literal (m (Hole nodes info, CoreG nodes edges info))
-    -> m (Hole nodes info, CoreG nodes edges info)
-
 -- | for handling representation, type constructor
-class RuntimeRepGraph rep info | rep -> info where
-  handleRep
-    :: ConstrainGraph rep nodes edges info m
-    => rep (m (Hole nodes info, CoreG nodes edges info))
-    -> m (Hole nodes info, CoreG nodes edges info)
-
--- | for handling type extension
-class InjGraph injector info | injector -> info where
-  handleInj
-    :: ConstrainGraph injector nodes edges info m
-    => injector (m (Hole nodes info, CoreG nodes edges info))
+class FoldTypeGraph f info | f -> info where
+  foldTypeGraph
+    :: ConstrainGraph f nodes edges info m
+    => f (m (Hole nodes info, CoreG nodes edges info))
     -> m (Hole nodes info, CoreG nodes edges info)
 
 -- ** definition for `:+:`
 type instance ConstrainGraph (f :+: g) nodes edges info m
   = (ConstrainGraph f nodes edges info m, ConstrainGraph g nodes edges info m)
 
-instance (BinderGraph f info, BinderGraph g info) => BinderGraph (f :+: g) info where
-  handleBinder (Inl v) = handleBinder v
-  handleBinder (Inr v) = handleBinder v
-instance (LiteralGraph f info, LiteralGraph g info) => LiteralGraph (f :+: g) info where
-  handleLiteral (Inl v) = handleLiteral v
-  handleLiteral (Inr v) = handleLiteral v
-instance (InjGraph f info, InjGraph g info) => InjGraph (f :+: g) info where
-  handleInj (Inl v) = handleInj v
-  handleInj (Inr v) = handleInj v
+instance (FoldBinderTypeGraph f info, FoldBinderTypeGraph g info) => FoldBinderTypeGraph (f :+: g) info where
+  foldBinderTypeGraph (Inl v) = foldBinderTypeGraph v
+  foldBinderTypeGraph (Inr v) = foldBinderTypeGraph v
+instance (FoldTypeGraph f info, FoldTypeGraph g info) => FoldTypeGraph (f :+: g) info where
+  foldTypeGraph (Inl v) = foldTypeGraph v
+  foldTypeGraph (Inr v) = foldTypeGraph v
 
 -- ** general method for the algorithm
 
 node :: HasState "node" Int m => m Int
 node = modify @"node" (+1) >> get @"node"
 
-localName :: (Eq name, HasReader "variable" [(name, (Hole nodes info, CoreG nodes edges info))] m)
-          => name -> m (Maybe (Hole nodes info, CoreG nodes edges info))
-localName name = ask @"variable" >>= return . lookup name
-
 -- ** the algorithm for transforming syntactic type into graphic representation
 
+type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
+  ( FoldTypeGraph f info, ConstrainGraph f nodes edges info m
+  , FoldBinderTypeGraph bind info, ConstrainGraph bind nodes edges info m
+  , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
+  , HasState "node" Int m
+  , Uno NodeBot :<: nodes, Uno NodeApp :<: nodes, Uno Sub :<: edges
+  , Ord (edges (Link edges))
+  , MonadFail m
+  , Show name, Eq name, Functor f, Functor bind
+  )
+instance FoldTypeGraph (Type.Type bind f name) Int where
+  foldTypeGraph = cata go
+    where
+      go Type.TypPhtF = node <&> hole' (Uno NodeBot) <&> \v -> (v, Vertex v)
+      go (Type.TypVarF v) = v
+      go (Type.TypConF m ms) = do
+        ns <- sequence $ m: ms
+        let len = toInteger $ length ns
+        top <- node <&> hole' (Uno $ NodeApp len)
+        gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . Uno $ Sub i) (Vertex top) (Vertex sub) <> subg
+        return (top, overlays gs)
+      go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv >>= return . \case
+        New name -> asks @"local" (lookup name) >>= \case
+          Just v -> return v
+          Nothing -> fail $ "Unable to find name " <> show name
+        Inc m -> m
+      go (Type.TypeF v) = foldTypeGraph v
+
+
 -- | transform a syntactic type into its graphic representation
--- TODO: we need to handle type alias for global type names
+-- we need to prepare global environment before we start this transformation
 toGraph
-  :: ( HasState "node" Int m, HasReader "variable" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
-     , BinderGraph bind Int, RuntimeRepGraph rep Int, LiteralGraph prm Int, InjGraph inj Int
-     , ConstrainGraph prm nodes edges Int m, ConstrainGraph bind nodes edges Int m
-     , ConstrainGraph rep nodes edges Int m, ConstrainGraph inj nodes edges Int m
-     , Eq name, Ord (edges (Link edges))
-     , Functor rep, Functor inj, Functor bind, Functor prm
-     -- nodes constraint
-     , Uno (NodeRef name) :<: nodes, Uno NodeBot :<: nodes
-     , Uno NodeApp :<: nodes
-     -- edges constraint
-     , Uno Sub :<: edges
+  :: ( HasState "node" Int m
+     , HasReader "global" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
+     , HasReader "local" [(name, (Hole nodes Int, CoreG nodes edges Int))] m
+     , FoldBinderTypeGraph bind Int, ConstrainGraph bind nodes edges Int m
+     , FoldTypeGraph f Int, ConstrainGraph f nodes edges Int m
+     , Show name, Eq name
+     , Ord (edges (Link edges))
+     , Functor bind, Functor f
+     , Uno NodeBot :<: nodes, Uno NodeApp :<: nodes, Uno Sub :<: edges
+     , MonadFail m
      )
-  => Type.Type rep prm bind inj name -> m (Hole nodes Int, CoreG nodes edges Int)
-toGraph = cata go
-  where
-    go Type.TypPhtF = node <&> hole' (Uno NodeBot) <&> \v -> (v, Vertex v)
-    go (Type.TypRepF v) = handleRep v
-    go (Type.TypVarF name) = localName name >>= \case
-      Just a -> return a
-      -- TOOD: handle type alias, allow a context for nominal type
-      Nothing -> node <&> hole' (Uno $ NodeRef False name) <&> \v -> (v, Vertex v)
-    go (Type.TypPrmF v) = handleLiteral v
-    go (Type.TypConF m ms) = do
-      ns <- sequence $ m: ms
-      let len = toInteger $ length ns
-      top <- node <&> hole' (Uno $ NodeApp len)
-      gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . Uno $ Sub i) (Vertex top) (Vertex sub) <> subg
-      return (top, overlays gs)
-    go (Type.TypLetF binder v) = handleBinder binder v
-    go (Type.TypInjF v) = handleInj v
+  => Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
+toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
+  Just v -> return v
+  Nothing -> fail $ "Unable to find name " <> show name
 
 -- ** instances
 
@@ -143,13 +135,13 @@ type instance ConstrainGraph (Bound name) nodes edges info m
   = ( Eq (edges (Link edges))
     , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
     , Uno (Bind name) :<: edges
-    , HasReader "variable" [(name, (Hole nodes info, CoreG nodes edges info))] m
+    , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
     )
 -- | handle binder
-instance BinderGraph (Bound name) Int where
-  handleBinder (name :~ mbound) mbody = do
+instance FoldBinderTypeGraph (Bound name) Int where
+  foldBinderTypeGraph (name :~ mbound) mbody = do
     a@(var, _) <- mbound
-    (root, body) <- local @"variable" ((name, a):) mbody
+    (root, body) <- local @"local" ((name, a):) mbody
     if hasVertex (== var) body
     then do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
@@ -157,9 +149,9 @@ instance BinderGraph (Bound name) Int where
       g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
       return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
     else return (root, body)
-  handleBinder (name :> mbound) mbody = do
+  foldBinderTypeGraph (name :> mbound) mbody = do
     a@(var, _) <- mbound
-    (root, body) <- local @"variable" ((name, a):) mbody
+    (root, body) <- local @"local" ((name, a):) mbody
     if hasVertex (== var) body
     then do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
@@ -170,12 +162,12 @@ instance BinderGraph (Bound name) Int where
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
 -- | handle `Forall` binder
-instance BinderGraph f Int => BinderGraph (Forall f) Int where
-  handleBinder (Forall v) = handleBinder v
+instance FoldBinderTypeGraph f Int => FoldBinderTypeGraph (Forall f) Int where
+  foldBinderTypeGraph (Forall v) = foldBinderTypeGraph v
 type instance ConstrainGraph (Scope f) nodes edges info m = ConstrainGraph f nodes edges info m
 -- | handle `Scope` binder
-instance BinderGraph f Int => BinderGraph (Scope f) Int where
-  handleBinder (Scope v) = handleBinder v
+instance FoldBinderTypeGraph f Int => FoldBinderTypeGraph (Scope f) Int where
+  foldBinderTypeGraph (Scope v) = foldBinderTypeGraph v
 
 -- *** handle literals
 
@@ -185,8 +177,8 @@ type instance ConstrainGraph Tuple nodes edges info m
     , Functor m, HasState "node" Int m
     )
 -- | handle `Tuple`
-instance LiteralGraph Tuple Int where
-  handleLiteral (Tuple ms) = do
+instance FoldTypeGraph Tuple Int where
+  foldTypeGraph (Tuple ms) = do
     gs <- sequence ms
     let len = toInteger $ length gs
     root <- node <&> hole' (Uno $ NodeTup len)
@@ -200,8 +192,8 @@ type instance ConstrainGraph (Record label) nodes edges info m
     , HasState "node" Int m
     )
 -- | handle `Record`
-instance LiteralGraph (Record label) Int where
-  handleLiteral (Record ms) = do
+instance FoldTypeGraph (Record label) Int where
+  foldTypeGraph (Record ms) = do
     gs <- forM ms sequence
     let len = toInteger $ length gs
     root <- node <&> hole' (Uno $ NodeRec len)
@@ -217,8 +209,8 @@ type instance ConstrainGraph (Variant label) nodes edges info m
     , HasState "node" Int m
     )
 -- | handle `Variant`
-instance LiteralGraph (Variant label) Int where
-  handleLiteral (Variant ms) = do
+instance FoldTypeGraph (Variant label) Int where
+  foldTypeGraph (Variant ms) = do
     gs <- mapM (mapM sequence) ms
     let len = toInteger $ length gs
     root <- node <&> hole' (Uno $ NodeRec len)
@@ -233,25 +225,25 @@ instance LiteralGraph (Variant label) Int where
 -- | handle `LiteralText'
 type instance ConstrainGraph LiteralText nodes edges info m
   = ( Uno (NodeLit Text) :<: nodes, HasState "node" Int m)
-instance LiteralGraph LiteralText Int where
-  handleLiteral (LiteralText (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+instance FoldTypeGraph LiteralText Int where
+  foldTypeGraph (LiteralText (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 -- | handle `LiteralNatural'
 type instance ConstrainGraph LiteralNatural nodes edges info m
   = ( Uno (NodeLit Integer) :<: nodes, HasState "node" Int m)
-instance LiteralGraph LiteralNatural Int where
-  handleLiteral (LiteralNatural (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+instance FoldTypeGraph LiteralNatural Int where
+  foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 
 -- *** handle Injectors
 
 type instance ConstrainGraph Identity nodes edges info m = ()
 -- | `Identity` injector does nothing
-instance InjGraph Identity Int where
-  handleInj (Identity m) = m
+instance FoldTypeGraph Identity Int where
+  foldTypeGraph (Identity m) = m
 
 -- *** handle RuntimeRep
 
 type instance ConstrainGraph Rep nodes edges info m = ()
-instance RuntimeRepGraph Rep Int where
-  handleRep (Rep _) = error "TODO: implement"
+instance FoldTypeGraph Rep Int where
+  foldTypeGraph (Rep _) = error "TODO: implement"

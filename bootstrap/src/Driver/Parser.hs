@@ -40,7 +40,6 @@ import Control.Monad.State (StateT (..), MonadPlus)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Applicative (Alternative)
 
-import Data.Functor.Identity (Identity)
 import Data.Text (Text)
 import Data.Void (Void)
 import GHC.Generics (Generic)
@@ -48,9 +47,9 @@ import GHC.Generics (Generic)
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
 
-type TypeAST = StandardType Label (Bound Name) Identity Name
-type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ :+: PatGroup) Label Name
-type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((:@) typ) Label Name
+type TypeAST = StandardType Label (Bound Name) Name Name
+type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ :+: PatGroup) Label Name
+type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ) Label Name
 
 type ASTExpr typ = Expr
   ( Let (ASTPat typ)
@@ -59,7 +58,7 @@ type ASTExpr typ = Expr
   :+: Apply :+: Tuple :+: Record Label
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
   :+: VisibleType typ :+: Selector Label :+: Constructor Label
-  :+: (:@) typ
+  :+: (@:) typ
   ) Name
 
 type ASTDeclExt typ expr = UserItem

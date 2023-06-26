@@ -9,8 +9,9 @@ module Tlang.AST
 
   , StandardType
 
-  , TypLitExt
-  , TypBindExt
+  , TypPlugin
+  , TypBindPlugin
+
 
     -- ** reexport of AST
   , module Expr
@@ -39,11 +40,11 @@ import Tlang.Rep (Rep (..))
 import Data.Text (Text, unpack)
 import Data.String (IsString (..))
 
-type TypLitExt label = Tuple :+: Record label :+: Variant label :+: Ext.LiteralNatural :+: Ext.LiteralText
-type TypBindExt bound = Forall bound :+: Scope bound
+type TypPlugin label = Tuple :+: Record label :+: Variant label :+: Ext.LiteralNatural :+: Ext.LiteralText :+: Rep
+type TypBindPlugin bound = Forall bound :+: Scope bound
 
 -- | original type definition
-type StandardType label b = Type Rep (TypLitExt label) (TypBindExt b)
+type StandardType label bound = Type (TypBindPlugin bound) (TypPlugin label)
 
 -- | a place holder for every parametric data type
 data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)

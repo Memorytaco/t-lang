@@ -2,6 +2,7 @@ module Tlang.Constraint
   ( Constraint (..)
   , ConstraintF (..)
   , (:<>) (..)
+  , (:>>) (..)
   )
 where
 
@@ -33,7 +34,10 @@ type FoldFunctor f = (Functor f, Traversable f, Foldable f)
 makeBaseFunctor $ fixQ [d| instance (FoldFunctor rel) => Recursive (Constraint rel name term typ) |]
 $(deriveBifunctor ''Constraint)
 
+-- | constraint concatenation
 data a :<> b = a :<> b deriving (Show, Eq, Functor, Foldable, Traversable)
+-- | first order substitution
+data a :>> b = a :>> b deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- data Prefix qual name typ
 --   = typ :~ name  -- ^ `name` is rigid bound to `typ`
@@ -53,4 +57,5 @@ data a :<> b = a :<> b deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- $(deriveBifunctor ''Prefix)
 $(deriveBifunctor ''(:<>))
+$(deriveBifunctor ''(:>>))
 

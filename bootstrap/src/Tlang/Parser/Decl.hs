@@ -38,6 +38,11 @@ type ParserM e m =
   , HasReader "PatternOperator" [Operator Text] m
   )
 
+-- | decl type level lang
+--
+-- * `e` is error
+-- * `m` is monad
+-- * `a` is lang token
 data WithDecl (e :: Type) (m :: Type -> Type) (a :: k)
 
 -- | define sequence operator
@@ -78,7 +83,7 @@ instance (ParserM e m, PrattToken tProxy typ m, ParserDSL eProxy expr m, info ~ 
     end $> declare (UserValue expr sig name)
 
 instance ( ParserM e m, PrattToken proxy typ m
-         , info ~ Name, typ ~ AST.Type trep tcons tbind tinj Name
+         , info ~ Name, typ ~ AST.Type tbind trep Name Name
          , UserType typ [Bound Name typ] :<: decl
          )
   => ParserDSL (WithDecl e m (Layer "type" proxy typ)) (Decl decl info) m where
@@ -111,7 +116,7 @@ instance (ParserM e m, PrattToken proxy typ m, UserStruct Label :<: ext)
     css <- commaSep field
     end $> UserDataDef (inj $ UserStructs cs1 css)
 
-instance (ParserM e m, PrattToken proxy typ m, UserEnum Label :<: ext, typ ~ AST.Type trep tcons tbind tinj Name)
+instance (ParserM e m, PrattToken proxy typ m, UserEnum Label :<: ext, typ ~ AST.Type tbind trep name a, a ~ Name)
   => ParserDSL (WithDataDef e m (Layer "enum" proxy typ)) ((UserDataDef ext typ)) m where
   syntax _ end = do
     let fieldName = identifier <|> operator <&> Label
@@ -140,7 +145,7 @@ instance ( ParserM e m
 
 instance ( ParserM e m
          , info ~ Name, UserData [Bound Name typ] def :<: decl
-         , typ ~ AST.Type trep tcons tbind tinj Name
+         , typ ~ AST.Type tbind trep name a
          , ParserDSL proxy def m
          )
   => ParserDSL (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where

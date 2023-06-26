@@ -1,10 +1,14 @@
+{-# LANGUAGE RankNTypes, QuantifiedConstraints #-}
 module Tlang.AST.Type
   ( Type (..)
   , TypeF (..)
-  , TypeAssert (..)
+
   , Kind (..)
   , KindF (..)
+
+  , Closed
   , (:==) (..)
+  , type (>|) (..)
 
   , Variance (..)
 
@@ -20,78 +24,83 @@ import Tlang.TH (fixQ)
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
-data Type rep prm bind inj name
-  = TypPht                                      -- ^ empty type (bottom type) or "forall a. a" type
-  | TypVar name                                 -- ^ refer to named type or type variable
-  | TypRep (rep (Type rep prm bind inj name))  -- ^ type representation, the concrete one, will always be with kind '*'
-                                                --   It has syntax level support
-  | TypPrm (prm (Type rep prm bind inj name)) -- ^ type level Primitive prmtructor. natural number, string, record and so on.
-                                                --   It also include sub structure like records and variants.
-                                                --   Everything that could __literally__ written in source code.
-  | TypCon (Type rep prm bind inj name)        -- ^ type application or type prmtructor
-           [Type rep prm bind inj name]
-  | TypLet (bind (Type rep prm bind inj name)) -- ^ a uniform way to represent arbitrary binding logic
-           (Type rep prm bind inj name)
-  | TypInj (inj (Type rep prm bind inj name))  -- ^ Allow artibrary injection, to provide further information of syntax tree
+data Type bind rep name a where
+  -- | empty type (bottom type) or "forall a. a" type
+  TypPht :: Type bind rep name a
+  -- | refer to named type or type variable
+  TypVar :: a -> Type bind rep name a
+  -- | type application or type prmtructor
+  TypCon :: Type bind rep name a -> [Type bind rep name a] -> Type bind rep name a
+  -- | a uniform way to represent arbitrary binding logic
+  TypBnd :: bind (Type bind rep name a)
+         -> Type bind rep name (name >| Type bind rep name a)
+         -> Type bind rep name a
+  -- | Allow artibrary injection, to provide further information of syntax tree. e.g. literal, kind annotation
+  Type :: rep (Type bind rep name a) -> Type bind rep name a
   deriving (Functor, Foldable, Traversable)
 
-instance (Functor prm, Functor bind, Functor inj, Functor rep) => Applicative (Type rep prm bind inj) where
+-- | closed term
+data Closed
+instance Show Closed where
+  show = error "Impossible for Closed"
+instance Eq Closed where
+  (==) = error "Impossible for Closed"
+instance Ord Closed where
+  compare = error "Impossible for Closed"
+
+infixr 3 >|
+data bind >| free
+  = New bind -- ^ introduce new bound variable
+  | Inc free -- ^ increase variable index, from (bind2 >| a) to (bind1 >| (bind2 >| a))
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+$(deriveBifunctor ''(>|))
+$(deriveBifunctor ''Type)
+
+instance Applicative ((>|) bind) where
+  pure = Inc
+  New x <*> _ = New x
+  Inc f <*> a = f <$> a
+
+instance Monad ((>|) bind) where
+  New x >>= _ = New x
+  Inc a >>= f = f a
+
+instance (Functor bind, Functor rep) => Applicative (Type bind rep name) where
   pure = TypVar
   TypPht <*> _ = TypPht
   TypVar f <*> a = f <$> a
-  TypRep ff <*> a = TypRep $ (<*> a) <$> ff
-  TypPrm ff <*> a = TypPrm $ (<*> a) <$> ff
-  TypCon a as <*> b = TypCon (a <*> b) ((<*> b) <$> as)
-  TypLet ff a <*> b = TypLet ((<*> b) <$> ff) (a <*> b)
-  TypInj ff <*> a = TypInj ((<*> a) <$> ff)
+  TypCon f fs <*> a = TypCon (f <*> a) ((<*> a) <$> fs)
+  TypBnd fbnd fbod <*> x = TypBnd ((<*> x) <$> fbnd) (lift <$> fbod)
+    where lift = fmap (<*> x)
+  Type f <*> a = Type $ (<*> a) <$> f
 
-instance (Functor prm, Functor bind, Functor inj, Functor rep) => Monad (Type rep prm bind inj) where
+instance (Functor bind, Functor rep) => Monad (Type bind rep name) where
   TypPht >>= _ = TypPht
   TypVar v >>= f = f v
-  TypPrm fa >>= f = TypPrm ((>>= f) <$> fa)
   TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
-  TypLet fa m >>= f = TypLet ((>>= f) <$> fa) (m >>= f)
-  TypRep fa >>= f = TypRep ((>>= f) <$> fa)
-  TypInj fa >>= f = TypInj ((>>= f) <$> fa)
+  TypBnd fa m >>= f =
+    let g = fmap (>>= f)
+     in TypBnd ((>>= f) <$> fa) (g <$> m)
+  Type fa >>= f = Type ((>>= f) <$> fa)
 
-deriving instance
-  ( Eq (inj  (Type rep prm bind inj name))
-  , Eq (bind (Type rep prm bind inj name))
-  , Eq (prm (Type rep prm bind inj name))
-  , Eq (rep (Type rep prm bind inj name))
-  , Eq name
-  ) => Eq (Type rep prm bind inj name)
-
-deriving instance
-  ( Ord (inj  (Type rep prm bind inj name))
-  , Ord (bind (Type rep prm bind inj name))
-  , Ord (prm (Type rep prm bind inj name))
-  , Ord (rep (Type rep prm bind inj name))
-  , Ord name
-  ) => Ord (Type rep prm bind inj name)
+deriving instance (Eq a, Eq name, forall x. Eq x => Eq (bind x), forall x. Eq x => Eq (rep x)) => Eq (Type bind rep name a)
+deriving instance ( Ord a, Ord name
+                  , forall x. Eq x => Eq (bind x), forall x. Ord x => Ord (bind x)
+                  , forall x. Eq x => Eq (rep x), forall x. Ord x => Ord (rep x)
+                  )
+                  => Ord (Type bind rep name a)
 
 instance
-  ( Show name
-  , Show (rep (Type rep prm bind inj name))
-  , Show (inj (Type rep prm bind inj name))
-  , Show (bind (Type rep prm bind inj name))
-  , Show (prm (Type rep prm bind inj name))
-  ) => Show (Type rep prm bind inj name) where
+  ( Show a, Show name, Show (a >| name)
+  , forall x. Show x => Show (rep x)
+  , forall x. Show x => Show (bind x)
+  , Show (bind (Type bind rep name a))
+  ) => Show (Type bind rep name a) where
   show TypPht = "⊥"
-  show (TypRep t) = show t
-  show (TypPrm lit) = show lit
+  show (Type t) = show t
   show (TypVar name) = show name
-  show (TypLet binder body) = "let { " <> show binder <> " = " <> show body <> " }"
+  show (TypBnd binder body) = "Bind { " <> show binder <> " = " <> show body <> " }"
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
-  show (TypInj anno) = show anno
-
--- | type prmtraint
-data TypeAssert msg typ
-  = TACons typ typ [typ]  -- ^ actual worker, predicate
-  | TAAnd (TypeAssert msg typ) [TypeAssert msg typ] -- ^ and connective
-  | TATrue      -- ^ always Succeed
-  | TAFail msg  -- ^ failed with a message, the message may be empty
-  deriving (Show, Eq)
 
 -- | MLF bounded quantifier
 data Bound name typ
@@ -113,35 +122,58 @@ data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)
 data name :== typ = name :== typ  -- ^ pick a name to encapsulate a type, and turn a unnamed type to named type.
                                   --   other information including variable and kind is in `Type` itself.
                                   --   definition for type level operator, which should be prefixed with ":"
-  deriving (Show, Eq, Functor)
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 $(deriveBifunctor ''(:==))
 
+infixr 3 :->
+
 -- | type kind representation, any kind, normal kind (*) and higher kind
--- TODO: refactor the structure
-data Kind f name
-  = KindType                      -- ^ concrete type, language's builtin type kind.
-  | KindRef name                  -- ^ type kinds other than KindRef and KindType,
-                                  --   and represent any type level thing, literal, value, lifted prmtructor, etc.
-  | KindAbs name (Kind f name)    -- ^ quantified kind variable, well, this is...
-  | Kind f name ::> Kind f name   -- ^ something like "* -> *", means this is a type prmtructor or something else.
-  | KindLift (f (Kind f name))    -- ^ extend functionality
+data Kind f name a where
+  -- | concrete type, language's builtin type kind.
+  KindStar :: Kind f name a
+  -- | type kinds other than KindRef and KindType, and represent any type level thing.
+  -- e.g. literal, value, lifted constructor, etc.
+  KindVar :: a -> Kind f name a
+  -- | something like "* -> *", means this is a type prmtructor or something else.
+  (:->) :: Kind f name a -> Kind f name a -> Kind f name a
+  -- | quantified kind variable, well, this is...
+  KindBnd :: name -> Kind f name (name >| Kind f name a) -> Kind f name a
+  -- | extend functionality
+  KindFix :: (f (Kind f name a)) -> Kind f name a
+  deriving (Functor, Foldable, Traversable)
+$(deriveBifunctor ''Kind)
 
-deriving instance (Eq (f (Kind f name)), Eq name) => Eq (Kind f name)
-deriving instance (Functor f) => Functor (Kind f)
+instance (Functor f) => Applicative (Kind f info) where
+  pure = KindVar
+  KindStar <*> _ = KindStar
+  KindVar f <*> a = f <$> a
+  (a :-> b) <*> x = a <*> x :-> b <*> x
+  KindBnd name mf <*> x = KindBnd name (lift <$> mf)
+    where lift = fmap (<*> x)
+  KindFix v <*> x = KindFix ((<*> x) <$> v)
 
-instance (Show name, Show (f (Kind f name))) => Show (Kind f name) where
-  show KindType = "*"
-  show (KindRef name) = show name
-  show (KindAbs v name) = show v <> ". " <> show name
-  show (v@(_ ::> _) ::> a) = "(" <> show v <> ")" <> " -> " <> show a
-  show (a ::> b) = show a <> " -> " <> show b
-  show (KindLift anno) = show anno
+instance (Functor f) => Monad (Kind f info) where
+  KindStar >>= _ = KindStar
+  KindVar a >>= f = f a
+  (a :-> b) >>= f = (a >>= f) :-> (b >>= f)
+  KindBnd name a >>= f = KindBnd name (fmap (>>= f) <$> a)
+  KindFix v >>= f = KindFix ((>>= f) <$> v)
 
-infixr 5 ::>
+deriving instance (forall x. Eq x => Eq (f x), Eq info, Eq a) => Eq (Kind f info a)
+deriving instance (forall x. Ord x => Ord (f x), forall x. Eq x => Eq (f x), Ord info, Ord a) => Ord (Kind f info a)
+
+instance (Show info, Show a, forall x. Show x => Show (f x)) => Show (Kind f info a) where
+  show KindStar = "*"
+  show (KindVar name) = show name
+  show (KindBnd v body) = "{" <> show v <> "}" <> " => " <> show body
+  show (v@(_ :-> _) :-> a) = "(" <> show v <> ")" <> " -> " <> show a
+  show (a :-> b) = show a <> " -> " <> show b
+  show (KindFix anno) = show anno
 
 makeBaseFunctor $ fixQ [d|
-  instance (Functor rep, Functor inj, Functor bind, Functor prm) => Recursive (Type rep prm bind inj name)
-  instance (Functor f) => Recursive (Kind f name)
+  instance (Functor rep, Functor bind) => Recursive (Type bind rep name a)
+  instance (Functor f) => Recursive (Kind f info a)
   |]
-deriving instance (Show name, Show (rep r), Show r, Show (prm r), Show (bind r), Show (inj r)) => Show (TypeF rep prm bind inj name r)
+deriving instance (Show name, Show a, Show r, forall x. Show x => Show (rep x), forall x. Show x => Show (bind x))
+  => Show (TypeF bind rep name a r)

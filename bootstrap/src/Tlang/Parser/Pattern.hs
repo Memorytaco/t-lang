@@ -148,7 +148,7 @@ instance (PatternC e m, ParserDSL proxy expr m)
 -- ** extension for pattern
 
 -- | type annotation for pattern
-instance (PatternC e m, (:@) typ :<: ext, PrattToken proxy typ m)
+instance (PatternC e m, (@:) typ :<: ext, PrattToken proxy typ m)
   => PrattToken (WithPattern e m (Layer "annotation" proxy typ)) (Pattern lit ext label name expr) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where

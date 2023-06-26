@@ -34,6 +34,7 @@ library
       Driver.Parser
       Driver.Transform
       Driver.Unification
+      Example
       Interface.Config
       Interface.Parser
       Interface.Shell
@@ -60,10 +61,6 @@ library
       Tlang.Graph.Extension.Type
       Tlang.Graph.Operation
       Tlang.Graph.Type
-      Tlang.Helper
-      Tlang.Helper.AST
-      Tlang.Helper.AST.Binder
-      Tlang.Helper.AST.Type
       Tlang.Inference
       Tlang.Inference.Expr
       Tlang.Inference.Graph
@@ -81,10 +78,10 @@ library
       Tlang.Rep.Class
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
-      Tlang.Subst
       Tlang.TH
       Tlang.Transform.Class
       Tlang.Transform.TypeGraph
+      Tlang.Transform.TypeRuntime
       Tlang.Unification
       Tlang.Unification.Kind
       Tlang.Unification.Type
@@ -213,6 +210,7 @@ test-suite t-lang-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
+      Language.AST
       Paths_t_lang
   hs-source-dirs:
       test

@@ -64,10 +64,6 @@ type instance CodeGenEnv m (VisibleType typ) = (MonadFail m)
 instance OperandGen (VisibleType typ) where
   genOperand _ = fail "VisibleType is not supported for now"
 
--- type instance CodeGenEnv m (VisibleType typ) = (MonadFail m)
--- instance OperandGen (VisibleType typ) where
---   genOperand _ = fail "VisibleType is not supported for now"
-
 type instance CodeGenEnv m Apply = (MonadFail m)
 instance OperandGen Apply where
   genOperand (Apply mf ma mas) = do
@@ -202,8 +198,8 @@ instance OperandGen pattern' => OperandGen (Lambda pattern' prefix) where
   genOperand _ = do
     error "lambda not defined"
 
-type instance CodeGenEnv m ((:@) typ) = ()
-instance OperandGen ((:@) typ) where
+type instance CodeGenEnv m ((@:) typ) = ()
+instance OperandGen ((@:) typ) where
   genOperand (v :@ _) = v
 
 -- **** global definition

@@ -1,7 +1,7 @@
 module Tlang.AST.Expr
   ( Expr (..)
   , ExprF (..)
-  , (:@) (..)
+  , type (@:) (..)
   )
 where
 
@@ -12,8 +12,8 @@ import Data.Bifunctor.TH (deriveBifunctor)
 import Tlang.TH (fixQ)
 
 -- | type annotation with full power of the type system
-data typ :@ term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
-$(deriveBifunctor ''(:@))
+data typ @: term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
+$(deriveBifunctor ''(@:))
 
 -- | a `Free` like structure for defining `Expr`
 --
