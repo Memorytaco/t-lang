@@ -1,6 +1,7 @@
 module Tlang.Graph.Extension.Type
   (
-    -- ** Constant node
+
+  -- ** Constant node
     NodeSum (..)
   , NodeRec (..)
   , NodeHas (..)
@@ -12,16 +13,25 @@ module Tlang.Graph.Extension.Type
   , NodeTup (..)
   , NodeBot (..)
   , NodeArr (..)
+  , NodePht (..)
 
+  -- ** a wrapper to make difference among type nodes and constraint nodes
+  -- or structure edges and constraint edges
   , G (..)
-  , P (..)  -- ^ permission
+  , T (..)
 
-    -- ** Edge
+  -- ** Edge
   , Sub (..)
   , Bind (..)
-  , Flag (..) -- ^ binding flag
   , Instance (..)
   , Unify (..)
+
+  -- ** utility structures
+
+  -- *** permission
+  , P (..)
+  -- *** binding flag
+  , Flag (..)
   )
 where
 
@@ -57,11 +67,20 @@ data NodeBot = NodeBot deriving (Show, Eq, Ord)
 -- | arrow node, for ->
 data NodeArr = NodeArr deriving (Show, Eq, Ord)
 
+-- | a redundant annotation node, it means nothing
+-- TODO: expand this node into annotation node to attach more information to nodes
+newtype NodePht a = NodePht a deriving (Show, Eq, Ord)
+
 -- *** Constraint node
 
 -- | `G` node, represents one level of generalization.
 -- the integer indicates how many instances it now has.
-newtype G = G Integer deriving (Show, Eq, Ord)
+newtype G a = G Integer deriving (Show, Eq, Ord)
+
+-- | `T` node, wrap concrete type nodes
+newtype T c a = T c
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
+  deriving Show via c
 
 -- ** Edge definition
 

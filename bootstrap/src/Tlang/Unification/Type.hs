@@ -5,7 +5,13 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Tlang.Unification.Type
-  ( Uno (..)
+  (
+
+  -- ** Core environment
+    (:~~:) (..)
+  , GraphConstraint
+
+  , Uno (..)
   , Histo (..)
   , (~=~)
   )
@@ -13,7 +19,7 @@ where
 
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:) (..), (:+:) (..))
 
 import Control.Monad (when, unless, forM, foldM)
 import Data.Functor ((<&>), ($>))
@@ -22,6 +28,27 @@ import Capability.State (HasState)
 import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy, intercalate)
 import Data.Set (toList)
+
+import Data.Kind (Constraint, Type)
+
+-- ** a frame where to put definition
+
+type GraphConstraint :: (Type -> Type) -> (Type -> Type) -> (Type -> Type) -> Type -> (Type -> Type) -> Constraint
+type family GraphConstraint entity node edge info m
+
+class node :~~: info | node -> info where
+  gunify :: ( HasState "graph" (CoreG ns es info) m
+            , HasThrow "failure" (GraphUnifyError (Hole ns info)) m
+            , GraphConstraint node ns es info m
+            , Eq (ns (Hole ns info)), Ord (es (Link es))
+            , node :<: ns)
+         => (Hole ns info -> Hole ns info -> m (Hole ns info))
+         -> (node (Hole ns info), info) -> Hole ns info -> m (Hole ns info)
+
+type instance GraphConstraint (a :+: b) n e i m = (GraphConstraint a n e i m, GraphConstraint b n e i m, a :<: n, b :<: n)
+instance (f :~~: a, g :~~: a) => (f :+: g) :~~: a where
+  gunify f (Inr v, a) = gunify f (v, a)
+  gunify f (Inl v, a) = gunify f (v, a)
 
 -- ** algorithm instance
 
@@ -63,7 +90,7 @@ instance Histo :~~: Int where
         Nothing -> return $ hole n (Histo c . nub $ b:h1)
 
 type instance GraphConstraint (Uno NodeBot) n e i m
-  = ( Uno G :<: n, Histo :<: n
+  = ( G :<: n, Histo :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -71,7 +98,7 @@ type instance GraphConstraint (Uno NodeBot) n e i m
 instance Uno NodeBot :~~: Int where
   gunify unify (Uno NodeBot, n1) a@(Hole tag n) = do
     -- some exceptions that a bottom node can't be unified with
-    when (isHole @(Uno G) a true) $ failMsg "unexpected G node"
+    when (isHole @G a true) $ failMsg "unexpected G node"
     -- handle `Histo` node explicitly
     case prj tag of
       Just (Histo _ _) -> unify a $ hole n1 (Uno NodeBot)
@@ -81,7 +108,7 @@ instance Uno NodeBot :~~: Int where
         hole n1 (Uno NodeBot) ==> a >> a ==> v >> rebind @String v $> v
 
 type instance GraphConstraint (Uno NodeTup) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -114,7 +141,7 @@ instance Uno NodeTup :~~: Int where
 
 
 type instance GraphConstraint (Uno (NodeHas label)) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i)), Eq label
     )
@@ -137,7 +164,7 @@ instance Uno (NodeHas label) :~~: Int where
 
 
 type instance GraphConstraint (Uno NodeSum) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -164,7 +191,7 @@ instance Uno NodeSum :~~: Int where
 
 
 type instance GraphConstraint (Uno NodeRec) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -190,7 +217,7 @@ instance Uno NodeRec :~~: Int where
       Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeRec s1) a
 
 type instance GraphConstraint (Uno NodeApp) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -218,7 +245,7 @@ instance Uno NodeApp :~~: Int where
       Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeApp s1) a
 
 type instance GraphConstraint (Uno (NodeRep a)) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
@@ -235,7 +262,7 @@ instance Eq a => Uno (NodeRep a) :~~: Int where
       Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeRep r1)) a
 
 type instance GraphConstraint (Uno (NodeRef name)) n e i m
-  = ( Uno G :<: n, Histo :<: n, Uno NodeBot :<: n
+  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
     , Uno (Bind String) :<: e, Uno Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     , Eq name

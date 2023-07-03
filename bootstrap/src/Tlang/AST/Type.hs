@@ -140,7 +140,7 @@ data Kind f name a where
   -- | quantified kind variable, well, this is...
   KindBnd :: name -> Kind f name (name >| Kind f name a) -> Kind f name a
   -- | extend functionality
-  KindFix :: (f (Kind f name a)) -> Kind f name a
+  Kind :: (f (Kind f name a)) -> Kind f name a
   deriving (Functor, Foldable, Traversable)
 $(deriveBifunctor ''Kind)
 
@@ -151,14 +151,14 @@ instance (Functor f) => Applicative (Kind f info) where
   (a :-> b) <*> x = a <*> x :-> b <*> x
   KindBnd name mf <*> x = KindBnd name (lift <$> mf)
     where lift = fmap (<*> x)
-  KindFix v <*> x = KindFix ((<*> x) <$> v)
+  Kind v <*> x = Kind ((<*> x) <$> v)
 
 instance (Functor f) => Monad (Kind f info) where
   KindStar >>= _ = KindStar
   KindVar a >>= f = f a
   (a :-> b) >>= f = (a >>= f) :-> (b >>= f)
   KindBnd name a >>= f = KindBnd name (fmap (>>= f) <$> a)
-  KindFix v >>= f = KindFix ((>>= f) <$> v)
+  Kind v >>= f = Kind ((>>= f) <$> v)
 
 deriving instance (forall x. Eq x => Eq (f x), Eq info, Eq a) => Eq (Kind f info a)
 deriving instance (forall x. Ord x => Ord (f x), forall x. Eq x => Eq (f x), Ord info, Ord a) => Ord (Kind f info a)
@@ -169,7 +169,7 @@ instance (Show info, Show a, forall x. Show x => Show (f x)) => Show (Kind f inf
   show (KindBnd v body) = "{" <> show v <> "}" <> " => " <> show body
   show (v@(_ :-> _) :-> a) = "(" <> show v <> ")" <> " -> " <> show a
   show (a :-> b) = show a <> " -> " <> show b
-  show (KindFix anno) = show anno
+  show (Kind anno) = show anno
 
 makeBaseFunctor $ fixQ [d|
   instance (Functor rep, Functor bind) => Recursive (Type bind rep name a)

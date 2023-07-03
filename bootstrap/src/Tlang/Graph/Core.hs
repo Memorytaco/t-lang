@@ -7,10 +7,6 @@ module Tlang.Graph.Core
   -- ** Core graph
   , CoreG
 
-  -- ** Core environment
-  , (:~~:) (..)
-  , GraphConstraint
-
   -- ** unification error data and sub data
   , GraphUnifyError (..)
   , GraphProperty (..)
@@ -44,12 +40,11 @@ import qualified Algebra.Graph.AdjacencyMap as AdjacencyMap
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
 import Algebra.Graph.Labelled (Graph (..), Context (..), context, edgeLabel, replaceEdge, transpose, emap, foldg)
 import qualified Algebra.Graph.Labelled as Algebra (edge, connect, overlay, vertices, overlays, edges)
-import Data.Kind (Constraint, Type)
 import Data.Functor ((<&>))
 import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
 
-import Tlang.Generic ((:<:) (..), (:+:) (..))
+import Tlang.Generic ((:<:) (..))
 
 -- | algebraic edge for graph
 newtype Link e = Link (e (Link e))
@@ -77,20 +72,8 @@ data GraphProperty node
 
 -- ** core structure and method for graph unification
 
--- | core structure for graph unification
+-- | core structure for graphic representation of syntactic type
 type CoreG nodes edges info = Graph (Set (Link edges)) (Hole nodes info)
-
-type family GraphConstraint (entity :: Type -> Type) (node :: Type -> Type) (edge :: Type -> Type) (info :: Type)
-                            (m :: Type -> Type) :: Constraint
-
-class node :~~: info | node -> info where
-  gunify :: ( HasState "graph" (CoreG ns es info) m
-            , HasThrow "failure" (GraphUnifyError (Hole ns info)) m
-            , GraphConstraint node ns es info m
-            , Eq (ns (Hole ns info)), Ord (es (Link es))
-            , node :<: ns)
-         => (Hole ns info -> Hole ns info -> m (Hole ns info))
-         -> (node (Hole ns info), info) -> Hole ns info -> m (Hole ns info)
 
 -- ** state operator
 
@@ -226,11 +209,6 @@ filterLink predicate n1 n2 g = replaceEdge (Set.filter predicate $ getLink n1 n2
 -- | predicates
 hasVertex :: (Hole nodes info -> Bool) -> CoreG nodes edges info -> Bool
 hasVertex p = foldg False p (const (||))
-
-type instance GraphConstraint (a :+: b) n e i m = (GraphConstraint a n e i m, GraphConstraint b n e i m, a :<: n, b :<: n)
-instance (f :~~: a, g :~~: a) => (f :+: g) :~~: a where
-  gunify f (Inr v, a) = gunify f (v, a)
-  gunify f (Inl v, a) = gunify f (v, a)
 
 -- ** algorithms
 

@@ -3,6 +3,7 @@ module Tlang.Inference.Kind
   (
     KindUnifyError (..)
   , shift
+  , clean
 
   )
 where
@@ -54,9 +55,17 @@ substitute
   -> Kind f name a
 substitute var target term = term >>= \a -> if a == var then target else return a
 
--- clean (KindBnd i val) = case traverse (\case New _ -> Nothing; Inc v -> Just (return v)) val of
---                           Just t -> t
---                           Nothing -> KindBnd i (clean val)
+-- | remove redundant binder
+clean :: Traversable f => Kind f name a -> Kind f name a
+clean (Kind v) = Kind (clean <$> v)
+clean (a :-> b) = clean a :-> clean b
+clean (KindBnd i val) =
+  let iter (New _) = Nothing
+      iter (Inc v) = Just v
+   in case traverse iter val of
+        Just mval -> clean $ mval >>= id
+        Nothing -> KindBnd i (fmap clean <$> val)
+clean a = a
 
 data KindUnifyError k
   = KindUnMatch k k
