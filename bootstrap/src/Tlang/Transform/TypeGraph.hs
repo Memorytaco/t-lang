@@ -103,7 +103,7 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
       go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv >>= return . \case
         New name -> asks @"local" (lookup name) >>= \case
           Just v -> return v
-          Nothing -> fail $ "Unable to find name " <> show name
+          Nothing -> fail $ "Unable to find local binding of " <> show name
         Inc m -> m
       go (Type.TypeF v) = foldTypeGraph v
 
@@ -134,7 +134,9 @@ toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
 type instance ConstrainGraph (Bound name) nodes edges info m
   = ( Eq (edges (Link edges))
     , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
-    , Uno (Bind name) :<: edges
+    , Uno (Bind name) :<: edges, Uno Sub :<: edges
+    , NodePht :<: nodes
+    , HasState "node" Int m
     , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
     )
 -- | handle binder
@@ -142,23 +144,38 @@ instance FoldBinderTypeGraph (Bound name) Int where
   foldBinderTypeGraph (name :~ mbound) mbody = do
     a@(var, _) <- mbound
     (root, body) <- local @"local" ((name, a):) mbody
-    if hasVertex (== var) body
+    -- check whether the body is merely bounded type nodes, if so there
+    -- is a loop via binding edge, and it needs to add a phantom node here
+    -- to remove the self binding loop
+    if root == var
     then do
+      pht <- hole' NodePht <$> node
+      return (pht, overlays [body, var -<< Uno (Bind Flexible 1 (Just name)) >>- pht, pht -<< Uno (Sub 1) >>- root])
+    else do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
             return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
       g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
       return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
-    else return (root, body)
+
   foldBinderTypeGraph (name :> mbound) mbody = do
     a@(var, _) <- mbound
     (root, body) <- local @"local" ((name, a):) mbody
-    if hasVertex (== var) body
+    if root == var
     then do
+      pht <- hole' NodePht <$> node
+      return (pht, overlays [body, var -<< Uno (Bind Flexible 1 (Just name)) >>- pht, pht -<< Uno (Sub 1) >>- root])
+    else do
       let shiftLink g (e@(Uno (Bind flag i name')), n) =
             return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
       g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< Uno (Bind Rigid 1 (Just name)) >>- root)
-    else return (root, body)
+      return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
+    -- if hasVertex (== var) body
+    -- then do
+    --   let shiftLink g (e@(Uno (Bind flag i name')), n) =
+    --         return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+    --   g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
+    --   return (root, overlay g' $ var -<< Uno (Bind Rigid 1 (Just name)) >>- root)
+    -- else return (root, body)
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
 -- | handle `Forall` binder

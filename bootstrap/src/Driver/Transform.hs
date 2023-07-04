@@ -25,6 +25,7 @@ type PlayG
   = CoreG (   Uno NodeBot :+: Uno (NodeLit Integer) :+: Uno (NodeLit Text)
           :+: Uno NodeTup :+: Uno NodeSum :+: Uno NodeRec :+: Uno (NodeRef Name)
           :+: Uno NodeApp :+: Uno (NodeHas Label)
+          :+: NodePht
           )
           (Uno Sub :+: Uno (Bind Name)) Int
 

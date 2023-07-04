@@ -19,8 +19,12 @@ module Tlang.Graph.Extension.Type
   -- or structure edges and constraint edges
   , G (..)
   , T (..)
+  , C (..)
 
   -- ** Edge
+  , E (..)
+  , type (/.)
+  , type (+.)
   , Sub (..)
   , Bind (..)
   , Instance (..)
@@ -34,6 +38,8 @@ module Tlang.Graph.Extension.Type
   , Flag (..)
   )
 where
+
+import Data.Kind (Type)
 
 -- ** Node definition
 
@@ -69,16 +75,24 @@ data NodeArr = NodeArr deriving (Show, Eq, Ord)
 
 -- | a redundant annotation node, it means nothing
 -- TODO: expand this node into annotation node to attach more information to nodes
-newtype NodePht a = NodePht a deriving (Show, Eq, Ord)
+data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
--- *** Constraint node
+-- *** Graph decorator
+--
+-- used to decorate things and gives them different meanings
+-- or itself means something.
 
 -- | `G` node, represents one level of generalization.
 -- the integer indicates how many instances it now has.
 newtype G a = G Integer deriving (Show, Eq, Ord)
 
 -- | `T` node, wrap concrete type nodes
-newtype T c a = T c
+newtype T t a = T t
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
+  deriving Show via t
+
+-- | `C` node, wrap things and behaves as constraint
+newtype C c a = C c
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via c
 
@@ -86,8 +100,41 @@ newtype T c a = T c
 
 -- *** General edge
 
+-- define parameter
+data a /. b
+data a +. b
+
+-- | Edge family
+--
+-- __Experimental__
+data family E (proxy :: k)
+
+-- | indexed edge
+data instance E "structure"
+  = E Integer
+  deriving (Show, Eq, Ord)
+
+-- | indexed binding edge
+data instance E ("binding" /. (name :: Type))
+  = B Flag Integer (Maybe name)
+  deriving (Show, Eq, Ord)
+
+-- | unification edge, with no direction
+data instance E "unify"
+  = Unify' deriving (Show, Eq, Ord)
+
+data instance E (a +. b)
+  = El (E a)
+  | Er (E b)
+instance (Show (E a), Show (E b)) => Show (E (a +. b)) where
+  show (El e) = show e
+  show (Er e) = show e
+deriving instance (Eq (E a), Eq (E b)) => Eq (E (a +. b))
+deriving instance (Ord (E a), Ord (E b)) => Ord (E (a +. b))
+
 -- | structural edge, with number attached. orders matter.
 newtype Sub = Sub Integer deriving (Show, Eq, Ord)
+
 -- | binding edge, with number attached and also the origin name. orders and names matter.
 data Bind name = Bind Flag Integer (Maybe name) deriving (Show, Eq, Ord)
 
@@ -111,7 +158,7 @@ data P
 
 -- *** Constraint edge
 
--- | unify constraint edge, underictional edge
+-- | unify constraint edge, undirectional edge
 data Unify = Unify deriving (Show, Eq, Ord)
 
 -- | instance constraint edge
