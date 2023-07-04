@@ -33,6 +33,8 @@ library
       Driver.Inference
       Driver.Parser
       Driver.Transform
+      Driver.Transform.GraphType
+      Driver.Transform.TypeGraph
       Driver.Unification
       Example
       Interface.Config

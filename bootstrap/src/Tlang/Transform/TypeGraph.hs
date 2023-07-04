@@ -84,7 +84,7 @@ type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
   , FoldBinderTypeGraph bind info, ConstrainGraph bind nodes edges info m
   , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
   , HasState "node" Int m
-  , Uno NodeBot :<: nodes, Uno NodeApp :<: nodes, Uno Sub :<: edges
+  , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
   , Ord (edges (Link edges))
   , MonadFail m
   , Show name, Eq name, Functor f, Functor bind
@@ -92,13 +92,13 @@ type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
 instance FoldTypeGraph (Type.Type bind f name) Int where
   foldTypeGraph = cata go
     where
-      go Type.TypPhtF = node <&> hole' (Uno NodeBot) <&> \v -> (v, Vertex v)
+      go Type.TypPhtF = node <&> hole' (T NodeBot) <&> \v -> (v, Vertex v)
       go (Type.TypVarF v) = v
       go (Type.TypConF m ms) = do
         ns <- sequence $ m: ms
         let len = toInteger $ length ns
-        top <- node <&> hole' (Uno $ NodeApp len)
-        gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . Uno $ Sub i) (Vertex top) (Vertex sub) <> subg
+        top <- node <&> hole' (T $ NodeApp len)
+        gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . T $ Sub i) (Vertex top) (Vertex sub) <> subg
         return (top, overlays gs)
       go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv >>= return . \case
         New name -> asks @"local" (lookup name) >>= \case
@@ -119,7 +119,7 @@ toGraph
      , Show name, Eq name
      , Ord (edges (Link edges))
      , Functor bind, Functor f
-     , Uno NodeBot :<: nodes, Uno NodeApp :<: nodes, Uno Sub :<: edges
+     , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
      , MonadFail m
      )
   => Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
@@ -134,7 +134,7 @@ toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
 type instance ConstrainGraph (Bound name) nodes edges info m
   = ( Eq (edges (Link edges))
     , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
-    , Uno (Bind name) :<: edges, Uno Sub :<: edges
+    , T (Bind name) :<: edges, T Sub :<: edges
     , NodePht :<: nodes
     , HasState "node" Int m
     , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
@@ -150,12 +150,12 @@ instance FoldBinderTypeGraph (Bound name) Int where
     if root == var
     then do
       pht <- hole' NodePht <$> node
-      return (pht, overlays [body, var -<< Uno (Bind Flexible 1 (Just name)) >>- pht, pht -<< Uno (Sub 1) >>- root])
+      return (pht, overlays [body, var -<< T (Bind Flexible 1 (Just name)) >>- pht, pht -<< T (Sub 1) >>- root])
     else do
-      let shiftLink g (e@(Uno (Bind flag i name')), n) =
-            return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-      g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
+      let shiftLink g (e@(T (Bind flag i name')), n) =
+            return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+      g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
+      return (root, overlay g' $ var -<< T (Bind Flexible 1 (Just name)) >>- root)
 
   foldBinderTypeGraph (name :> mbound) mbody = do
     a@(var, _) <- mbound
@@ -163,18 +163,18 @@ instance FoldBinderTypeGraph (Bound name) Int where
     if root == var
     then do
       pht <- hole' NodePht <$> node
-      return (pht, overlays [body, var -<< Uno (Bind Flexible 1 (Just name)) >>- pht, pht -<< Uno (Sub 1) >>- root])
+      return (pht, overlays [body, var -<< T (Bind Flexible 1 (Just name)) >>- pht, pht -<< T (Sub 1) >>- root])
     else do
-      let shiftLink g (e@(Uno (Bind flag i name')), n) =
-            return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-      g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< Uno (Bind Flexible 1 (Just name)) >>- root)
+      let shiftLink g (e@(T (Bind flag i name')), n) =
+            return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+      g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
+      return (root, overlay g' $ var -<< T (Bind Flexible 1 (Just name)) >>- root)
     -- if hasVertex (== var) body
     -- then do
-    --   let shiftLink g (e@(Uno (Bind flag i name')), n) =
-    --         return . overlay (n -<< Uno (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-    --   g' <- foldM shiftLink body $ lTo @(Uno (Bind name)) (== root) body
-    --   return (root, overlay g' $ var -<< Uno (Bind Rigid 1 (Just name)) >>- root)
+    --   let shiftLink g (e@(T (Bind flag i name')), n) =
+    --         return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
+    --   g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
+    --   return (root, overlay g' $ var -<< T (Bind Rigid 1 (Just name)) >>- root)
     -- else return (root, body)
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
@@ -189,7 +189,7 @@ instance FoldBinderTypeGraph f Int => FoldBinderTypeGraph (Scope f) Int where
 -- *** handle literals
 
 type instance ConstrainGraph Tuple nodes edges info m
-  = ( Uno Sub :<: edges, Uno NodeTup :<: nodes
+  = ( T Sub :<: edges, T NodeTup :<: nodes
     , Ord (edges (Link edges)), Ord (nodes (Hole nodes info))
     , Functor m, HasState "node" Int m
     )
@@ -198,13 +198,13 @@ instance FoldTypeGraph Tuple Int where
   foldTypeGraph (Tuple ms) = do
     gs <- sequence ms
     let len = toInteger $ length gs
-    root <- node <&> hole' (Uno $ NodeTup len)
-    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< Uno (Sub i) >>- a) Empty $ zip [1..len] gs
+    root <- node <&> hole' (T $ NodeTup len)
+    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< T (Sub i) >>- a) Empty $ zip [1..len] gs
     return (root, g)
 
 
 type instance ConstrainGraph (Record label) nodes edges info m
-  = ( Uno (NodeHas label) :<: nodes, Uno NodeRec :<: nodes, Uno Sub :<: edges
+  = ( T (NodeHas label) :<: nodes, T NodeRec :<: nodes, T Sub :<: edges
     , Ord (edges (Link edges)), Ord (nodes (Hole nodes info))
     , HasState "node" Int m
     )
@@ -213,15 +213,15 @@ instance FoldTypeGraph (Record label) Int where
   foldTypeGraph (Record ms) = do
     gs <- forM ms sequence
     let len = toInteger $ length gs
-    root <- node <&> hole' (Uno $ NodeRec len)
+    root <- node <&> hole' (T $ NodeRec len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, (a, g'))) -> do
-      label <- node <&> hole' (Uno $ NodeHas True l)
-      return $ overlays [root -<< Uno (Sub i) >>- label, label -<< Uno (Sub 1) >>- a, g', g]
+      label <- node <&> hole' (T $ NodeHas True l)
+      return $ overlays [root -<< T (Sub i) >>- label, label -<< T (Sub 1) >>- a, g', g]
     return (root, g)
 
 
 type instance ConstrainGraph (Variant label) nodes edges info m
-  = ( Uno (NodeHas label) :<: nodes, Uno NodeRec :<: nodes, Uno Sub :<: edges
+  = ( T (NodeHas label) :<: nodes, T NodeRec :<: nodes, T Sub :<: edges
     , Ord (edges (Link edges)), Ord (nodes (Hole nodes info))
     , HasState "node" Int m
     )
@@ -230,26 +230,26 @@ instance FoldTypeGraph (Variant label) Int where
   foldTypeGraph (Variant ms) = do
     gs <- mapM (mapM sequence) ms
     let len = toInteger $ length gs
-    root <- node <&> hole' (Uno $ NodeRec len)
+    root <- node <&> hole' (T $ NodeRec len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, val)) -> do
-      label <- node <&> hole' (Uno $ NodeHas True l)
+      label <- node <&> hole' (T $ NodeHas True l)
       return . overlays $
-        [ overlays [root -<< Uno (Sub i) >>- label, g]
-        , maybe Empty (\(a, g') -> overlays [label -<< Uno (Sub 1) >>- a, g']) val
+        [ overlays [root -<< T (Sub i) >>- label, g]
+        , maybe Empty (\(a, g') -> overlays [label -<< T (Sub 1) >>- a, g']) val
         ]
     return (root, g)
 
 -- | handle `LiteralText'
 type instance ConstrainGraph LiteralText nodes edges info m
-  = ( Uno (NodeLit Text) :<: nodes, HasState "node" Int m)
+  = ( T (NodeLit Text) :<: nodes, HasState "node" Int m)
 instance FoldTypeGraph LiteralText Int where
-  foldTypeGraph (LiteralText (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+  foldTypeGraph (LiteralText (getLiteral -> lit)) = node <&> hole' (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 -- | handle `LiteralNatural'
 type instance ConstrainGraph LiteralNatural nodes edges info m
-  = ( Uno (NodeLit Integer) :<: nodes, HasState "node" Int m)
+  = ( T (NodeLit Integer) :<: nodes, HasState "node" Int m)
 instance FoldTypeGraph LiteralNatural Int where
-  foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole' (Uno $ NodeLit lit) <&> \v -> (v, Vertex v)
+  foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole' (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 
 -- *** handle Injectors

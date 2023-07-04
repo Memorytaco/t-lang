@@ -17,7 +17,7 @@ import Tlang.AST
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:) (..), (:+:) (..))
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
@@ -109,6 +109,14 @@ withBinding restore root m = do
 --
 -- define logic here
 
+type instance GraphTypeConstrain (x :+: y) m nodes edges info bind rep name a
+  = ( GraphTypeConstrain x m nodes edges info bind rep name a
+    , GraphTypeConstrain y m nodes edges info bind rep name a
+    )
+instance (UnfoldGraphType x info, UnfoldGraphType y info) => UnfoldGraphType (x :+: y) info where
+  unfoldGraphType restore (Inl v) info = unfoldGraphType restore v info
+  unfoldGraphType restore (Inr v) info = unfoldGraphType restore v info
+
 type instance GraphTypeConstrain (T NodeTup) m nodes edges info bind rep name a
   = ( T Sub :<: edges
     , T NodeTup :<: nodes
@@ -193,8 +201,8 @@ instance UnfoldGraphType (T NodeApp) Int where
 type instance GraphTypeConstrain (T NodeRec) m nodes edges info bind rep name a
   = ( WithLocalEnv m nodes edges info bind rep name a
     , WithBindingEnv m nodes edges info bind rep name a
-    , T (NodeHas Name) :<: nodes, T NodeRec :<: nodes
-    , Record Name :<: rep
+    , T (NodeHas Label) :<: nodes, T NodeRec :<: nodes
+    , Record Label :<: rep
     , T Sub :<: edges
     , MonadFail m
     )
@@ -202,24 +210,27 @@ instance UnfoldGraphType (T NodeRec) Int where
   unfoldGraphType restore s@(T (NodeRec _)) info =
     let root = Hole (inj s) info in withLocal root $ withBinding restore root do
     subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
-    fields <- mapM (unfoldRecordLabel @Name restore) (snd <$> subLinks)
+    fields <- mapM (unfoldRecordLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Record fields
 
 type instance GraphTypeConstrain (T NodeSum) m nodes edges info bind rep name a
   = ( WithLocalEnv m nodes edges info bind rep name a
     , WithBindingEnv m nodes edges info bind rep name a
     , T Sub :<: edges
-    , T (NodeHas Name) :<: nodes, T NodeSum :<: nodes
-    , Variant Name :<: rep
+    , T (NodeHas Label) :<: nodes, T NodeSum :<: nodes
+    , Variant Label :<: rep
     , MonadFail m
     )
 instance UnfoldGraphType (T NodeSum) Int where
   unfoldGraphType restore s@(T (NodeSum _)) info =
     let root = Hole (inj s) info in withLocal root $ withBinding restore root do
     subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
-    fields <- mapM (unfoldVariantLabel @Name restore) (snd <$> subLinks)
+    fields <- mapM (unfoldVariantLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Variant fields
 
+type instance GraphTypeConstrain (T (NodeHas any)) m nodes edges info bind rep name a = ()
+instance UnfoldGraphType (T (NodeHas any)) Int where
+  unfoldGraphType _ (T (NodeHas _ _)) _ = error "impossible"
 
 unfoldRecordLabel
   :: forall tag m nodes edges info bind rep name a. (HasReader "graph" (CoreG nodes edges info) m, MonadFail m, Eq (Hole nodes info), T Sub :<: edges, Ord (edges (Link edges)), T (NodeHas tag) :<: nodes)
