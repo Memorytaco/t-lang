@@ -41,6 +41,7 @@ dependencies:
 - type-errors
 - template-haskell
 - tasty
+- tasty-hunit
 - capability
 - algebraic-graphs == 0.7
 

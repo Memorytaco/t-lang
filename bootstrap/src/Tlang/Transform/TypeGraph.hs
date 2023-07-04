@@ -1,3 +1,4 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {- | Transformation module for graphic type
 
     This module transform syntactic type into relevent graphic representation
@@ -17,7 +18,6 @@ module Tlang.Transform.TypeGraph
 where
 
 -- ** for graph
-import Tlang.Unification.Type
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
@@ -77,6 +77,41 @@ instance (FoldTypeGraph f info, FoldTypeGraph g info) => FoldTypeGraph (f :+: g)
 node :: HasState "node" Int m => m Int
 node = modify @"node" (+1) >> get @"node"
 
+-- | increase binding index by 1, the lower binding index, the outer the binder
+-- e.g. forall a b. anything
+-- Index are:  1 2
+-- a has 1, b has 2
+--
+-- another one:
+--    forall a b c d e f. anything
+--           1 2 3 4 5 6
+shiftBindingEdge
+  :: forall name nodes edges info
+   . ( T (Bind name) :<: edges, Ord info, Ord (edges (Link edges))
+     , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
+     )
+  => Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
+shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Bind name)) (== root) g
+  where shiftup gr (e@(T (Bind flag i name)), n) = overlays
+          [ n -<< T (Bind flag (i+1) name) >>- root
+          , filterLink (/= link' e) n root gr
+          ]
+{-# INLINE shiftBindingEdge #-}
+
+-- | move bound site from `from` to `to`
+moveBindingEdge
+  :: forall name nodes edges info
+   . ( T (Bind name) :<: edges, Ord info, Ord (edges (Link edges))
+     , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
+     )
+  => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
+moveBindingEdge from to g = foldl move g $ lTo @(T (Bind name)) (== from) g
+  where move gr (e@(T (Bind flag i name)), n) = overlays
+          [ n -<< T (Bind flag i name) >>- to
+          , filterLink (/= link' e) n from gr
+          ]
+{-# INLINE moveBindingEdge #-}
+
 -- ** the algorithm for transforming syntactic type into graphic representation
 
 type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
@@ -125,7 +160,7 @@ toGraph
   => Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
 toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
   Just v -> return v
-  Nothing -> fail $ "Unable to find name " <> show name
+  Nothing -> fail $ "Unable to find global binding of " <> show name
 
 -- ** instances
 
@@ -141,41 +176,25 @@ type instance ConstrainGraph (Bound name) nodes edges info m
     )
 -- | handle binder
 instance FoldBinderTypeGraph (Bound name) Int where
-  foldBinderTypeGraph (name :~ mbound) mbody = do
-    a@(var, _) <- mbound
+  foldBinderTypeGraph bounds mbody = do
+    -- fetch relevant binding name, its bounded type and permission
+    (name, mbound, flag) <- case bounds of
+      name :~ mbound -> return (name, mbound, Rigid)
+      name :> mbound -> return (name, mbound, Flexible)
+    -- convert bounds first
+    a@(var, bbody) <- mbound
+    -- convert type body
     (root, body) <- local @"local" ((name, a):) mbody
     -- check whether the body is merely bounded type nodes, if so there
-    -- is a loop via binding edge, and it needs to add a phantom node here
+    -- may exist a loop via binding edge, and a phantom node needs to be put here
     -- to remove the self binding loop
-    if root == var
-    then do
+    if root == var then do
       pht <- hole' NodePht <$> node
-      return (pht, overlays [body, var -<< T (Bind Flexible 1 (Just name)) >>- pht, pht -<< T (Sub 1) >>- root])
-    else do
-      let shiftLink g (e@(T (Bind flag i name')), n) =
-            return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-      g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< T (Bind Flexible 1 (Just name)) >>- root)
-
-  foldBinderTypeGraph (name :> mbound) mbody = do
-    a@(var, _) <- mbound
-    (root, body) <- local @"local" ((name, a):) mbody
-    if root == var
-    then do
-      pht <- hole' NodePht <$> node
-      return (pht, overlays [body, var -<< T (Bind Flexible 1 (Just name)) >>- pht, pht -<< T (Sub 1) >>- root])
-    else do
-      let shiftLink g (e@(T (Bind flag i name')), n) =
-            return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-      g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
-      return (root, overlay g' $ var -<< T (Bind Flexible 1 (Just name)) >>- root)
-    -- if hasVertex (== var) body
-    -- then do
-    --   let shiftLink g (e@(T (Bind flag i name')), n) =
-    --         return . overlay (n -<< T (Bind flag (i+1) name') >>- root) $ filterLink (/= link' e) n root g
-    --   g' <- foldM shiftLink body $ lTo @(T (Bind name)) (== root) body
-    --   return (root, overlay g' $ var -<< T (Bind Rigid 1 (Just name)) >>- root)
-    -- else return (root, body)
+      -- TODO: explain why we need to move all binding edges from old root to the phantom node
+      return (pht, overlays [ moveBindingEdge @name root pht $ shiftBindingEdge @name root body
+                            , bbody, var -<< T (Bind flag 1 (Just name)) >>- pht
+                            , pht -<< T (Sub 1) >>- root])
+    else return (root, overlays [shiftBindingEdge @name root body, bbody, var -<< T (Bind flag 1 (Just name)) >>- root])
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
 -- | handle `Forall` binder
@@ -221,7 +240,8 @@ instance FoldTypeGraph (Record label) Int where
 
 
 type instance ConstrainGraph (Variant label) nodes edges info m
-  = ( T (NodeHas label) :<: nodes, T NodeRec :<: nodes, T Sub :<: edges
+  = ( T (NodeHas label) :<: nodes
+    , T NodeSum :<: nodes, T Sub :<: edges
     , Ord (edges (Link edges)), Ord (nodes (Hole nodes info))
     , HasState "node" Int m
     )
@@ -230,7 +250,7 @@ instance FoldTypeGraph (Variant label) Int where
   foldTypeGraph (Variant ms) = do
     gs <- mapM (mapM sequence) ms
     let len = toInteger $ length gs
-    root <- node <&> hole' (T $ NodeRec len)
+    root <- node <&> hole' (T $ NodeSum len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, val)) -> do
       label <- node <&> hole' (T $ NodeHas True l)
       return . overlays $

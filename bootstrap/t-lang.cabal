@@ -141,6 +141,7 @@ library
     , optparse-applicative
     , recursion-schemes
     , tasty
+    , tasty-hunit
     , template-haskell
     , text
     , transformers >=0.5.6.2
@@ -203,6 +204,7 @@ executable t-lang-exe
     , recursion-schemes
     , t-lang
     , tasty
+    , tasty-hunit
     , template-haskell
     , text
     , transformers >=0.5.6.2
@@ -213,7 +215,7 @@ test-suite t-lang-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
-      Language.AST
+      Test.Driver.Transform.GraphAndType
       Paths_t_lang
   hs-source-dirs:
       test
@@ -267,6 +269,7 @@ test-suite t-lang-test
     , recursion-schemes
     , t-lang
     , tasty
+    , tasty-hunit
     , template-haskell
     , text
     , transformers >=0.5.6.2

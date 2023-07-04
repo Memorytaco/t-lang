@@ -23,6 +23,7 @@ import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
 
 import Data.Text (Text)
+import Data.List (sortBy)
 
 import qualified Data.Kind as Data (Type, Constraint)
 
@@ -50,6 +51,15 @@ toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
 --
 -- These are general code snippets
 
+order :: Ord a => [(a, b)] -> [(a, b)]
+order = sortBy \(a, _) (b, _) -> compare a b
+
+-- | structure link from, sort by sub edge
+sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges)
+      => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
+sFrom root = fmap order . asks @"graph" $ lFrom @(T Sub) (== root)
+{-# INLINE sFrom #-}
+
 -- | query whether one node has been translated into syntactic form, if so return the name
 lookupName :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, name)] m)
            => Hole nodes info -> m (Maybe name)
@@ -75,7 +85,7 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , HasReader "local" [(Hole nodes info, a)] m
   , HasReader "scheme" (Maybe a -> m a) m
   , T (Bind a) :<: edges
-  , Ord (edges (Link edges))
+  , Ord (edges (Link edges)), Ord a
   , Eq (Hole nodes info), Eq a, Eq info
   , Forall (Bound a) :<: bind
   , Functor rep
@@ -86,7 +96,7 @@ withBinding
   :: forall m nodes edges info bind rep name a. WithBindingEnv m nodes edges info bind rep name a
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- asks @"graph" $ lTo @(T (Bind a)) (== root)
+  preBinds <- fmap order . asks @"graph" $ lTo @(T (Bind a)) (== root)
   scheme <- ask @"scheme"
   localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Bind flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
   body <- local @"local" ((snd <$> localBinds) <>) m
@@ -149,38 +159,42 @@ type instance GraphTypeConstrain (T (NodeRef name')) m nodes edges info bind rep
   = ( T (NodeRef name') :<: nodes
     , name' ~ a
     , WithLocalEnv m nodes edges info bind rep name a
+    , WithBindingEnv m nodes edges info bind rep name a
     )
 instance UnfoldGraphType (T (NodeRef a)) Int where
-  unfoldGraphType _ s@(T (NodeRef _ name)) info =
-    let root = Hole (inj s) info in withLocal root $ return (TypVar name)
+  unfoldGraphType restore s@(T (NodeRef _ name)) info =
+    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (TypVar name)
 
 type instance GraphTypeConstrain (T NodeBot) m nodes edges info bind rep name a
   = ( T NodeBot :<: nodes
     , WithLocalEnv m nodes edges info bind rep name a
+    , WithBindingEnv m nodes edges info bind rep name a
     )
 instance UnfoldGraphType (T NodeBot) Int where
-  unfoldGraphType _ s@(T NodeBot) info =
-    let root = Hole (inj s) info in withLocal root $ return TypPht
+  unfoldGraphType restore s@(T NodeBot) info =
+    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return TypPht
 
 
 type instance GraphTypeConstrain (T (NodeLit Text)) m nodes edges info bind rep name a
   = ( T (NodeLit Text) :<: nodes
     , LiteralText :<: rep
     , WithLocalEnv m nodes edges info bind rep name a
+    , WithBindingEnv m nodes edges info bind rep name a
     )
 instance UnfoldGraphType (T (NodeLit Text)) Int where
-  unfoldGraphType _ s@(T (NodeLit val)) info =
-    let root = Hole (inj s) info in withLocal root $ return (Type . inj . LiteralText $ Literal val)
+  unfoldGraphType restore s@(T (NodeLit val)) info =
+    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (Type . inj . LiteralText $ Literal val)
 
 
 type instance GraphTypeConstrain (T (NodeLit Integer)) m nodes edges info bind rep name a
   = ( T (NodeLit Integer) :<: nodes
     , LiteralNatural :<: rep
     , WithLocalEnv m nodes edges info bind rep name a
+    , WithBindingEnv m nodes edges info bind rep name a
     )
 instance UnfoldGraphType (T (NodeLit Integer)) Int where
-  unfoldGraphType _ s@(T (NodeLit val)) info =
-    let root = Hole (inj s) info in withLocal root $ return (Type . inj . LiteralNatural $ Literal val)
+  unfoldGraphType restore s@(T (NodeLit val)) info =
+    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (Type . inj . LiteralNatural $ Literal val)
 
 type instance GraphTypeConstrain (T NodeApp) m nodes edges info bind rep name a
   = ( T NodeApp :<: nodes
@@ -192,7 +206,7 @@ type instance GraphTypeConstrain (T NodeApp) m nodes edges info bind rep name a
 instance UnfoldGraphType (T NodeApp) Int where
   unfoldGraphType restore s@(T (NodeApp _)) info =
     let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
+    subLinks <- sFrom root
     case snd <$> subLinks of
       a:as -> TypCon <$> restore a <*> mapM restore as
       [] -> fail "Illegal Application Node: it has no sub nodes"
@@ -209,7 +223,7 @@ type instance GraphTypeConstrain (T NodeRec) m nodes edges info bind rep name a
 instance UnfoldGraphType (T NodeRec) Int where
   unfoldGraphType restore s@(T (NodeRec _)) info =
     let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
+    subLinks <- sFrom root
     fields <- mapM (unfoldRecordLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Record fields
 
@@ -224,7 +238,7 @@ type instance GraphTypeConstrain (T NodeSum) m nodes edges info bind rep name a
 instance UnfoldGraphType (T NodeSum) Int where
   unfoldGraphType restore s@(T (NodeSum _)) info =
     let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
+    subLinks <- sFrom root
     fields <- mapM (unfoldVariantLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Variant fields
 
