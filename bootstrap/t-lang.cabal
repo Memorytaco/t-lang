@@ -81,8 +81,8 @@ library
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
       Tlang.TH
-      Tlang.Transform.Class
       Tlang.Transform.GraphType
+      Tlang.Transform.Pass
       Tlang.Transform.TypeGraph
       Tlang.Transform.TypeRuntime
       Tlang.Unification

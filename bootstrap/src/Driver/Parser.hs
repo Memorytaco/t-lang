@@ -28,6 +28,7 @@ import Tlang.AST
 import Tlang.Parser
 import Tlang.Extension
 import Tlang.Generic ((:+:))
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 import qualified Data.Kind as D (Type)
 
 import Capability.Accessors
@@ -47,25 +48,25 @@ import GHC.Generics (Generic)
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
 
-type TypeAST = StandardType Label (Bound Name) Name Name
+type TypeAST = StandardType Label (Prefix Name) Name Name
 type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ :+: PatGroup) Label Name
 type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ) Label Name
 
 type ASTExpr typ = Expr
   ( Let (ASTPat typ)
-  :+: Lambda (ASTGPat typ) (Bounds Name typ)
-  :+: Lambda (Grp (ASTPat typ)) (Bounds Name typ)
+  :+: Equation (ASTGPat typ) (Prefixes Name typ)
+  :+: Equation (Grp (ASTPat typ)) (Prefixes Name typ)
   :+: Apply :+: Tuple :+: Record Label
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
-  :+: VisibleType typ :+: Selector Label :+: Constructor Label
+  :+: Value typ :+: Selector Label :+: Constructor Label
   :+: (@:) typ
   ) Name
 
 type ASTDeclExt typ expr = UserItem
-  :+: UserType typ [Bound Name typ]
+  :+: UserType typ [Prefix Name typ]
   :+: UserFFI typ
   :+: UserValue expr (Maybe typ)
-  :+: UserData [Bound Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
+  :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
 type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Name
 
 type PredefExprVal = ASTExpr TypeAST

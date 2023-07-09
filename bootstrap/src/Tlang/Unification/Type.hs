@@ -89,40 +89,40 @@ instance Histo :~~: Int where
         Just (Histo d h2) -> return $ hole n (Histo d . nub $ h2 <> h1)
         Nothing -> return $ hole n (Histo c . nub $ b:h1)
 
-type instance GraphConstraint (Uno NodeBot) n e i m
+type instance GraphConstraint (T NodeBot) n e i m
   = ( G :<: n, Histo :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for bottom node
-instance Uno NodeBot :~~: Int where
-  gunify unify (Uno NodeBot, n1) a@(Hole tag n) = do
+instance T NodeBot :~~: Int where
+  gunify unify (T NodeBot, n1) a@(Hole tag n) = do
     -- some exceptions that a bottom node can't be unified with
     when (isHole @G a true) $ failMsg "unexpected G node"
     -- handle `Histo` node explicitly
     case prj tag of
-      Just (Histo _ _) -> unify a $ hole n1 (Uno NodeBot)
+      Just (Histo _ _) -> unify a $ hole n1 (T NodeBot)
       Nothing -> do
         -- merge node, keep `a`
-        let v = hole n (Histo a [hole n1 $ Uno NodeBot, a])
-        hole n1 (Uno NodeBot) ==> a >> a ==> v >> rebind @String v $> v
+        let v = hole n (Histo a [hole n1 $ T NodeBot, a])
+        hole n1 (T NodeBot) ==> a >> a ==> v >> rebind @String v $> v
 
-type instance GraphConstraint (Uno NodeTup) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T NodeTup) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for tuple
-instance Uno NodeTup :~~: Int where
-  gunify unify (Uno (NodeTup s), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a $ hole n1 (Uno $ NodeTup s)
-    else case prj @(Uno NodeTup) tag of
-      Just (Uno (NodeTup t)) -> do
+instance T NodeTup :~~: Int where
+  gunify unify (T (NodeTup s), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a $ hole n1 (T $ NodeTup s)
+    else case prj @(T NodeTup) tag of
+      Just (T (NodeTup t)) -> do
         -- arity of tuple should match
-        when (t /= s) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno (NodeTup s))) a
+        when (t /= s) $ failProp $ NodeDoesn'tMatch (hole n1 (T (NodeTup s))) a
         -- merge node, keep `a`
-        hole n1 (Uno $ NodeTup s) ==> a >> rebind @String a
+        hole n1 (T $ NodeTup s) ==> a >> rebind @String a
         -- unify subnodes, now these subnodes share same sub edge number
         {-
                   (ng)      or    (ng)
@@ -132,108 +132,108 @@ instance Uno NodeTup :~~: Int where
             since sub edge is tagged with a number, and result is sorted, it will be
             the second case. we group it by equivalence edge.
         -}
-        children <- getsGraph $ lFrom @(Uno Sub) (== a)
+        children <- getsGraph $ lFrom @(T Sub) (== a)
         pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
           [snd -> x, snd -> y] -> return (x, y)
           _ -> failMsg "Tuple nodes don't have same number of children"
         sequel unify pairs >> return a
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (Uno (NodeTup s))) a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (T (NodeTup s))) a
 
 
-type instance GraphConstraint (Uno (NodeHas label)) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T (NodeHas label)) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i)), Eq label
     )
 -- | unification for label
-instance Uno (NodeHas label) :~~: Int where
-  gunify unify (Uno (NodeHas b1 label1), n1) a@(Hole tag _) = case prj @(Uno (NodeHas label)) tag of
-    Just (Uno (NodeHas b2 label2)) -> do
+instance T (NodeHas label) :~~: Int where
+  gunify unify (T (NodeHas b1 label1), n1) a@(Hole tag _) = case prj @(T (NodeHas label)) tag of
+    Just (T (NodeHas b2 label2)) -> do
       -- a label must match exactly, otherwise unification fails
-      unless (b1 == b2 && label1 == label2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno (NodeHas b1 label1))) a
+      unless (b1 == b2 && label1 == label2) $ failProp $ NodeDoesn'tMatch (hole n1 (T (NodeHas b1 label1))) a
       -- merge node, keep `a`
-      hole n1 (Uno $ NodeHas b1 label1) ==> a >> rebind @String a
+      hole n1 (T $ NodeHas b1 label1) ==> a >> rebind @String a
       -- b1 == `True` means it has one child, and that should match too
       if b1 then do
-        children <- getsGraph $ lFrom @(Uno Sub) (== a)
+        children <- getsGraph $ lFrom @(T Sub) (== a)
         case snd <$> children of
           [x, y] -> unify x y $> a
           _ -> failMsg "Unexpected internal encoding error, label node should have exact one child but it doesn't"
       else return a
-    Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (Uno (NodeHas b1 label1))) a
+    Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (T (NodeHas b1 label1))) a
 
 
-type instance GraphConstraint (Uno NodeSum) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T NodeSum) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for variant node
-instance Uno NodeSum :~~: Int where
-  gunify unify (Uno (NodeSum s1), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a (hole n1 . Uno $ NodeSum s1)
-    else case prj @(Uno NodeSum) tag of
-      Just (Uno (NodeSum s2)) -> do
+instance T NodeSum :~~: Int where
+  gunify unify (T (NodeSum s1), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a (hole n1 . T $ NodeSum s1)
+    else case prj @(T NodeSum) tag of
+      Just (T (NodeSum s2)) -> do
         -- structure node should have same number of subnodes
-        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeSum s1)) a
+        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeSum s1)) a
         -- merge node, keep `a`, and rebind binding edge
-        hole n1 (Uno $ NodeSum s1) ==> a >> rebind @String a
+        hole n1 (T $ NodeSum s1) ==> a >> rebind @String a
         -- unify subnodes
-        children <- getsGraph $ lFrom @(Uno Sub) (== a)
+        children <- getsGraph $ lFrom @(T Sub) (== a)
         if toInteger (length children) == s1 + s2 then do
           pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
             [snd -> x, snd -> y] -> return (x, y)
             _ -> failMsg "Variant nodes don't have same number of children"
           sequel unify pairs $> a
         else failMsg "Unexpected internal encoding error, variant structure node has wrong number of subnodes"
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeSum s1) a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . T $ NodeSum s1) a
 
 
-type instance GraphConstraint (Uno NodeRec) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T NodeRec) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for record node
-instance Uno NodeRec :~~: Int where
-  gunify unify (Uno (NodeRec s1), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a (hole n1 . Uno $ NodeRec s1)
-    else case prj @(Uno NodeRec) tag of
-      Just (Uno (NodeRec s2)) -> do
+instance T NodeRec :~~: Int where
+  gunify unify (T (NodeRec s1), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a (hole n1 . T $ NodeRec s1)
+    else case prj @(T NodeRec) tag of
+      Just (T (NodeRec s2)) -> do
         -- structure node should have same number of subnodes
-        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeRec s1)) a
+        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeRec s1)) a
         -- merge node, keep `a`
-        hole n1 (Uno $ NodeRec s1) ==> a >> rebind @String a
+        hole n1 (T $ NodeRec s1) ==> a >> rebind @String a
         -- unify subnodes
-        children <- getsGraph $ lFrom @(Uno Sub) (== a)
+        children <- getsGraph $ lFrom @(T Sub) (== a)
         if toInteger (length children) == s1 + s2 then do
           pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
             [snd -> x, snd -> y] -> return (x, y)
             _ -> failMsg "Variant nodes don't have same number of children"
           sequel unify pairs $> a
         else failMsg "Unexpected internal encoding error, record structure node has wrong number of subnodes"
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeRec s1) a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . T $ NodeRec s1) a
 
-type instance GraphConstraint (Uno NodeApp) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T NodeApp) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for variant node
-instance Uno NodeApp :~~: Int where
-  gunify unify (Uno (NodeApp s1), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a (hole n1 . Uno $ NodeApp s1)
-    else case prj @(Uno NodeApp) tag of
-      Just (Uno (NodeApp s2)) -> do
+instance T NodeApp :~~: Int where
+  gunify unify (T (NodeApp s1), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a (hole n1 . T $ NodeApp s1)
+    else case prj @(T NodeApp) tag of
+      Just (T (NodeApp s2)) -> do
         -- structure node should have same number of subnodes
-        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeApp s1)) a
+        when (s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeApp s1)) a
         -- merge node, keep `a`
-        hole n1 (Uno $ NodeApp s1) ==> a >> rebind @String a
+        hole n1 (T $ NodeApp s1) ==> a >> rebind @String a
         -- unify subnodes
-        children <- getsGraph $ lFrom @(Uno Sub) (== a)
+        children <- getsGraph $ lFrom @(T Sub) (== a)
         if toInteger (length children) == s1 + s2 then do
           pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
             [snd -> x, snd -> y] -> return (x, y)
@@ -242,45 +242,45 @@ instance Uno NodeApp :~~: Int where
         else failMsg "Unexpected internal encoding error, type application node has wrong number of subnodes"
         -- TODO: check name node and deal with type alias, it is complex
         -- we now assume no type alias is involved
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeApp s1) a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . T $ NodeApp s1) a
 
-type instance GraphConstraint (Uno (NodeRep a)) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T (NodeRep a)) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     )
 -- | unification for representation type node
-instance Eq a => Uno (NodeRep a) :~~: Int where
-  gunify unify (Uno (NodeRep r1), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a (hole n1 . Uno $ NodeRep r1)
-    else case prj @(Uno (NodeRep a)) tag of
-      Just (Uno (NodeRep r2)) -> do
+instance Eq a => T (NodeRep a) :~~: Int where
+  gunify unify (T (NodeRep r1), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a (hole n1 . T $ NodeRep r1)
+    else case prj @(T (NodeRep a)) tag of
+      Just (T (NodeRep r2)) -> do
         -- representation has shipped equivalence relation
-        when (r1 /= r2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeRep r1)) a
-        hole n1 (Uno $ NodeRep r1) ==> a >> rebind @String a >> return a
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeRep r1)) a
+        when (r1 /= r2) $ failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeRep r1)) a
+        hole n1 (T $ NodeRep r1) ==> a >> rebind @String a >> return a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeRep r1)) a
 
-type instance GraphConstraint (Uno (NodeRef name)) n e i m
-  = ( G :<: n, Histo :<: n, Uno NodeBot :<: n
-    , Uno (Bind String) :<: e, Uno Sub :<: e
+type instance GraphConstraint (T (NodeRef name)) n e i m
+  = ( G :<: n, Histo :<: n, T NodeBot :<: n
+    , T (Bind String) :<: e, T Sub :<: e
     , Show (n (Hole n i)), Ord (n (Hole n i))
     , Eq name
     )
 -- | unification for variant node
-instance Uno (NodeRef name) :~~: Int where
-  gunify unify (Uno (NodeRef b1 s1), n1) a@(Hole tag _) =
-    if isHole @(Uno NodeBot) a true || isHole @Histo a true then
-      unify a (hole n1 . Uno $ NodeRef b1 s1)
-    else case prj @(Uno (NodeRef name)) tag of
-      Just (Uno (NodeRef b2 s2)) -> do
+instance T (NodeRef name) :~~: Int where
+  gunify unify (T (NodeRef b1 s1), n1) a@(Hole tag _) =
+    if isHole @(T NodeBot) a true || isHole @Histo a true then
+      unify a (hole n1 . T $ NodeRef b1 s1)
+    else case prj @(T (NodeRef name)) tag of
+      Just (T (NodeRef b2 s2)) -> do
         -- when name nodes are both no alias, then use syntax directed type equality
-        when (not (b1 || b2) && s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (Uno $ NodeRef b1 s1)) a
+        when (not (b1 || b2) && s1 /= s2) $ failProp $ NodeDoesn'tMatch (hole n1 (T $ NodeRef b1 s1)) a
         -- TODO: check type alias, alias node should be defined in `NodeApp`
         -- we now assume no type alias is involved
         -- merge node, keep `a`
-        hole n1 (Uno $ NodeRef b1 s1) ==> a >> rebind @String a >> return a
-      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . Uno $ NodeRef b1 s1) a
+        hole n1 (T $ NodeRef b1 s1) ==> a >> rebind @String a >> return a
+      Nothing -> failProp $ NodeDoesn'tMatch (hole n1 . T $ NodeRef b1 s1) a
 
 -- ** useful operator
 
@@ -303,9 +303,9 @@ sequel unify ((a,b): xs) = do
   return $ val : vals
 
 -- | get node's binder and flag
-binderInfo :: (Eq info, Eq (ns (Hole ns info)), Ord (es (Link es)), Uno (Bind name) :<: es)
+binderInfo :: (Eq info, Eq (ns (Hole ns info)), Ord (es (Link es)), T (Bind name) :<: es)
            => Hole ns info -> CoreG ns es info -> [(Flag, Integer, Maybe name, Hole ns info)]
-binderInfo node g = lFrom (== node) g >>= \(Uno (Bind flag i name), binder) -> return (flag, i, name, binder)
+binderInfo node g = lFrom (== node) g >>= \(T (Bind flag i name), binder) -> return (flag, i, name, binder)
 
 -- | rebind binding edge for node n, this should happen after `==>`.
 rebind :: forall name ns es info m
@@ -314,7 +314,7 @@ rebind :: forall name ns es info m
           , Show info, Show (ns (Hole ns info))
           , Ord info, Ord (ns (Hole ns info)), Ord (es (Link es))
           , Eq name
-          , Uno (Bind name) :<: es, Uno NodeBot :<: ns, Uno Sub :<: es, Histo :<: ns
+          , T (Bind name) :<: es, T NodeBot :<: ns, T Sub :<: es, Histo :<: ns
           )
        => Hole ns info -> m ()
 rebind n = do
@@ -327,20 +327,20 @@ rebind n = do
                [] -> failMsg ""
   bn <- foldM lcb b bs
   i <- maximum <$> forM binders \(f, i, name, v) ->
-    modifyGraph (filterLink (`isLink` \(Uno (Bind f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
-  modifyGraph $ overlay (n -<< Uno (Bind flag i (Nothing :: Maybe name)) >>- bn)
+    modifyGraph (filterLink (`isLink` \(T (Bind f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
+  modifyGraph $ overlay (n -<< T (Bind flag i (Nothing :: Maybe name)) >>- bn)
   where
     -- | return direct ancestors of node n, if it is partially grafted node.
     -- if this is used during unification, '==>' should be used first.
     partial = do
-      ns <- getGraph <&> transpose <&> \g -> toList $ reachable (`isLink` \(Uno (Sub _)) -> True) g n
-      if or $ flip isHole (\_ (Histo _ as) -> or $ flip isHole (\_ (Uno NodeBot) -> True) <$> as) <$> ns
-         then getsGraph $ nub . fmap snd . lTo @(Uno Sub) (== n)
+      ns <- getGraph <&> transpose <&> \g -> toList $ reachable (`isLink` \(T (Sub _)) -> True) g n
+      if or $ flip isHole (\_ (Histo _ as) -> or $ flip isHole (\_ (T NodeBot) -> True) <$> as) <$> ns
+         then getsGraph $ nub . fmap snd . lTo @(T Sub) (== n)
          else return []
     -- | least common binder of two nodes
     lcb n1 n2 = do
-      ns1 <- getsGraph \g -> dfs (`isLink` (\(Uno (Bind _ _ (_ :: Maybe name))) -> True)) g n1
-      ns2 <- getsGraph \g -> dfs (`isLink` (\(Uno (Bind _ _ (_ :: Maybe name))) -> True)) g n2
+      ns1 <- getsGraph \g -> dfs (`isLink` (\(T (Bind _ _ (_ :: Maybe name))) -> True)) g n1
+      ns2 <- getsGraph \g -> dfs (`isLink` (\(T (Bind _ _ (_ :: Maybe name))) -> True)) g n2
       case zip ns1 ns2 >>= \(a, b) -> if a == b then pure a else [] of
         [] -> failMsg $ "No least common binder for " <> show n1 <> ", " <> show n2
         ls -> return $ last ls

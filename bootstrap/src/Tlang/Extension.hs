@@ -10,6 +10,8 @@ module Tlang.Extension
     -- ** common structure
   , Tuple (..)
   , Record (..)
+  , Value (..)
+  , Cast (..)
 
     -- ** reexport other extensions
   , module Type
@@ -38,6 +40,14 @@ newtype LiteralNatural a = LiteralNatural (Literal Integer a) deriving (Show, Eq
 newtype LiteralInteger a = LiteralInteger (Literal Integer a) deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 newtype LiteralNumber a = LiteralNumber (Literal Double a) deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
+-- | Inject any constant into the expression
+newtype Value val a = Value val
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
+  deriving Show via val
+
+-- | Type or Kind casting
+data Cast t a = Cast t a
+  deriving (Show, Eq, Functor)
 
 -- | builtin tuple
 newtype Tuple a

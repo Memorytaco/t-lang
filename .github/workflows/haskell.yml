@@ -48,4 +48,5 @@ jobs:
       run: |
         cd bootstrap
         stack build
+        stack test
         cd ..

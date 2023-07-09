@@ -3,6 +3,8 @@ module Tlang.Constraint
   , ConstraintF (..)
   , (:<>) (..)
   , (:>>) (..)
+  , Prefix (..)
+  , Prefixes (..)
   )
 where
 
@@ -30,8 +32,7 @@ deriving instance Traversable rel => Traversable (Constraint rel term name)
 deriving instance (Show (rel typ), Show term, Show name, Show typ) => Show (Constraint rel name term typ)
 deriving instance (Eq (rel typ), Eq term, Eq name, Eq typ) => Eq (Constraint rel name term typ)
 
-type FoldFunctor f = (Functor f, Traversable f, Foldable f)
-makeBaseFunctor $ fixQ [d| instance (FoldFunctor rel) => Recursive (Constraint rel name term typ) |]
+makeBaseFunctor $ fixQ [d| instance (Functor rel) => Recursive (Constraint rel name term typ) |]
 $(deriveBifunctor ''Constraint)
 
 -- | constraint concatenation
@@ -39,23 +40,23 @@ data a :<> b = a :<> b deriving (Show, Eq, Functor, Foldable, Traversable)
 -- | first order substitution
 data a :>> b = a :>> b deriving (Show, Eq, Functor, Foldable, Traversable)
 
+-- | MLF bounded quantifier
+data Prefix name typ
+  = name :~ typ -- ^ equality relation, rigid binding
+  | name :> typ -- ^ lower bound or subsume, flexible binding
+  deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
+
+newtype Prefixes name typ = Prefixes [Prefix name typ]
+  deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
+
 -- data Prefix qual name typ
 --   = typ :~ name  -- ^ `name` is rigid bound to `typ`
 --   | typ :< name  -- ^ `name` is an instance of `typ`
 --   | qual typ :? name  -- ^ `name` is qualified by `qual typ`
 --   deriving (Show, Eq)
 
--- data Prefix label name typ
---   = Prefix (Bound name typ)
---   | RowRec (Bound name [(label, typ)])        -- ^ record row
---   | RowVar (Bound name [(label, Maybe typ)])  -- ^ variant row
---   deriving (Show, Eq)
-
--- data Qualify label typ
---   = AllOf [(label, typ)]        -- ^ for record
---   | AnyOf [(label, Maybe typ)]  -- ^ for variant
-
--- $(deriveBifunctor ''Prefix)
+$(deriveBifunctor ''Prefix)
+$(deriveBifunctor ''Prefixes)
 $(deriveBifunctor ''(:<>))
 $(deriveBifunctor ''(:>>))
 

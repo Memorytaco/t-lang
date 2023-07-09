@@ -7,6 +7,7 @@ import Tlang.Parser.Class
 import Tlang.Parser.Lexer
 
 import Tlang.AST
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Text.Megaparsec hiding (Label)
 import Text.Megaparsec.Debug
@@ -167,7 +168,7 @@ instance (ExprC e m, Apply :<: f, Let pat :<: f, PrattToken proxy (pat (Expr f n
 instance ( ExprC e m, Apply :<: f
          , PatGroup :<: pext
          , PrattToken proxy (Pattern plit pext plabel pname (Expr f name)) m
-         , Lambda (Pattern plit pext plabel pname) (Bounds Name (Type tbind trep tname a)) :<: f
+         , Equation (Pattern plit pext plabel pname) (Prefixes Name (Type tbind trep tname a)) :<: f
          )
   => PrattToken (WithExpr e m (Layer ("block" :- Type tbind trep tname a) proxy (Hint (Pattern plit pext plabel pname))))
                 (Expr f name) m where
@@ -179,7 +180,7 @@ instance ( ExprC e m, Apply :<: f
         branch = (,) <$> sPat <*> (reservedOp "=" *> parser (void . lookAhead $ reservedOp "]" <|> reservedOp "|") Go)
              <|> fail "expect equation"
         lambda = do
-          heads <- Lambda . Bounds . fromMaybe [] <$> optional
+          heads <- Equation . Prefixes . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> (reservedOp "|" *> branch `sepBy1` reservedOp "|" <|> return [])
     brackets (lambda <&> Expr . inj <?> "block lambda") <&> literal
@@ -187,7 +188,7 @@ instance ( ExprC e m, Apply :<: f
 -- | one line lambda for expression
 instance ( ExprC e m, Apply :<: f
          , PrattToken proxy (pat (Expr f name)) m
-         , Lambda (Grp pat) (Bounds Name (Type tbind trep tname a)) :<: f
+         , Equation (Grp pat) (Prefixes Name (Type tbind trep tname a)) :<: f
          )
   => PrattToken (WithExpr e m (Layer ("line" :- Type tbind trep tname a) proxy (Hint (Grp pat))))
                 (Expr f name) m where
@@ -198,7 +199,7 @@ instance ( ExprC e m, Apply :<: f
         gPat = iPat `sepBy1` reservedOp "," <&> Grp
         branch = (,) <$> gPat <*> (reservedOp "=>" *> parser (void $ lookAhead end) Go)
         lambda = do
-          heads <- Lambda . Bounds . fromMaybe [] <$> optional
+          heads <- Equation . Prefixes . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> return []
     reservedOp "\\" *> (lambda <&> Expr . inj) <&> literal
@@ -206,7 +207,8 @@ instance ( ExprC e m, Apply :<: f
 -- | type application
 instance ( ExprC e m
          , PrattToken proxy (Type tbind trep tname a) m
-         , VisibleType (Type tbind trep tname a) :<: f
+         , Value (Type tbind trep tname a) :<: f
+         , Apply :<: f
          , a ~ Name, Tuple :<: trep, LiteralText :<: trep, LiteralNatural :<: trep
          , Record Label :<: trep
          )
@@ -221,6 +223,6 @@ instance ( ExprC e m
       <|> Type . inj . LiteralText . Literal <$> stringLiteral -- text
       <|> Type . inj <$> record (pratt @proxy)
     let nud' _ = fail "Type application requires one argument"
-        led' _ left = return . Expr . inj $ VisibleType typ left
+        led' _ left = return . Expr . inj $ Apply left (Expr . inj $ Value typ) []
     return $ Semantic nud' led' (return Infinite)
 

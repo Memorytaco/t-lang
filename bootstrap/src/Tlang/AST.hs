@@ -3,7 +3,6 @@ module Tlang.AST
 
     -- ** useful data
     None (..)
-  , Symbol (..)
   , Label (..)
   , Name (..)
 
@@ -49,9 +48,6 @@ type StandardType label bound = Type (TypBindPlugin bound) (TypPlugin label)
 -- | a place holder for every parametric data type
 data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- | used to represent type name reference, both for operator and normal name
-data Symbol = Symbol String | Op String deriving (Eq)
-
 -- | a wrapper for name reference
 newtype Name = Name Text deriving (Eq, Ord) deriving IsString via Text
 instance Show Name where
@@ -61,18 +57,4 @@ instance Show Name where
 newtype Label = Label Text deriving (Eq, Ord) deriving IsString via Text
 instance Show Label where
   show (Label text) = unpack text
-
-instance Show Symbol where
-  show (Symbol s) = s
-  show (Op s) = s
-
-instance Ord Symbol where
-  compare (Symbol s1) (Symbol s2) = compare s1 s2
-  compare (Op s1) (Symbol s2) = compare s1 s2
-  compare (Symbol s1) (Op s2) = compare s1 s2
-  compare (Op s1) (Op s2) = compare s1 s2
-
-instance Labellable Symbol where
-  toLabelValue (Symbol name) = toLabelValue name
-  toLabelValue (Op name) = toLabelValue name
 

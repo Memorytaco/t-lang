@@ -36,7 +36,7 @@ import Data.Text (Text)
 -- ** for type
 import qualified Tlang.AST.Type as Type
 import Tlang.AST.Type (type (>|) (..))
-import Tlang.AST.Type (Bound (..))
+import Tlang.Constraint (Prefix (..))
 
 -- ** for signature
 import Data.Kind (Constraint, Type)
@@ -166,7 +166,7 @@ toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
 
 -- *** handle binders
 
-type instance ConstrainGraph (Bound name) nodes edges info m
+type instance ConstrainGraph (Prefix name) nodes edges info m
   = ( Eq (edges (Link edges))
     , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
     , T (Bind name) :<: edges, T Sub :<: edges
@@ -175,7 +175,7 @@ type instance ConstrainGraph (Bound name) nodes edges info m
     , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
     )
 -- | handle binder
-instance FoldBinderTypeGraph (Bound name) Int where
+instance FoldBinderTypeGraph (Prefix name) Int where
   foldBinderTypeGraph bounds mbody = do
     -- fetch relevant binding name, its bounded type and permission
     (name, mbound, flag) <- case bounds of

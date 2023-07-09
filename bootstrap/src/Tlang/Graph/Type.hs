@@ -15,7 +15,7 @@ import Data.GraphViz.Attributes.Complete (Label (StrLabel))
 import Data.Text.Lazy (pack)
 import Tlang.Graph.Core
 
-import Tlang.AST (Symbol (..), Variance (..))
+import Tlang.AST (Variance (..))
 
 -- | label for edge
 data GEdge a

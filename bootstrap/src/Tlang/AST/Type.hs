@@ -11,9 +11,6 @@ module Tlang.AST.Type
   , type (>|) (..)
 
   , Variance (..)
-
-  , Bound (..)
-  , Bounds (..)
   )
 where
 
@@ -101,17 +98,6 @@ instance
   show (TypVar name) = show name
   show (TypBnd binder body) = "Bind { " <> show binder <> " = " <> show body <> " }"
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
-
--- | MLF bounded quantifier
-data Bound name typ
-  = name :~ typ -- ^ equality relation
-  | name :> typ -- ^ lower bound or subsume
-  deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
-$(deriveBifunctor ''Bound)
-
--- | type Prefixs qual name typ = [Prefix qual name typ]
-newtype Bounds name typ = Bounds [Bound name typ] deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
-$(deriveBifunctor ''Bounds)
 
 -- | type variance
 data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)

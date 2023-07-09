@@ -18,6 +18,7 @@ import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
 import Tlang.Generic ((:<:) (..), (:+:) (..))
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
@@ -87,7 +88,7 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , T (Bind a) :<: edges
   , Ord (edges (Link edges)), Ord a
   , Eq (Hole nodes info), Eq a, Eq info
-  , Forall (Bound a) :<: bind
+  , Forall (Prefix a) :<: bind
   , Functor rep
   )
 

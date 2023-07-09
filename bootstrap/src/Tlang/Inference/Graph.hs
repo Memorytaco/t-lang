@@ -53,6 +53,7 @@ import Data.Text (pack)
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext
 import Tlang.Generic
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
@@ -73,7 +74,7 @@ simplify r g =
 
 runRestore
   :: forall label lit m rep bind a.
-    (Show label, MonadFail m, Forall (Bound Name) :<: bind, Scope (Bound Name) :<: bind
+    (Show label, MonadFail m, Forall (Prefix Name) :<: bind, Scope (Prefix Name) :<: bind
    , Const lit :<: rep, Record label :<: rep, Variant label :<: rep, Tuple :<: rep)
   => Node
   -> Gr (GNode (GNodeLabel lit label Name)) (GEdge Name)
@@ -93,7 +94,7 @@ injTypeLit = Type . inj
 restore
   :: ( MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
      , MonadState ([(Node, name)], Int) m, Show label, MonadFail m
-     , Forall (Bound name) :<: bind, Scope (Bound name) :<: bind
+     , Forall (Prefix name) :<: bind, Scope (Prefix name) :<: bind
      , Tuple :<: rep, Record label :<: rep, Variant label :<: rep, Const lit :<: rep
      , Eq name
      )

@@ -64,4 +64,5 @@ transformationShouldKeepTypeIntact = testGroup "Transformation Should Keep Type 
   , "forall a b. 1"
   , "forall a b. \"symbol\""
   , "forall a b. (a, {name: b, identity: <human, animal> })"
+  , "forall a. a forall a. a"
   ]

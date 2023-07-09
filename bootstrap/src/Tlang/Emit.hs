@@ -22,6 +22,7 @@ import LLVM.IRBuilder
 import Tlang.AST hiding (Type)
 import Tlang.Generic ((:+:) (..))
 import Tlang.Extension
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Data.Maybe (fromMaybe)
 import Data.Kind (Constraint, Type)
@@ -60,8 +61,8 @@ instance (OperandGen f, OperandGen g) => OperandGen (f :+: g) where
   genOperand (Inl fv) = genOperand fv
   genOperand (Inr fv) = genOperand fv
 
-type instance CodeGenEnv m (VisibleType typ) = (MonadFail m)
-instance OperandGen (VisibleType typ) where
+type instance CodeGenEnv m (Value typ) = (MonadFail m)
+instance OperandGen (Value typ) where
   genOperand _ = fail "VisibleType is not supported for now"
 
 type instance CodeGenEnv m Apply = (MonadFail m)
@@ -193,8 +194,8 @@ instance OperandGen (Constructor l) where
   genOperand _ = do
     error "constructor not defined"
 
-type instance CodeGenEnv m (Lambda pattern' prefix) = ()
-instance OperandGen pattern' => OperandGen (Lambda pattern' prefix) where
+type instance CodeGenEnv m (Equation pattern' prefix) = ()
+instance OperandGen pattern' => OperandGen (Equation pattern' prefix) where
   genOperand _ = do
     error "lambda not defined"
 
@@ -219,8 +220,8 @@ instance (GlobalGen f a, GlobalGen g a) => GlobalGen (f :+: g) a where
   genGlobal (Inl fv) = genGlobal fv
   genGlobal (Inr fv) = genGlobal fv
 
-type instance GlobalGenEnv m (UserType typ [Bound Name typ]) a = ()
-instance GlobalGen (UserType typ [Bound Name typ]) a where
+type instance GlobalGenEnv m (UserType typ [Prefix Name typ]) a = ()
+instance GlobalGen (UserType typ [Prefix Name typ]) a where
   genGlobal _ = return Nothing
 
 type instance GlobalGenEnv m UserItem a = ()
@@ -235,9 +236,9 @@ type instance GlobalGenEnv m (UserValue expr (Maybe typ)) a = ()
 instance GlobalGen (UserValue expr (Maybe typ)) a where
   genGlobal _ = return Nothing
 
-type instance GlobalGenEnv m (UserData [Bound Name typ] def) a = ()
-instance GlobalGen (UserData [Bound Name typ] def) a where
+type instance GlobalGenEnv m (UserData [Prefix Name typ] def) a = ()
+instance GlobalGen (UserData [Prefix Name typ] def) a where
   genGlobal _ = return Nothing
 
 
---   :+: UserData [Bound Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
+--   :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)

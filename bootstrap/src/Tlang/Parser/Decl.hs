@@ -12,6 +12,7 @@ module Tlang.Parser.Decl
 where
 
 import Tlang.AST hiding (Type)
+import Tlang.Constraint (Prefix (..))
 import qualified Tlang.AST as AST (Type)
 
 import Tlang.Parser.Class
@@ -84,7 +85,7 @@ instance (ParserM e m, PrattToken tProxy typ m, ParserDSL eProxy expr m, info ~ 
 
 instance ( ParserM e m, PrattToken proxy typ m
          , info ~ Name, typ ~ AST.Type tbind trep Name Name
-         , UserType typ [Bound Name typ] :<: decl
+         , UserType typ [Prefix Name typ] :<: decl
          )
   => ParserDSL (WithDecl e m (Layer "type" proxy typ)) (Decl decl info) m where
   syntax _ end = do
@@ -99,7 +100,7 @@ instance ( ParserM e m, PrattToken proxy typ m
         if ":" `isPrefixOf` op
            then Name <$> operator
            else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> show (Name op) <> "\" ?"
-      typVar :: m (Bound Name typ)
+      typVar :: m (Prefix Name typ)
       typVar = identifier <&> (:> TypPht) . Name
 
 data WithDataDef (e :: Type) (m :: Type -> Type) (a :: k)
@@ -144,14 +145,14 @@ instance ( ParserM e m
            <|> runDSL @(WithDataDef e m b) end
 
 instance ( ParserM e m
-         , info ~ Name, UserData [Bound Name typ] def :<: decl
+         , info ~ Name, UserData [Prefix Name typ] def :<: decl
          , typ ~ AST.Type tbind trep name a
          , ParserDSL proxy def m
          )
   => ParserDSL (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
   syntax _ end = do
     dataName <- reserved "data" *> name
-    vars :: [Bound Name typ] <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
+    vars :: [Prefix Name typ] <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
     body <- runDSL @proxy @def (lookAhead end)
     end $> declare (UserData dataName vars body)
     where

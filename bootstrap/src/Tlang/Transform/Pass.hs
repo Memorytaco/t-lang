@@ -1,10 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Tlang.Transform.Class
+module Tlang.Transform.Pass
   (
     -- ** defined transform for `Expr`
-    TransformSimp (..)
-  , PassSimp
-  , transformSimp
+    TransformCata (..)
+  , PassCata
+  , transformCata
 
     -- ** companion type family
   , Provide
@@ -22,16 +22,16 @@ type family Provide m t a pass f :: Constraint
 
 -- | use this in __pass__ parameter in `Provide` family to define
 -- a simple pass on `Expr`
-data PassSimp (a :: any)
+data PassCata (a :: any)
 
 -- | simple transformation pass with cata scheme
-class TransformSimp pass f a | pass f -> a where
-  transformSimp_
-    :: (Provide m t a (PassSimp pass) f, Monad m)
+class TransformCata pass f a | pass f -> a where
+  transformCata_
+    :: (Provide m t a (PassCata pass) f, Monad m)
     => Proxy pass -> f (m (Expr t a)) -> m (Expr t a)
 
 -- | please use this if you need one pass
-transformSimp :: forall pass t f a m. (TransformSimp pass f a, Provide m t a (PassSimp pass) f, Monad m)
+transformCata :: forall pass t f a m. (TransformCata pass f a, Provide m t a (PassCata pass) f, Monad m)
               => f (m (Expr t a)) -> m (Expr t a)
-transformSimp = transformSimp_ (Proxy @pass)
+transformCata = transformCata_ (Proxy @pass)
 

@@ -13,6 +13,7 @@ import Tlang.Parser.Class
 import Tlang.Parser.Lexer
 
 import Tlang.AST
+import Tlang.Constraint (Prefix (..))
 
 import Data.Text (Text)
 import Data.List (find)
@@ -136,7 +137,7 @@ instance (TypeC e m, Tuple :<: rep)
     return $ literal tuple
 
 -- | `Forall` quantified type
-instance (TypeC e m, (Forall (Bound Name)) :<: bind, a ~ Name, name ~ Name, Functor rep)
+instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Functor rep)
   => PrattToken (WithType e m "forall") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
@@ -152,7 +153,7 @@ instance (TypeC e m, (Forall (Bound Name)) :<: bind, a ~ Name, name ~ Name, Func
       addIndex (name, bound) typ = TypBnd (inj $ Forall bound) (lift name typ)
 
 -- | `Scope` quantified type
-instance (TypeC e m, (Scope (Bound Name)) :<: bind, name ~ Name, a ~ Name, Functor rep)
+instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Functor rep)
   => PrattToken (WithType e m "abstract") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
