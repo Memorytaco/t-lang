@@ -8,13 +8,18 @@ module Tlang.Generic
   , Alg (..)
   , (:@:)
 
-  -- ** Re-Export of foldable functor
-  , module FunctorFoldable
-
   -- ** Useful functor
   , X (..)
   , type (|:) (..)
   , type (|:$) (..)
+
+  -- ** term level open recursion
+  , Recursion (..)
+  , Recursion2 (..)
+
+  -- ** Re-Export of foldable functor
+  , module FunctorFoldable
+
   )
 where
 
@@ -87,4 +92,19 @@ instance (Alg l a, Alg r a) => Alg (l :+: r) a where
   alg (Inr v) = alg v
 
 type (:@:) a op = Alg op a
+
+-- | open recursion, a template
+newtype Recursion m a b = Recursion ((a -> m b) -> (a -> m b))
+-- | open recursion, a template, for arity 2
+newtype Recursion2 m a b = Recursion2 ((a -> a -> m b) -> (a -> a -> m b))
+
+instance Semigroup (Recursion m a b) where
+  Recursion g <> Recursion f = Recursion $ g . f
+instance Monoid (Recursion m a b) where
+  mempty = Recursion id
+
+instance Semigroup (Recursion2 m a b) where
+  Recursion2 g <> Recursion2 f = Recursion2 $ g . f
+instance Monoid (Recursion2 m a b) where
+  mempty = Recursion2 id
 

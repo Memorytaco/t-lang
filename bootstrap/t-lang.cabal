@@ -86,8 +86,8 @@ library
       Tlang.Transform.TypeGraph
       Tlang.Transform.TypeRuntime
       Tlang.Unification
+      Tlang.Unification.Graph
       Tlang.Unification.Kind
-      Tlang.Unification.Type
   other-modules:
       Paths_t_lang
   hs-source-dirs:
@@ -216,6 +216,7 @@ test-suite t-lang-test
   main-is: Spec.hs
   other-modules:
       Test.Driver.Transform.GraphAndType
+      Test.Driver.Unification
       Paths_t_lang
   hs-source-dirs:
       test

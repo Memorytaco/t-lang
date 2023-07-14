@@ -18,7 +18,7 @@ import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
 import Tlang.Generic ((:<:) (..), (:+:) (..))
-import Tlang.Constraint (Prefix (..), Prefixes (..))
+import Tlang.Constraint (Prefix (..))
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
@@ -56,7 +56,7 @@ order :: Ord a => [(a, b)] -> [(a, b)]
 order = sortBy \(a, _) (b, _) -> compare a b
 
 -- | structure link from, sort by sub edge
-sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges)
+sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges, Ord info, Ord (nodes (Hole nodes info)))
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
 sFrom root = fmap order . asks @"graph" $ lFrom @(T Sub) (== root)
 {-# INLINE sFrom #-}
@@ -90,6 +90,7 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , Eq (Hole nodes info), Eq a, Eq info
   , Forall (Prefix a) :<: bind
   , Functor rep
+  , Ord info, Ord (nodes (Hole nodes info))
   )
 
 -- | automatically handling binding edge
@@ -133,6 +134,7 @@ type instance GraphTypeConstrain (T NodeTup) m nodes edges info bind rep name a
     , T NodeTup :<: nodes
     , Tuple :<: rep
     , WithBindingEnv m nodes edges info bind rep name a
+    , Ord info, Ord (nodes (Hole nodes info))
     )
 instance UnfoldGraphType (T NodeTup) Int where
   unfoldGraphType restore s@(T (NodeTup _)) info =
@@ -146,6 +148,7 @@ type instance GraphTypeConstrain NodePht m nodes edges info bind rep name a
     , WithLocalEnv m nodes edges info bind rep name a
     , NodePht :<: nodes
     , T Sub :<: edges
+    , Ord info, Ord (nodes (Hole nodes info))
     )
 instance UnfoldGraphType NodePht Int where
   unfoldGraphType restore NodePht info =
@@ -220,6 +223,7 @@ type instance GraphTypeConstrain (T NodeRec) m nodes edges info bind rep name a
     , Record Label :<: rep
     , T Sub :<: edges
     , MonadFail m
+    , Ord info, Ord (nodes (Hole nodes info))
     )
 instance UnfoldGraphType (T NodeRec) Int where
   unfoldGraphType restore s@(T (NodeRec _)) info =
@@ -228,6 +232,16 @@ instance UnfoldGraphType (T NodeRec) Int where
     fields <- mapM (unfoldRecordLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Record fields
 
+type instance GraphTypeConstrain G m nodes edges info bind rep name a
+  = MonadFail m
+instance UnfoldGraphType G Int where
+  unfoldGraphType _ (G _) _ = fail "Illegal Gen Node"
+
+type instance GraphTypeConstrain Histo m nodes edges info bind rep name a
+  = (MonadFail m)
+instance UnfoldGraphType Histo Int where
+  unfoldGraphType _ (Histo _) _ = fail "Illegal Histo Node"
+
 type instance GraphTypeConstrain (T NodeSum) m nodes edges info bind rep name a
   = ( WithLocalEnv m nodes edges info bind rep name a
     , WithBindingEnv m nodes edges info bind rep name a
@@ -235,6 +249,7 @@ type instance GraphTypeConstrain (T NodeSum) m nodes edges info bind rep name a
     , T (NodeHas Label) :<: nodes, T NodeSum :<: nodes
     , Variant Label :<: rep
     , MonadFail m
+    , Ord info, Ord (nodes (Hole nodes info))
     )
 instance UnfoldGraphType (T NodeSum) Int where
   unfoldGraphType restore s@(T (NodeSum _)) info =
@@ -248,7 +263,12 @@ instance UnfoldGraphType (T (NodeHas any)) Int where
   unfoldGraphType _ (T (NodeHas _ _)) _ = error "impossible"
 
 unfoldRecordLabel
-  :: forall tag m nodes edges info bind rep name a. (HasReader "graph" (CoreG nodes edges info) m, MonadFail m, Eq (Hole nodes info), T Sub :<: edges, Ord (edges (Link edges)), T (NodeHas tag) :<: nodes)
+  :: forall tag m nodes edges info bind rep name a
+  . ( HasReader "graph" (CoreG nodes edges info) m
+    , MonadFail m, Eq (Hole nodes info)
+    , T Sub :<: edges, T (NodeHas tag) :<: nodes
+    , Ord (edges (Link edges)), Ord info, Ord (nodes (Hole nodes info))
+    )
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (tag, Type bind rep name a)
 unfoldRecordLabel restore root@(Hole n _) = do
   -- a label node can not be bound on, so no checking bindings here
@@ -264,7 +284,12 @@ unfoldRecordLabel restore root@(Hole n _) = do
 {-# INLINE unfoldRecordLabel #-}
 
 unfoldVariantLabel
-  :: forall tag m nodes edges info bind rep name a. (HasReader "graph" (CoreG nodes edges info) m, MonadFail m, Eq (Hole nodes info), T Sub :<: edges, Ord (edges (Link edges)), T (NodeHas tag) :<: nodes)
+  :: forall tag m nodes edges info bind rep name a
+  . ( HasReader "graph" (CoreG nodes edges info) m
+    , MonadFail m, Eq (Hole nodes info)
+    , T Sub :<: edges, T (NodeHas tag) :<: nodes
+    , Ord (edges (Link edges)), Ord info, Ord (nodes (Hole nodes info))
+    )
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (tag, Maybe (Type bind rep name a))
 unfoldVariantLabel restore root@(Hole n _) = do
   -- a label node can not be bound on, so no checking bindings here

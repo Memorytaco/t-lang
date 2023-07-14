@@ -1,3 +1,4 @@
+{-# LANGUAGE QuantifiedConstraints #-}
 module Tlang.Extension.Expr
   (
     -- ** expresion structure
@@ -9,6 +10,7 @@ module Tlang.Extension.Expr
   , Constructor (..)
 
   , Lambda (..)
+  , LambdaI (..)
   , Coerce (..)
   , Match (..)
   )
@@ -78,6 +80,21 @@ data Coerce name typ
 -- | function block, basic computation block, support both type abstraction and value abstraction
 data Lambda bind e = Lambda (bind e) e deriving (Show, Eq, Ord, Functor)
 
+-- | function block, which supports nested data type as deBruijn index.
+--
+-- Lambda, but with indexed variable.
+--
+-- It needs another newtype definition to define type level fixpoint.
+-- e.g. a definition for `Expr`
+--    newtype ExprL ix f a = ExprL (Expr (ix (ExprL ix f) :+: f) a)
+--    type ExprNest f a = ExprL (Lambda' (Const Int) Int)
+--
+-- it uses another layer of wrapper to add type index and keeps other things the same.
+data LambdaI bind name f e = LambdaI (bind e) (f (Either name e)) deriving (Functor, Foldable, Traversable)
+deriving instance (forall a. Show (bind a), forall a. Show (f a)) => Show (LambdaI bind name f e)
+deriving instance (forall a. Eq (bind a), forall a. Eq (f a)) => Eq (LambdaI bind name f e)
+deriving instance (forall a. Ord (bind a), forall a. Ord (f a)) => Ord (LambdaI bind name f e)
+
 -- | pattern match expression
-data Match pat e
-  = Match e [(pat e, e)]
+data Match match e
+  = Match e [(match e, e)]

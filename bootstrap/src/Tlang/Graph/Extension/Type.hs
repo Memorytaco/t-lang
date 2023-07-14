@@ -19,6 +19,8 @@ module Tlang.Graph.Extension.Type
   -- or structure edges and constraint edges
   , G (..)
   , T (..)
+  , Histo (..)
+  , Pht (..)
   , C (..)
 
   -- ** Edge
@@ -26,6 +28,7 @@ module Tlang.Graph.Extension.Type
   , type (/.)
   , type (+.)
   , Sub (..)
+  , O (..)
   , Bind (..)
   , Instance (..)
   , Unify (..)
@@ -77,6 +80,14 @@ data NodeArr = NodeArr deriving (Show, Eq, Ord)
 -- TODO: expand this node into annotation node to attach more information to nodes
 data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
+-- | TODO: to replace `Histo` nodes
+data NodeDelegate
+
+-- | a `Histo` is meant to remember every merged node
+newtype Histo a = Histo [a]
+  deriving (Functor, Foldable, Traversable)
+  deriving (Show, Eq, Ord) via [a]
+
 -- *** Graph decorator
 --
 -- used to decorate things and gives them different meanings
@@ -84,19 +95,32 @@ data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable
 
 -- | `G` node, represents one level of generalization.
 -- the integer indicates how many instances it now has.
-newtype G a = G Integer deriving (Show, Eq, Ord)
+newtype G a = G Integer deriving (Show, Eq, Ord, Functor)
 
 -- | `T` node, wrap concrete type nodes
 newtype T t a = T t
-  deriving (Eq, Ord, Functor, Foldable, Traversable)
-  deriving Show via t
+  deriving (Show, Functor, Foldable, Traversable)
+  deriving (Eq, Ord) via t
 
 -- | `C` node, wrap things and behaves as constraint
 newtype C c a = C c
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via c
 
+-- | `C` phantom node, it attach additional information to nodes.
+--
+-- Any nodes wrapped by this should not interfere operation on "normal"
+-- nodes, like constraint nodes or type nodes.
+newtype Pht c a = Pht c
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
+  deriving Show via c
+
 -- ** Edge definition
+
+-- | a boring edge with no information attached
+--
+-- this edge is unique and expresses connection only
+data O = O deriving (Show, Eq, Ord)
 
 -- *** General edge
 

@@ -12,7 +12,6 @@ module Tlang.Extension.Type
 where
 
 import Data.List (intercalate)
-import Data.Text (Text)
 
 -- | * Binder extension
 

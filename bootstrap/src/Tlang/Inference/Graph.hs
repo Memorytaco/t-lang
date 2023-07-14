@@ -18,10 +18,6 @@ module Tlang.Inference.Graph
   , GNodeLabel (..)
   , NodeArity (..)
 
-  , simplify
-  , runRestore
-  , restore
-  , augGraph
 
   , (~=~)
   , expandat
@@ -31,192 +27,18 @@ module Tlang.Inference.Graph
   )
 where
 
-import Tlang.AST
-
 import Control.Monad
 import Control.Monad.Reader (MonadReader (..), asks)
 import Control.Monad.State (MonadState (..), modify, gets)
-import Control.Monad.Identity (Identity)
 import Control.Monad.RWS (RWST (..))
 import Data.Functor ((<&>))
-import Data.Functor.Foldable
 import Data.Bifunctor (first, second, bimap)
 import Data.List (sortBy, union, nub, intersect)
 import Data.Graph.Inductive hiding (edges, nodes)
-import qualified Data.Graph.Inductive as I
-import Data.Coerce (coerce)
 import Data.Maybe (fromJust)
-import Control.Applicative ((<|>))
-import Data.Functor.Const (Const (..))
-import Data.Text (pack)
-
-import Tlang.Extension.Type as Ext
-import Tlang.Extension as Ext
-import Tlang.Generic
-import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Tlang.Graph.Type
 import Tlang.Graph.Operation
-
--- | simplify, forall (a <> g). a == g
--- FIXME: complete the ruleset
-simplify :: Node
-         -> Gr (GNode (GNodeLabel lit label name)) (GEdge name)
-         -> Gr (GNode (GNodeLabel lit label name)) (GEdge name)
-simplify r g =
-  case cleanable g of
-    [] -> g
-    nds -> simplify r $ delNodes nds g
-  where
-    cleanable lg =
-      let total = I.nodes lg
-       in filter (\n -> n /= r && null (sOut lg n <> sIn lg n)) total
-
-runRestore
-  :: forall label lit m rep bind a.
-    (Show label, MonadFail m, Forall (Prefix Name) :<: bind, Scope (Prefix Name) :<: bind
-   , Const lit :<: rep, Record label :<: rep, Variant label :<: rep, Tuple :<: rep)
-  => Node
-  -> Gr (GNode (GNodeLabel lit label Name)) (GEdge Name)
-  -> ([(Node, Name)], Int)
-  -> m (Type bind rep Name Name, ([(Node, Name)], Int))
-runRestore node g s = do
-  (typ, stat, ()) <- runRWST (restore (Name . pack . show) node) g s
-  return (typ, stat)
-
-injTypeLit :: sub :<: rep => sub (Type bind rep name a) -> Type bind rep name a
-injTypeLit = Type . inj
-
--- | convert a graphic type back to normal representation
--- it satisfies:
--- t == restore . toGraph t
--- FIXME: when somewhere occurs node like forall a.a, it will enter dead loop.
-restore
-  :: ( MonadReader (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m
-     , MonadState ([(Node, name)], Int) m, Show label, MonadFail m
-     , Forall (Prefix name) :<: bind, Scope (Prefix name) :<: bind
-     , Tuple :<: rep, Record label :<: rep, Variant label :<: rep, Const lit :<: rep
-     , Eq name
-     )
-  => (Node -> name) -> Node -> m (Type bind rep name name)
-restore schema root = do
-  -- we check out whether this node has been bound somewhere
-  localNames <- gets fst
-  case lookup root localNames of
-    Just name -> return (TypVar name)  -- if so, return the bounded name and it is done.
-    Nothing -> do -- otherwise, generate sub structure
-      label <- ask >>= \g -> return . lab' $ context g root
-      -- we construct local symbol first, mutate local name binding
-      bounds <- getInBounds root
-      oldBounds <- gets fst
-      modify (first ((fmap snd <$> bounds) <>))
-      -- we construct type body (aka. monotype) second
-      body <- case label of
-        GType NodeUni -> return . injTypeLit $ Tuple []
-        GType NodeBot -> return TypPht
-        GType (NodeLit lit) -> return (injTypeLit $ Const lit)
-        GType (NodeRef name) -> return (TypVar name)
-        GType NodeSum -> do
-          labelNodes <- getStructure root >>= \subs -> mapM nodeLabel subs
-          pairs <- forM labelNodes \(node, nlabel) ->
-            case nlabel of
-              GType (NodeHas l) -> getLabelMaybe node <&> (l,)
-              _ -> fail "Expect a Label node, but have none!"
-          return (injTypeLit $ Variant pairs)
-        GType NodeRec -> do
-          labelNodes <- getStructure root >>= mapM nodeLabel
-          pairs <- forM labelNodes \(node, nlabel) ->
-            case nlabel of
-              GType (NodeHas l) -> getLabel node <&> (l,)
-              _ -> fail "Expect a Label node, but have none!"
-          return (injTypeLit $ Record pairs)
-        GType NodeTup -> do
-          subtypes <- getStructure root >>= mapM (restore schema)
-          return (injTypeLit $ Tuple subtypes)
-        GType NodeApp -> do
-          t1:subtypes <- getStructure root >>= mapM (restore schema)
-          return $ TypCon t1 subtypes
-        GType NodeAbs -> error "not supported now"
-        GType (NodeHas tag) -> fail $ "Unexpected label node of " <> show tag
-        GNode -> fail "Unexpected G node"
-      -- we generalize type with local name binding, third
-      bindings <- forM bounds \(node, (perm, name)) -> do
-        -- remove bound ot the node, so recursive type variable is not allowed.
-        modify (first $ filter (\(n, _) -> n /= node))
-        typ <- restore schema node
-        case perm of
-          Rigid -> return (name, name :~ typ)
-          Flexible -> return (name, name :> typ)
-          Explicit -> return (name, name :> typ)
-      let shift val term = do
-            var <- term
-            if var == val
-               then return (New var)
-               else return . Inc $ return var
-      modify (first $ const oldBounds) -- restore the local binding
-      return $ foldr (\(name, bnd) bod -> TypBnd (inj $ Forall bnd) $ shift name bod) body bindings  -- return the final type
-  where
-    -- | generate new name using index and one schema
-    newName decorate = do
-      ix <- gets snd
-      modify (fmap (+1))
-      return (decorate ix)
-    -- | return information of bound node of a binder
-    -- (Node, (Perm, name))
-    getInBounds node = do
-      inwards <- asks inn
-      let -- filterBind :: Monad m => LEdge (GEdge name) -> m [((Node, Node), (Perm, name), Int)]
-          filterBind (a, b, GBind perm ix Nothing) = do
-            name <- newName schema
-            return [((a,b), (perm, name), ix)]
-          filterBind (a, b, GBind perm ix (Just name)) = return [((a,b), (perm, name), ix)]
-          filterBind _ = return []
-      bounds <- foldM (\ls nbound -> (ls <>) <$> filterBind nbound) [] $ inwards node
-      return $ (\(fst -> from, info, _) -> (from, info)) <$> sortBy (\(_, _, i1) (_, _, i2)-> compare i1 i2) bounds
-    -- | return out structure nodes, in sub order
-    -- [Node]
-    getStructure node = do
-      outwards <- asks out
-      let filterStructure :: Monad m => LEdge (GEdge name) -> m [((Node, Node), Int)]
-          filterStructure (a, b, GSub ix) = return [((a,b), ix)]
-          filterStructure _ = return []
-      edges <- foldM (\ls nbound -> (ls <>) <$> filterStructure nbound) [] $ outwards node
-      return $ (\((_, to), _) -> to) <$> sortBy (\(_, i1) (_, i2) -> compare i1 i2) edges
-    -- | fetch label type
-    getLabel node = do
-      nodes <- getStructure node
-      case nodes of
-        [sub] -> restore schema sub
-        _ -> fail $ "Require arity 1 of label but it is " <> show (length nodes)
-    getLabelMaybe node = do
-      nodes <- getStructure node
-      case nodes of
-        [] -> return Nothing
-        [sub] -> Just <$> restore schema sub
-        _ -> fail $ "Require arity 1 or 0 of label but it is " <> show (length nodes)
-    nodeLabel node = ask >>= \g -> return (node, lab' $ context g node)
-
--- | add redundant binding edges to graphic type
--- FIXME: add constructor node and remove application node
--- TODO: add concepts of arity and variance of node
-augGraph :: (MonadState (Gr (GNode (GNodeLabel lit label name)) (GEdge name)) m, MonadFail m)
-         => Node -> m ()
-augGraph root = do
-  g <- get
-  let subs = fst <$> sOut g root
-      base = length . filter (\(_,_,e) -> isBindEdge e) $ inn g root
-  valids <- nub . join <$> mapM checkEdge subs
-  forM_ (zip valids [base..(base + length valids)]) \(n, i) -> do
-    modify (insEdge (n, root, GBind Flexible i Nothing))
-  augGraph `mapM` nub subs
-  return ()
-  where
-    checkEdge r = do
-      g <- get
-      case filter (\(_,_, e) -> isBindEdge e) $ out g r of
-        [] -> return [r]
-        [_] -> return []
-        _ -> fail $ "Invalid binding edge for node " <> show r
 
 -- TODO: add a set of test cases
 -- here is one: forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c

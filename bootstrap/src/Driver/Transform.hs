@@ -3,6 +3,7 @@ module Driver.Transform
 
   -- ** default definition for Graphic Type
     PlayG
+  , UnifyG
 
   -- ** re-export subfunctionality
   , module GraphType
@@ -27,4 +28,12 @@ type PlayG
           :+: NodePht
           )
           (T Sub :+: T (Bind Name)) Int
+
+type UnifyG
+  = CoreG (   T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
+          :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
+          :+: T NodeApp :+: T (NodeHas Label)
+          :+: NodePht :+: Histo :+: G
+          )
+          (T Sub :+: T (Bind Name) :+: Pht O) Int
 

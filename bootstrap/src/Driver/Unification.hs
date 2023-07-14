@@ -1,39 +1,52 @@
+{-# LANGUAGE NoMonomorphismRestriction #-}
 {- | ** unification driver code
 -}
 module Driver.Unification
   (
     -- ** unify with exception
     runUnify
+  , runDefaultUnify
   )
 where
 
 import Control.Monad.Except (ExceptT, runExceptT)
 import Control.Monad.State (StateT (..))
 
-import Tlang.Unification.Type
+import Data.Text (Text)
+
+import Tlang.Unification.Graph
 import Tlang.Graph.Core
-import Tlang.Generic ((:<:))
+import Tlang.AST (Label, Name)
 
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)
 import Capability.State (HasState, MonadState (..))
-import Capability.Error (HasThrow, MonadError (..))
+import Capability.Error (HasThrow, HasCatch, MonadError (..))
 
 -- | unification monad
-newtype TypeUnify ns es m a = TypeUnify
-  { runTypeUnify ::
+newtype GraphUnify ns es m a = GraphUnify
+  { runGraphUnify ::
       StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m) a
   } deriving newtype (Functor, Applicative, Monad)
-    deriving (HasThrow "failure" (GraphUnifyError (Hole ns Int)))
+    deriving (HasThrow "failure" (GraphUnifyError (Hole ns Int)), HasCatch "failure" (GraphUnifyError (Hole ns Int)))
         via MonadError (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
     deriving (HasState "graph" (CoreG ns es Int), HasSource "graph" (CoreG ns es Int), HasSink "graph" (CoreG ns es Int))
         via MonadState (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
 
 runUnify
-  :: ( GraphConstraint ns ns es Int (TypeUnify ns es m)
-     , Monad m, Ord (es (Link es)), Eq (ns (Hole ns Int))
-     , ns :~~: Int, ns :<: ns
-     )
-  => CoreG ns es Int -> Hole ns Int -> Hole ns Int
+  :: Unifier (GraphUnify ns es m) ns Int -> CoreG ns es Int -> Hole ns Int -> Hole ns Int
   -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
-runUnify g a b = runExceptT $ runStateT (runTypeUnify $ a ~=~ b) g
+runUnify u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
+
+runDefaultUnify = runUnify . hook1 . joinCaseT $ CaseT
+  [ case1, case2
+  , case10
+  , case20, case21, case25 @Label
+  , case30
+  , case40 @Integer
+  , case40 @Text
+  , case50
+  , case60 @Name
+  ]
+
+

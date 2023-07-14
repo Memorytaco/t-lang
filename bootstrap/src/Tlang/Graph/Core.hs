@@ -7,23 +7,13 @@ module Tlang.Graph.Core
   -- ** Core graph
   , CoreG
 
-  -- ** unification error data and sub data
-  , GraphUnifyError (..)
-  , GraphProperty (..)
-
-  -- ** basic environment manipulation
-  , getGraph, putGraph, getsGraph, modifyGraph, modifyGraph', liftGraph
-
-  -- ** basic error handler
-  , failMsg
-  , failProp
-
   -- ** original constructor
   , Graph (..)
 
   -- ** helpers
   , hole, hole', link, link', lFrom, lTo, linkFrom, linkTo
   , isHole, isLink, getLink, filterLink
+  , matchHole
   , (-<), (>-), edge, edges
   , (-<<), (>>-)
   , connect, overlay, overlays, vertex, vertices
@@ -34,15 +24,14 @@ module Tlang.Graph.Core
   )
 where
 
-import Capability.Error (HasThrow, throw)
-import Capability.State (HasState, get, put, gets, modify, modify', state)
 import qualified Algebra.Graph.AdjacencyMap as AdjacencyMap
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
-import Algebra.Graph.Labelled (Graph (..), Context (..), context, edgeLabel, replaceEdge, transpose, emap, foldg)
+import Algebra.Graph.Labelled (Graph (..), Context (..), context, edgeLabel, edgeList, replaceEdge, transpose, emap, foldg)
 import qualified Algebra.Graph.Labelled as Algebra (edge, connect, overlay, vertices, overlays, edges)
 import Data.Functor ((<&>))
 import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
+import Data.List (sort)
 
 import Tlang.Generic ((:<:) (..))
 
@@ -58,43 +47,10 @@ deriving instance (Show (e (Hole e a)), Show a) => Show (Hole e a)
 deriving instance (Eq (e (Hole e a)), Eq a) => Eq (Hole e a)
 deriving instance (Ord (e (Hole e a)), Ord a) => Ord (Hole e a)
 
--- ** Error or exception
-
-data GraphUnifyError node
-  = FailWithProperty (GraphProperty node)   -- ^ some graph constraint property doesn't hold
-  | FailWithMessage String                  -- ^ fail with arbitrary message, unrecoverable error
-  deriving (Show, Eq)
-
-data GraphProperty node
-  = NodeWithBinder node -- ^ every node should have exactly one binder
-  | NodeDoesn'tMatch node node  -- ^  two nodes have different category and thus no equality
-  deriving (Show, Eq)
-
 -- ** core structure and method for graph unification
 
 -- | core structure for graphic representation of syntactic type
 type CoreG nodes edges info = Graph (Set (Link edges)) (Hole nodes info)
-
--- ** state operator
-
-getGraph :: HasState "graph" (CoreG ns es info) m => m (CoreG ns es info)
-getGraph = get @"graph"
-putGraph :: HasState "graph" (CoreG ns es info) m => CoreG ns es info -> m ()
-putGraph = put @"graph"
-getsGraph :: HasState "graph" (CoreG ns es info) m => (CoreG ns es info -> a) -> m a
-getsGraph = gets @"graph"
-modifyGraph, modifyGraph' :: HasState "graph" (CoreG ns es info) m => (CoreG ns es info -> CoreG ns es info) -> m ()
-modifyGraph = modify @"graph"
-modifyGraph' = modify' @"graph"
-liftGraph :: HasState "graph" (CoreG ns es info) m => (CoreG ns es info -> (a, CoreG ns es info)) -> m a
-liftGraph = state @"graph"
-
--- ** error handler
-failMsg :: HasThrow "failure" (GraphUnifyError (Hole ns info)) m => String -> m a
-failMsg = throw @"failure" . FailWithMessage
-
-failProp :: HasThrow "failure" (GraphUnifyError (Hole ns info)) m => GraphProperty (Hole ns info) -> m a
-failProp = throw @"failure" . FailWithProperty
 
 -- | construct new link
 link :: sub :<: sup => sub (Link sup) -> Set (Link sup)
@@ -162,17 +118,12 @@ vertices = Algebra.vertices
 {-# INLINE vertices #-}
 
 -- | query adjacent edges and nodes
-linkFrom, linkTo :: Ord (es (Link es)) => (Hole ns info -> Bool) -> CoreG ns es info -> [(Link es, Hole ns info)]
-linkFrom p g =
-  case context p g of
-    Just (outputs -> vs) -> vs >>= \(toList -> es, a) -> es <&> (, a)
-    Nothing -> mempty
-linkTo p g =
-  case context p g of
-    Just (inputs -> vs) -> vs >>= \(toList -> es, a) -> es <&> (, a)
-    Nothing -> mempty
+linkFrom, linkTo :: (Ord (es (Link es)), Ord info, Ord (ns (Hole ns info)))
+                 => (Hole ns info -> Bool) -> CoreG ns es info -> [(Link es, Hole ns info)]
+linkFrom p g = sort $ edgeList g >>= \(es, a, b) -> if p a then toList es <&> (,b) else []
+linkTo p g = sort $ edgeList g >>= \(es, a, b) -> if p b then toList es <&> (,a) else []
 
-lFrom, lTo :: forall e es ns info. (e :<: es, Ord (es (Link es)))
+lFrom, lTo :: forall e es ns info. (e :<: es, Ord (es (Link es)), Ord info, Ord (ns (Hole ns info)))
            => (Hole ns info -> Bool) -> CoreG ns es info -> [(e (Link es), Hole ns info)]
 lFrom p g = linkFrom p g >>= \(Link e, n) ->
   case prj @e e of
@@ -182,6 +133,17 @@ lTo p g = linkTo p g >>= \(Link e, n) ->
   case prj @e e of
     Just v -> pure (v, n)
     Nothing -> mempty
+
+matchHole
+  :: forall node nodes info a. (node :<: nodes)
+  => (Hole nodes info -> a)
+  -> (node (Hole nodes info) -> info -> a)
+  -> Hole nodes info
+  -> a
+matchHole f g node@(Hole (prj -> node'maybe) info) =
+  case node'maybe of
+    Just tag -> g tag info
+    Nothing -> f node
 
 -- | general predicate
 isHole :: forall node nodes info. (node :<: nodes)
