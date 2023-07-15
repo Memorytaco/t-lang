@@ -159,7 +159,7 @@ type PatLang e m typ expr ltyp lexpr = WithPattern e m
   :- "binding"
   :- "variable"
   :- Layer "view" lexpr expr
-  :- "group" :- "variant" :- "record" :- "tuple"
+  :- "group" :- "variant" :- "record" :- "tuple" :- "literal"
   :- Layer "annotation" ltyp typ
   :- "operator"
   )

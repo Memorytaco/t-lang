@@ -105,6 +105,15 @@ instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator Tex
             _ -> fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
     return (Semantic nud' led' (return $ Power l))
 
+-- | literal pattern
+instance (PatternC e m, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
+  => PrattToken (WithPattern e m "literal") (Pattern lit ext label name expr) m where
+  tokenize _ _ _ = do
+    lit <- try (float <&> PatPrm . inj . LiteralNumber . Literal)
+       <|> (integer <&> PatPrm . inj . LiteralInteger . Literal)
+       <|> (stringLiteral <&> PatPrm . inj . LiteralText . Literal)
+    return $ literal lit
+
 -- | `@` pattern
 instance (PatternC e m, name ~ Name, label ~ Label, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
   => PrattToken (WithPattern e m "binding") (Pattern lit ext label name expr) m where
@@ -114,7 +123,7 @@ instance (PatternC e m, name ~ Name, label ~ Label, LiteralText :<: lit, Literal
        <|> reserved "_" $> PatWild  -- wild pattern
        <|> (char '?' <|> char '!') *> fmap (PatVar . Name) identifier  -- variable
        <|> PatSym . Label <$> identifier <*> return []  -- a constructor
-       <|> (float <&> PatPrm . inj . LiteralNumber . Literal)
+       <|> try (float <&> PatPrm . inj . LiteralNumber . Literal)
        <|> (integer <&> PatPrm . inj . LiteralInteger . Literal)
        <|> (stringLiteral <&> PatPrm . inj . LiteralText . Literal)
        <|> (fmap PatTup . parens $ sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))

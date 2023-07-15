@@ -194,10 +194,10 @@ instance ( ExprC e m, Apply :<: f
                 (Expr f name) m where
   tokenize _ parser end = do
     let iPat = pratt @proxy @(pat (Expr f name))
-                     (void . lookAhead . choice $ reservedOp <$> [",", "=>"]) Go
+                     (void . lookAhead . choice $ reservedOp <$> [",", "="]) Go
                <?> "Lambda Parameter pattern"
         gPat = iPat `sepBy1` reservedOp "," <&> Grp
-        branch = (,) <$> gPat <*> (reservedOp "=>" *> parser (void $ lookAhead end) Go)
+        branch = (,) <$> gPat <*> (reservedOp "=" *> parser (void $ lookAhead end) Go)
         lambda = do
           heads <- Equation . Prefixes . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")

@@ -166,9 +166,9 @@ data Bind name = Bind Flag Integer (Maybe name) deriving (Show, Eq, Ord)
 -- if `Lock` is taken as relation, then it is treated the same as `Rigid`
 -- if `Explicit` is taken as permission, then it is treated the same as `Flexible`
 data Flag
-  = Explicit  -- ^ permission f, Flexible
-  | Flexible  -- ^ permission f, Flexible
-  | Rigid     -- ^ permission r, Rigid
+  = Explicit  -- ^ permission f, Flexible, user provided
+  | Flexible  -- ^ permission f, Flexible, automatic generated
+  | Rigid     -- ^ permission r, Rigid   , automatic generated
   deriving (Show, Eq, Ord)
 
 -- | Permission for each node
