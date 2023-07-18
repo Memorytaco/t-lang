@@ -20,8 +20,7 @@ module Tlang.Extension.Decl
   , UserType (..)
 
   -- ** foreign function interface
-  , UserFFI (..)
-  , FFItem (..)
+  , FFI (..)
 
   -- ** value binding
   , UserValue (..)
@@ -35,9 +34,13 @@ module Tlang.Extension.Decl
 where
 
 import Tlang.AST.Operator
+import Tlang.AST.Attribute
 import Tlang.AST.Class.Decl
 
-import Data.Text (Text)
+
+-- | boring container
+data Item item a = Item item a
+  deriving (Show, Eq, Ord, Functor)
 
 -- ** extensions for data type definition
 
@@ -73,22 +76,13 @@ data UserType typ vars info = UserType typ vars info deriving (Show, Eq, Functor
 
 -- *** external symbol
 
--- | external defined symbol, its semantic depends
--- on its attributes and type signature.
-data UserFFI typ info
-  = UserFFI [FFItem] typ info
+-- | external FFI symbol is defined by a name and a type.
+--
+-- It interpretation or semantic is determined by its attributes.
+data FFI typ name = FFI Attr typ name
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- *** attributes used to define external symbol
-
--- | customised attribute
-data FFItem
-  = FFItemF Text [FFItem]       -- ^ custom value, with optional arguments
-  | FFItemS Text                -- ^ string value
-  | FFItemI Integer             -- ^ Integer value
-  | FFItemA [FFItem]            -- ^ sequence items, take a list form
-  | FFItemR [(Text, FFItem)]    -- ^ associated value, take a record form
-  deriving (Show, Eq)
 
 -- ** extensions for value definition
 
@@ -98,10 +92,6 @@ data UserValue val typ info
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- ** extensions for parser rule (user defined operator for now)
-
--- | boring container
-data Item item a = Item item a
-  deriving (Show, Eq, Ord, Functor)
 
 -- | User defined operator, with name as operator name
 data UserOperator name
@@ -115,8 +105,6 @@ instance DeclInfo (UserData vars def) where
   getInfo (UserData info _ _) = info
 instance DeclInfo (UserType typ vars) where
   getInfo (UserType _ _ info) = info
-instance DeclInfo (UserFFI typ) where
-  getInfo (UserFFI _ _ info) = info
 instance DeclInfo (UserValue val typ) where
   getInfo (UserValue _ _ info) = info
 instance DeclInfo (Item a) where

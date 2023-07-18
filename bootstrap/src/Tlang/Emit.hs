@@ -229,9 +229,9 @@ type instance GlobalGenEnv m (Item (UserOperator Text)) a = ()
 instance GlobalGen (Item (UserOperator Text)) a where
   genGlobal _ = return Nothing
 
-type instance GlobalGenEnv m (UserFFI typ) a = ()
-instance GlobalGen (UserFFI typ) Name where
-  genGlobal (UserFFI _ _ name) = return Nothing
+type instance GlobalGenEnv m (Item (FFI typ Name)) a = ()
+instance GlobalGen (Item (FFI typ Name)) Name where
+  genGlobal (Item _ name) = return Nothing
 
 type instance GlobalGenEnv m (UserValue expr (Maybe typ)) a = ()
 instance GlobalGen (UserValue expr (Maybe typ)) a where

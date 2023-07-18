@@ -52,25 +52,25 @@ instance (ParserM e m, ParserDSL (WithDecl e m a) (Decl decl info) m, ParserDSL 
   syntax _ end = try (runDSL @(WithDecl e m a) end) <|> runDSL @(WithDecl e m b) end
 
 -- | foreign interface
-instance (ParserM e m, PrattToken proxy typ m, info ~ Name, UserFFI typ :<: decl)
+instance (ParserM e m, PrattToken proxy typ m, info ~ Name, Item (FFI typ Name) :<: decl)
   => ParserDSL (WithDecl e m (Layer "ffi" proxy typ)) (Decl decl info) m where
   syntax _ end = do
     void $ reserved "foreign"
-    items <- optional $ brackets (commaSep ffItem)
+    attrs <- optional $ brackets (commaSep attr)
     name <- Name <$> identifier
     void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
     sig <- pratt @proxy @typ (lookAhead end) Go
-    end $> declare (UserFFI (fromMaybe [] items) sig name)
+    end $> declare (Item (FFI (fromMaybe (AttrS []) $ AttrS <$> attrs) sig name) name)
     where
-      ffItem = str <|> int <|> sym <|> list <|> record
+      attr = str <|> int <|> sym <|> list <|> record
         where
-          str = FFItemS <$> stringLiteral
-          int = FFItemI <$> integer
-          sym = FFItemF <$> identifier <*> many ffItem
-          list = FFItemA <$> brackets (commaSep ffItem)
+          str = AttrT <$> stringLiteral
+          int = AttrI <$> integer
+          sym = AttrC <$> identifier <*> many attr
+          list = AttrS <$> brackets (commaSep attr)
           record =
-            let field = (,) <$> stringLiteral <*> (reservedOp "=" >> ffItem)
-             in braces $ FFItemR <$> commaSep field
+            let field = (,) <$> identifier <*> (reservedOp "=" >> attr)
+             in braces $ AttrP <$> commaSep field
 
 -- | top level definition
 instance (ParserM e m, PrattToken tProxy typ m, ParserDSL eProxy expr m, info ~ Name, UserValue expr (Maybe typ) :<: decl)
@@ -168,8 +168,7 @@ instance ( ParserM e m, info ~ Name, Item (UserOperator Text) :<: decl
          )
   => ParserDSL (WithDecl e m "fixity") (Decl decl info) m where
   syntax _ end = do
-    reserved "operator"
-    type'maybe <- optional (reserved "type")
+    type'maybe <- reserved "operator" >> optional (reserved "type")
     prefix <- case type'maybe of
       Just _ -> return TypeOperator
       Nothing -> return TermOperator
@@ -184,10 +183,12 @@ defOperator end = do
   right'maybe <- optional $ reserved "_"
   val <- precedence
   marker <- mconcat <$> some keyword
+  end
   case (left'maybe, right'maybe) of
     (Just _, Nothing) -> return $ Operator marker (val * 10 - 1) (val * 10) op
     (Nothing, Just _) -> return $ Operator marker (val * 10) (val * 10 - 1) op
-    _ -> fail "only one \"_\" marker is allowed"
+    (Just _, Just _) -> fail "only one \"_\" marker is allowed"
+    _ -> fail "missing marker \"_\""
   where
     precedence = do
       fixity <- integer

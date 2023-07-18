@@ -18,6 +18,7 @@ module Tlang.AST
   , module Decl
   , module Pattern
   , module Name
+  , module Attribute
 
   )
 where
@@ -29,6 +30,7 @@ import Tlang.AST.Operator as Operator
 import Tlang.AST.Decl as Decl
 import Tlang.AST.Pattern as Pattern
 import Tlang.AST.Name as Name
+import Tlang.AST.Attribute as Attribute
 
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext

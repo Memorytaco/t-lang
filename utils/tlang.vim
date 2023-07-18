@@ -18,7 +18,7 @@ endif
 
 syn keyword SyntaxTodo contained TODO FIXME XXX NOTE WARN
 syn match Comment "//.*$" contains=SyntaxTodo
-syn keyword Keyword data type unsafe safe let mod use fn module in
+syn keyword Keyword data type unsafe safe let module use foreign module in operator
 syn match Keyword '\(->\|=>\|=\|:\|,\)'
 
 syn match Number '\d\+'

@@ -13,7 +13,8 @@ import Control.Monad.State (MonadState (..), gets)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.RWS (RWST, runRWST)
 import Control.Monad.Except
-import Data.Text (Text)
+import Data.Text (Text, unpack)
+import qualified Data.Text.IO as Text (readFile)
 import Text.Megaparsec hiding (runParser)
 import Text.Megaparsec.Char
 import Data.Void (Void)
@@ -23,8 +24,9 @@ import LLVM.Context (withContext)
 import qualified Data.ByteString as B
 
 import Interface.Config
-import Tlang.Parser (runDSL)
+import Tlang.Parser (runDSL, module', declaration, reserved)
 import Tlang.Emit (genExpr)
+import Tlang.AST (Name, Module, builtinStore)
 
 import Driver.Parser
 import Driver.CodeGen
@@ -59,6 +61,18 @@ toplevel = do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         (Right res, _) -> LangDef res <$> getInput
+    Just "load" -> do
+      file :: Text <- getInput
+      let parseFile = module' ([] :: [Module PredefDeclExtVal Name])
+                              (declaration @(PredefDeclLang _) (void $ reserved ";;"))
+      content <- liftIO $ Text.readFile (unpack file)
+      driveParser builtinStore parseFile "stdin" content >>= \case
+        (Left err, _) -> do
+          liftIO . putStrLn $ errorBundlePretty err
+          customFailure SubParseError
+        (Right (def, _), _) -> do
+          liftIO . putStrLn $ show def
+          return LangNone
     Just "gen" ->
       getInput >>= driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" >>= \case
         (Left err, _) -> do

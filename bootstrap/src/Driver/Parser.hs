@@ -65,7 +65,7 @@ type ASTExpr typ = Expr
 type ASTDeclExt typ expr =
       Item (UserOperator Text)
   :+: UserType typ [Prefix Name typ]
-  :+: UserFFI typ
+  :+: Item (FFI typ Name)
   :+: UserValue expr (Maybe typ)
   :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
 type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Name

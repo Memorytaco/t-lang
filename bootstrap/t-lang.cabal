@@ -42,6 +42,7 @@ library
       Interface.Shell
       Tlang
       Tlang.AST
+      Tlang.AST.Attribute
       Tlang.AST.Class
       Tlang.AST.Class.Decl
       Tlang.AST.Decl

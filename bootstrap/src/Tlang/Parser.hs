@@ -7,6 +7,7 @@ module Tlang.Parser
   , module Decl
   , module Type
   , module Class
+  , module Lexer
   )
 where
 
@@ -26,6 +27,7 @@ import Tlang.Parser.Expr as Expr
 import Tlang.Parser.Decl as Decl
 import Tlang.Parser.Type as Type
 import Tlang.Parser.Class as Class
+import Tlang.Parser.Lexer as Lexer
 
 -- parseSource
 --   :: (MonadIO m, MonadError String m)
