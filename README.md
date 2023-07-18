@@ -15,7 +15,10 @@ Then you are free to try `stack run repl` command, which brings up an interprete
 
 1. `:gen` : to show generated llvm ir code for expression
 2. `:def` : to define global structures like a type declaration or value definition or FFI
-3. it defaults to print out parsed AST of your typing
+3. `:load` : to load a source file and parse it, then print raw AST structure
+4. `:mods` : to show modules available in scope. The names can be used for command `:showm`.
+5. `:showm` : to show contents of a module.
+6. it defaults to print out parsed AST of your typing
 
 > You are guaranteed to get a successful running on the `main` branch.
 
@@ -39,7 +42,7 @@ This is something still under consideration, But here are some topics you may pi
    
    This is the common setting and for now it is all we care about.
    
-   > For some reason, constraint system (type class) is not presented and this is our future goal.
+   > For some reason, constraint system (type class) is not presented and this is our goal.
 
 2. The framework
    
@@ -76,6 +79,10 @@ This is something still under consideration, But here are some topics you may pi
       > potential solution: mangled name for module definition for representing namespace and intermediate representation for analysed module with ability to be converted into object file
 
 ## Code structure
+
+TODO
+
+## Roadmap
 
 TODO
 
