@@ -28,7 +28,7 @@ data Module decls info
     { mmName :: ModuleName        -- ^ Module name
     , mmUses :: [Use info]        -- ^ Module imports, including lexical items
     , mmDecl :: Decls decls info  -- ^ Module declarations
-    } deriving (Show, Functor)
+    } deriving (Show, Eq, Functor)
 
 -- | A use statement to import symbol name.
 -- Use (origin name, current name) [symbol list]

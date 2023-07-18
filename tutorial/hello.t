@@ -1,7 +1,7 @@
 module main
 ;;
 
-operator ; _ 0 infix
+use std ( ; )
 ;;
 
 foreign [cstd] cos: float -> float

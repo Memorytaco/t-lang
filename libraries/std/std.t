@@ -2,30 +2,19 @@ module std ;;
 
 // standard boolean type
 data bool
-| true
 | false
+| true
 ;;
 
 // sequence operator
-infixl 0 ;
+operator ; _ 0 infix
 ;;
+
 let ; : forall a b. a -> b -> b =
 [ _, ?a = a ]
 ;;
 
-prefix 9 !
-;;
-let ! : forall a. ( () -> a ) -> a =
-[ ?f = f ()
-]
-;;
-
-let match: forall a b. a -> (a -> b) -> b =
-[ ?val, ?f = f val
-]
-;;
-
-infixr 0 $
+operator _ $ 0 infix
 ;;
 
 let $ : forall a b. (a -> b) -> a -> b =
@@ -38,7 +27,7 @@ let when: forall a b. bool -> a -> b =
 ]
 ;;
 
-infixl 1 &
+operator & _ 0 infix
 ;;
 
 let & : forall a b. a -> (a -> b) -> b =

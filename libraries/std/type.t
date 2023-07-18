@@ -1,33 +1,35 @@
 module std/type
 ;;
 
+use std;;
 
+// optional data defintion
 data optional a
 | none
-| some: a
+| some a
 ;;
 
 data maybe a
 | nothing
-| just: a
+| just a
 ;;
 
 data either a b
-| left: a
-| right: b
+| left a
+| right b
 ;;
 
 data ref a
 | null
-| ref: a
+| ref a
 ;;
 
 data list a
 | nil
-| cons: a * list a
+| cons a (list a)
 ;;
 
 // a string piece
-data str = #[bit 32, ptr (bit 8)]
+data str = #[{uint32, ptr (bit 8)}]
 ;;
 

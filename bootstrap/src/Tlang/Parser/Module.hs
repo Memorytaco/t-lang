@@ -84,12 +84,3 @@ module' ms declaraton = do
     lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)
     lookUpModule name = find $ (== name) . mmName
     putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)
-
--- | parse a new module basing on existed module
--- parseModule
---   :: (ShowErrorComponent e, MonadParsec e Text m, UserItem :<: decls)
---   => String -> ([Operator String], [Operator String]) -> [Module decls Name]
---   -> (StateT ([Operator String], [Operator String]) m) (Decl decls Name)
---   -> Text
---   -> m (Either (ParseErrorBundle Text e) (Module decls Name, [Module decls Name]), ([Operator String], [Operator String]))
--- parseModule source op ms decl txt = flip runStateT op $ runParserT (module' ms decl) source txt

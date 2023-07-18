@@ -12,6 +12,7 @@ module Tlang.Rep.Primitive
   , float, double
   , int8, int16, int32, int64, int128, char, short, int, long, longlong
   , uint8, uint16, uint32, uint64, byte, uchar
+  , struct
   , valueSpace
   )
 where
@@ -151,5 +152,9 @@ valueSpace (Bit i) = 2 ^ i
 
 ptr :: PrimitiveT t a -> PrimitiveT t a
 ptr = flip Ptr Nothing
+
+-- | structure with size align
+struct :: [PrimitiveT seq a] -> PrimitiveT seq a
+struct ts = Struct ts False
 
 makeBaseFunctor $ fixQ [d| instance (Functor t) => Recursive (PrimitiveT t a) |]

@@ -15,6 +15,8 @@ import Tlang.Parser.Lexer
 import Tlang.AST
 import Tlang.Constraint (Prefix (..))
 
+import qualified Tlang.Rep as Rep
+
 import Data.Text (Text)
 import Data.List (find)
 import Data.Functor (($>), (<&>))
@@ -146,6 +148,32 @@ instance (TypeC e m, Tuple :<: rep)
     tuple <- parens (sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
           <&> Type . inj . Tuple
     return $ literal tuple
+
+-- | runtime representation for type
+--
+-- TODO: we need to build an interface like FFI to deal with foreign low level type
+instance (TypeC e m, Rep.Rep :<: rep)
+  => PrattToken (WithType e m "rep") (Type bind rep name a) m where
+  tokenize _ parser _ = do
+    typ <- symbol "#[" *> (Rep.Rep . Rep.RepLift <$> prim) <* symbol "]"
+    return . literal . Type $ inj typ
+    where
+      prim = parens prim <|> bit <|> int <|> uint <|> float <|> ptr <|> stru <|> lft
+      ptr = reserved "ptr" *> (Rep.ptr <$> prim)
+      bit = reserved "bit" *> (Rep.bit <$> integer)
+      int = reserved "int8" $> Rep.int8
+        <|> reserved "int16" $> Rep.int16
+        <|> reserved "int32" $> Rep.int32
+        <|> reserved "int64" $> Rep.int64
+        <|> reserved "int128" $> Rep.int128
+      uint = reserved "uint8" $> Rep.uint8
+         <|> reserved "uint16" $> Rep.uint16
+         <|> reserved "uint32" $> Rep.uint32
+         <|> reserved "uint64" $> Rep.uint64
+      float = reserved "float" $> Rep.float
+          <|> reserved "double" $> Rep.double
+      stru = Rep.struct <$> braces (prim `sepBy1` reservedOp ",")
+      lft = symbol "$" *> parens (parser (lookAhead $ symbol ")" $> ()) Go) <&> Rep.Embed . Rep.DataRep
 
 -- | `Forall` quantified type
 instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Functor rep)

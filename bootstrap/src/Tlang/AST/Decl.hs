@@ -30,8 +30,8 @@ import Tlang.Generic ((:<:) (..))
 -- ** Core declaration structure
 
 -- | including data definition and operations
-newtype Decl decls info = Decl (decls info) deriving (Show, Functor, Foldable, Traversable)
-newtype Decls decls info = Decls [Decl decls info] deriving (Show, Functor, Foldable, Traversable)
+newtype Decl decls info = Decl { getDecl :: decls info } deriving (Show, Eq, Functor, Foldable, Traversable)
+newtype Decls decls info = Decls { getDecls :: [Decl decls info] } deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | declare a structure
 declare :: decl :<: decls => decl info -> Decl decls info
@@ -41,5 +41,5 @@ declare = Decl . inj
 -- | get inner structure
 declOf :: forall decl decls info. decl :<: decls
        => Decl decls info -> Maybe (decl info)
-declOf (Decl a) = prj a
+declOf = prj @decl . getDecl
 {-# INLINE declOf #-}

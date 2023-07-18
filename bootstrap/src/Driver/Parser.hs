@@ -131,7 +131,7 @@ type TypeLang e m = WithType e m
   :- "group"
   :- "nat" :- "text"
   :- "record" :- "variant"
-  :- "tuple"
+  :- "tuple" :- "rep"
   :- "forall" :- "abstract"
   )
 

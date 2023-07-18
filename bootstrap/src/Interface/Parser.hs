@@ -9,15 +9,17 @@ where
 
 import Control.Monad
 import Control.Applicative (Alternative)
-import Control.Monad.State (MonadState (..), gets)
+import Control.Monad.State (MonadState (..), gets, modify)
 import Control.Monad.Reader (MonadReader (..))
 import Control.Monad.RWS (RWST, runRWST)
 import Control.Monad.Except
-import Data.Text (Text, unpack)
-import qualified Data.Text.IO as Text (readFile)
+import Data.Text as Text (Text, unpack, dropWhileEnd, dropWhile)
+import Data.Char (isSpace)
+import qualified Data.Text.IO as Text
 import Text.Megaparsec hiding (runParser)
 import Text.Megaparsec.Char
 import Data.Void (Void)
+import Data.List (intercalate)
 
 import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
 import LLVM.Context (withContext)
@@ -26,15 +28,15 @@ import qualified Data.ByteString as B
 import Interface.Config
 import Tlang.Parser (runDSL, module', declaration, reserved)
 import Tlang.Emit (genExpr)
-import Tlang.AST (Name, Module, builtinStore)
+import Tlang.AST (builtinStore, ModuleName (..), Module (..), Decls (..))
 
 import Driver.Parser
 import Driver.CodeGen
 
 newtype ShellParser m a = ShellParser
-  { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () ShellState m) a
+  { getShellParser :: ParsecT ShellError Text (RWST ShellConfig () (ShellState PredefDeclExtVal) m) a
   } deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
-    deriving newtype (MonadState ShellState, MonadReader ShellConfig)
+    deriving newtype (MonadState (ShellState PredefDeclExtVal), MonadReader ShellConfig)
     deriving newtype (MonadPlus, Alternative, MonadParsec ShellError Text)
 
 data ShellError
@@ -50,10 +52,16 @@ data ShellRes decl expr txt
   | LangExpr expr txt
   | LangNone
 
+stripSpace :: Text -> Text
+stripSpace = Text.dropWhile isSpace . Text.dropWhileEnd isSpace
+ppModuleName :: ModuleName -> [Char]
+ppModuleName (ModuleName ls l) = intercalate "/" (fmap show $ ls <> [l])
+
 toplevel :: forall m. MonadIO m => ShellParser m (ShellRes PredefDeclVal PredefExprVal Text)
 toplevel = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- gets operators
+  mods <- gets modules
   case command'maybe of
     Just "def" ->
       getInput >>= parseDecl ops eof "stdin" >>= \case
@@ -62,16 +70,32 @@ toplevel = do
           customFailure SubParseError
         (Right res, _) -> LangDef res <$> getInput
     Just "load" -> do
-      file :: Text <- getInput
-      let parseFile = module' ([] :: [Module PredefDeclExtVal Name])
-                              (declaration @(PredefDeclLang _) (void $ reserved ";;"))
-      content <- liftIO $ Text.readFile (unpack file)
-      driveParser builtinStore parseFile "stdin" content >>= \case
+      file :: String <- unpack . stripSpace <$> getInput
+      let parseFile = module' mods (declaration @(PredefDeclLang _) (void $ reserved ";;"))
+      content <- liftIO $ Text.readFile file
+      driveParser builtinStore parseFile file content >>= \case
         (Left err, _) -> do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         (Right (def, _), _) -> do
           liftIO . putStrLn $ show def
+          modify \s -> s { modules = def: modules s}
+          return LangNone
+    Just "mods" -> do
+      liftIO $ forM_ (mmName <$> mods) \modName -> putStrLn $ ppModuleName modName
+      return LangNone
+    Just "showm" -> do
+      modName <- unpack . stripSpace <$> getInput
+      case lookup modName $ (\m -> (ppModuleName $ mmName m, m)) <$> mods of
+        Just m -> liftIO do
+          putStrLn $ "module> " <> modName <> ":"
+          putStrLn "==== uses:"
+          forM_ (mmUses m) \u -> putStrLn $ show u
+          putStrLn "==== items:"
+          forM_ (getDecls $ mmDecl m) \d -> putStrLn $ show d
+          return LangNone
+        Nothing -> do
+          liftIO . putStrLn $ "Can't find module \"" <> modName <> "\""
           return LangNone
     Just "gen" ->
       getInput >>= driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" >>= \case
@@ -83,7 +107,6 @@ toplevel = do
           liftIO $ withContext \ctx -> withModuleFromAST ctx module' \rmodule -> do
             moduleLLVMAssembly rmodule >>= B.putStr
           return LangNone
-          -- LangDef res <$> getInput
     Just cmd -> customFailure $ UnknownCommand cmd
     Nothing -> do
       resinput <- getInput
@@ -99,7 +122,7 @@ toplevel = do
 runToplevel
   :: MonadIO m
   => ShellConfig
-  -> ShellState
+  -> ShellState PredefDeclExtVal
   -> Text
-  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes PredefDeclVal PredefExprVal Text), ShellState, ())
+  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes PredefDeclVal PredefExprVal Text), ShellState PredefDeclExtVal, ())
 runToplevel r s txt = runRWST (runParserT (getShellParser toplevel) "stdin" txt) r s

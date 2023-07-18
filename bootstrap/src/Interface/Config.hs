@@ -6,7 +6,7 @@ module Interface.Config
   )
 where
 
-import Tlang.AST (OperatorStore)
+import Tlang.AST (OperatorStore, Module, Name)
 import Data.Text (Text)
 
 data ShellConfig = ShellConfig
@@ -19,8 +19,12 @@ data SearchEnv
     , srcPath :: [Text]
     } deriving (Show, Eq)
 
-data ShellState = ShellState
+data ShellState decls = ShellState
   { lineCount :: Int
   , operators :: OperatorStore
-  } deriving (Show, Eq)
+  , modules :: [Module decls Name]
+  }
+
+deriving instance Show (decls Name) => Show (ShellState decls)
+deriving instance Eq (decls Name) => Eq (ShellState decls)
 
