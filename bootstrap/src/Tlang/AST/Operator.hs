@@ -2,60 +2,100 @@
 -}
 
 module Tlang.AST.Operator
-  ( termOperator
-  , typOperator
-  , getBindPower
-  , withOperator
-  , matchPairOperator
+  ( builtinStore
 
   , Operator (..)
-  , OperatorKind (..)
+  , OperatorSpace (..)
   , OperatorClass (..)
+  , OperatorStore
+  , Fixity (..)
   )
 where
 
-import Data.Bifunctor (Bifunctor (..))
 import Data.Text (Text)
 
-data Operator a = Operator OperatorKind Integer Integer a deriving stock (Eq, Functor)
+-- | a boring data type holding a definition of
+data Operator a
+  = Operator Fixity Integer Integer a
+  deriving stock (Show, Eq, Ord, Functor)
 
-data OperatorKind = Prefix | Postfix | Unifix | Infix | NonFix deriving (Show, Eq)
+-- | fixity of operator.
+--
+-- It introduces many combinitations and mixes infix with unifix operator.
+-- But there should be no ambiguity.
+--
+-- * for operator mixed with prefix and postfix, it is disambiguated by its binding power.
+-- * for operator mixed with unfix and infix, it is default treated as an infix operator and
+--   fall back to prefix operator or postfix operator when there is no other choice.
+--   These definitions share one common binding power.
+data Fixity
+  = Prefix    -- ^ prefix position: <> token
+  | Postfix   -- ^ postfix position: token <>
+  | Unifix    -- ^ prefix or postfix: token <>, <> token. It is disambiguated by its binding power.
+  | Infix     -- ^ infix: token1 <> token2
+  | PreInfix  -- ^ infix and prefix: token1 <> token2, <> token.
+  | PostInfix -- ^ infix and postfix: token1 <> token2, token <>.
+  | UniInfix  -- ^ infix and unifix: token1 <> token2, token <>, <> token.
+  deriving (Show, Eq, Ord)
 
-data Delimite a = Delimite (a, a) ((a, a) -> a)
+instance Semigroup Fixity where
+  UniInfix <> _ = UniInfix
+  _ <> UniInfix = UniInfix
 
-data OperatorClass s v = OpRep (Either (Either (s, s) (s, s)) s)
-                       | OpNorm v
-                       deriving (Show, Eq, Ord, Functor)
+  PostInfix <> Prefix = UniInfix
+  PostInfix <> Unifix = UniInfix
+  PostInfix <> PreInfix = UniInfix
+  PostInfix <> _ = PostInfix
 
-instance Bifunctor OperatorClass where
-  bimap fa _ (OpRep r) = OpRep $ bimap (bimap (bimap fa fa) (bimap fa fa)) fa r
-  bimap _ fb (OpNorm b) = OpNorm $ fb b
+  PreInfix <> Postfix = UniInfix
+  PreInfix <> Unifix = UniInfix
+  PreInfix <> PostInfix = UniInfix
+  PreInfix <> _ = PreInfix
 
-withOperator :: (v -> a) -> (Either (Either (s, s) (s, s)) s -> a) -> OperatorClass s v -> a
-withOperator f _ (OpNorm v) = f v
-withOperator _ f (OpRep v) = f v
+  Infix <> Prefix = PreInfix
+  Infix <> Postfix = PostInfix
+  Infix <> Unifix = UniInfix
+  Infix <> v = v
 
-matchPairOperator :: Eq s => Either (s, s) (s, s) -> OperatorClass s v -> a -> a -> a
-matchPairOperator _ (OpNorm _) _ f = f
-matchPairOperator _ (OpRep (Right _)) _ f = f
-matchPairOperator v (OpRep (Left s)) t f = if v == s then t else f
+  Unifix <> v
+    | v <= Unifix = Unifix
+    | v == Infix = UniInfix
+    | otherwise = v
 
-getBindPower :: Operator a -> (Integer, Integer)
-getBindPower (Operator _ l r _) = (l, r)
+  Postfix <> Prefix = Unifix
+  Postfix <> Infix = PostInfix
+  Postfix <> PreInfix = UniInfix
+  Postfix <> v = v
 
-instance {-# InCoherent #-} Show (Operator String) where
-  show (Operator _ _ _ s) = s
-instance Show s => Show (Operator s) where
-  show (Operator _ _ _ s) = show s
+  Prefix <> Postfix = Unifix
+  Prefix <> Infix = PreInfix
+  Prefix <> PostInfix = UniInfix
+  Prefix <> v = v
 
--- | builtin term level operator
-termOperator :: [Operator Text]
-termOperator = []
+-- | Fixity defaults to `Infix`
+instance Monoid Fixity where
+  mempty = Infix
 
--- | builtin type level operator
-typOperator :: [Operator Text]
-typOperator =
-  [ Operator Infix   0   (-5)   "*"
-  , Operator Infix (-10) (-15)  "->"
-  , Operator Infix (-10) (-15)  "."
+-- | a potential data strcture for encoding quasiquotation.
+--
+-- TODO: add usage to this structure.
+data OperatorClass a
+  = OperatorUni (Operator a)  -- ^ operator that is used as infix or unifix
+  | OperatorDuo (a, a)        -- ^ environment operator
+  deriving stock (Show, Eq, Ord, Functor)
+
+-- | a namespace for defining operator
+data OperatorSpace a
+  = TermOperator a  -- ^ term level operator
+  | TypeOperator a  -- ^ type level operator
+  deriving (Show, Eq, Ord, Functor)
+
+-- | builtin operator
+builtinStore :: OperatorStore
+builtinStore =
+  [ TypeOperator $ Operator Infix (-10) (-15)  "->"
   ]
+
+-- | operator space for recording every available operator
+type OperatorStore = [OperatorSpace (Operator Text)]
+

@@ -2,9 +2,7 @@ module Tlang.AST
   (
 
     -- ** useful data
-    None (..)
-  , Label (..)
-  , Name (..)
+    Label (..)
 
   , StandardType
 
@@ -19,6 +17,7 @@ module Tlang.AST
   , module Operator
   , module Decl
   , module Pattern
+  , module Name
 
   )
 where
@@ -29,8 +28,8 @@ import Tlang.AST.Type as Type
 import Tlang.AST.Operator as Operator
 import Tlang.AST.Decl as Decl
 import Tlang.AST.Pattern as Pattern
+import Tlang.AST.Name as Name
 
-import Data.GraphViz
 import Tlang.Extension.Type as Ext
 import Tlang.Extension as Ext
 import Tlang.Generic
@@ -44,14 +43,6 @@ type TypBindPlugin bound = Forall bound :+: Scope bound
 
 -- | original type definition
 type StandardType label bound = Type (TypBindPlugin bound) (TypPlugin label)
-
--- | a place holder for every parametric data type
-data None a = None deriving (Show, Eq, Functor, Foldable, Traversable)
-
--- | a wrapper for name reference
-newtype Name = Name Text deriving (Eq, Ord) deriving IsString via Text
-instance Show Name where
-  show (Name text) = unpack text
 
 -- | label for variant and record
 newtype Label = Label Text deriving (Eq, Ord) deriving IsString via Text

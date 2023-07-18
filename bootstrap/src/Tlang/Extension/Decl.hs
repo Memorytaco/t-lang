@@ -27,15 +27,15 @@ module Tlang.Extension.Decl
   , UserValue (..)
 
   -- ** parser item, to modify language syntax, like operator precedence
-  , UserItem (..)
-  , ItemSpace (..)
+  , UserOperator (..)
+
+  -- ** a container for holding things
+  , Item (..)
   )
 where
 
 import Tlang.AST.Operator
-import Tlang.Generic ((:<:) (..))
 import Tlang.AST.Class.Decl
-import Tlang.AST.Decl
 
 import Data.Text (Text)
 
@@ -99,15 +99,14 @@ data UserValue val typ info
 
 -- ** extensions for parser rule (user defined operator for now)
 
--- | lexical item definition, definition of lexical operator (For Now, more to come in future)
--- TODO: figure out a way to manipulate lexemes and rules
-data UserItem a
-  = UserItem ItemSpace [Operator Text] a
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+-- | boring container
+data Item item a = Item item a
+  deriving (Show, Eq, Ord, Functor)
 
--- | lexical item namespace, to group lexical items together
-newtype ItemSpace = ItemSpace String deriving (Show, Eq)
-
+-- | User defined operator, with name as operator name
+data UserOperator name
+  = UserOperator (OperatorSpace (Operator name))
+  deriving (Show, Eq, Functor)
 
 -- ** Definition of `Decl` related type class instance
 
@@ -120,9 +119,5 @@ instance DeclInfo (UserFFI typ) where
   getInfo (UserFFI _ _ info) = info
 instance DeclInfo (UserValue val typ) where
   getInfo (UserValue _ _ info) = info
-instance DeclInfo UserItem where
-  getInfo (UserItem _ _ info) = info
-
--- *** `Query` related
-instance DeclInfo decl => Query decl where
-  query f (Decl cls) = prj cls >>= \decl -> if f (getInfo decl) then Just decl else Nothing
+instance DeclInfo (Item a) where
+  getInfo (Item _ info) = info

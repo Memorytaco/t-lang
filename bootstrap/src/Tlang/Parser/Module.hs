@@ -15,7 +15,7 @@ import Tlang.AST.Class.Decl
 import Tlang.Generic ((:<:))
 import Tlang.Extension.Decl
 
-import Data.Text (Text, isPrefixOf)
+import Data.Text (Text)
 import Data.Functor ((<&>))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
@@ -25,7 +25,7 @@ import Control.Applicative (liftA2)
 import Capability.State (HasState, modify)
 
 moduleName :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m ModuleName
-moduleName = liftA2 ModuleName init last <$> (Frag <$> identifier) `sepBy1` string "/"
+moduleName = liftA2 ModuleName init last <$> (Name <$> identifier) `sepBy1` string "/"
 
 -- | parsing module header
 --
@@ -50,8 +50,8 @@ stmtUse :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m) => m (Int, 
 stmtUse = do
   pos <- stateOffset <$> getParserState
   void $ reserved "use"
-  name <- NameAlias <$> moduleName <*> (optional (reserved "as" *> moduleName) <?> "qualified name")
-  items <- optional . parens $ (flip NameAlias Nothing <$> item) `sepBy` symbol ","
+  name <- Alias <$> moduleName <*> (optional (reserved "as" *> moduleName) <?> "qualified name")
+  items <- optional . parens $ (flip Alias Nothing <$> item) `sepBy` symbol ","
   void $ reservedOp ";;"
   return (pos, Use name $ fromMaybe [] items)
 
@@ -62,17 +62,16 @@ _mod ?? info = queryAll info (mmDecl _mod)
 
 module'
   :: ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
-     , HasState "TypeOperator" [Operator Text] m
-     , HasState "TermOperator" [Operator Text] m
-     , UserItem :<: decls)
+     , HasState "OperatorStore" OperatorStore m
+     , Item (UserOperator Text) :<: decls)
   => [Module decls Name] -> m (Decl decls Name)
   -> m (Module decls Name, [Module decls Name])
 module' ms declaraton = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
   uses <- many stmtUse >>= \deps -> do
-    forM deps \(pos, u@(Use namespace@(NameAlias from _) imps)) -> region (setErrorOffset pos) do
-      forM_ imps \(NameAlias sym _) -> do
+    forM deps \(pos, u@(Use namespace@(Alias from _) imps)) -> region (setErrorOffset pos) do
+      forM_ imps \(Alias sym _) -> do
         case lookUpModule from ms <&> (`itemOf` (== sym)) of
           Just ops -> forM_ ops putIntoEnv
           Nothing -> fail
@@ -81,13 +80,10 @@ module' ms declaraton = do
   decls <- many declaraton <* eof
   return (Module name uses $ Decls decls, ms)
   where
-    itemOf = (??) @UserItem
+    itemOf = (??) @(Item (UserOperator Text))
     lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)
     lookUpModule name = find $ (== name) . mmName
-    putIntoEnv (UserItem _ ops _) = forM_ ops \op@(Operator _ _ _ s) ->
-      if ":" `isPrefixOf` s
-         then modify @"TypeOperator" (op:)
-         else modify @"TermOperator" (op:)
+    putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)
 
 -- | parse a new module basing on existed module
 -- parseModule

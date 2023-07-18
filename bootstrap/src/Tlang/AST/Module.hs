@@ -1,6 +1,5 @@
 module Tlang.AST.Module
   (
-
   -- ** module definition
 
   -- | module itself is quite simple now, it contains a list of
@@ -9,29 +8,20 @@ module Tlang.AST.Module
   -- we can abstrace `Module` away from concrete `Decl` definition.
     Module (..)
   , ModuleName (..)
-  , Frag (..)
 
   -- | import statement
   , Use (..)
-
-  -- | name alias
-  , NameAlias (..)
   )
 where
 
 import Tlang.AST.Decl
-import Data.Text (Text)
-
--- | module path fragment
-newtype Frag
-  = Frag Text
-  deriving (Show, Eq, Ord)
+import Tlang.AST.Name (Name (..), Alias (..))
 
 -- | a `ModuleName` is composed by multiple `Frag`.
 -- Language takes a style of unix file path. Everything fits in
 -- unix file path is supported by `ModuleName` though it is limited
 -- in some language context.
-data ModuleName = ModuleName [Frag] Frag deriving (Show, Eq, Ord)
+data ModuleName = ModuleName [Name] Name deriving (Show, Eq, Ord)
 
 data Module decls info
   = Module
@@ -40,15 +30,7 @@ data Module decls info
     , mmDecl :: Decls decls info  -- ^ Module declarations
     } deriving (Show, Functor)
 
-data NameAlias name
-  = NameAlias name (Maybe name)
-  deriving (Eq, Functor)
-
-instance Show name => Show (NameAlias name) where
-  show (NameAlias name (Just alias)) = show name <> " as " <> show alias
-  show (NameAlias name Nothing) = show name
-
 -- | A use statement to import symbol name.
 -- Use (origin name, current name) [symbol list]
-data Use info = Use (NameAlias ModuleName) [NameAlias info] deriving (Show, Eq, Functor)
+data Use a = Use (Alias ModuleName) [Alias a] deriving (Show, Eq, Functor)
 

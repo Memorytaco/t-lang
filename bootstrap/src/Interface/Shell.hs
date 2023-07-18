@@ -7,7 +7,7 @@ module Interface.Shell
   )
 where
 
-import Data.Text (pack)
+import Data.Text (Text, pack)
 import System.Console.Haskeline
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Catch (MonadMask)
@@ -20,8 +20,8 @@ import Data.Functor (($>))
 import Driver.Parser
 import qualified Interface.Parser as Helper
 import qualified Interface.Config as Helper
-import Tlang.AST (typOperator, Decl (..))
-import Tlang.Extension.Decl (UserItem (..))
+import Tlang.AST (builtinStore, Decl (..))
+import Tlang.Extension.Decl (Item (..), UserOperator (..))
 import Tlang.AST.Class.Decl (query)
 
 data ReplStatus state
@@ -35,7 +35,7 @@ shell :: IO ()
 shell =  runInputT defaultSettings loop $> ()
   where loop = runStateT repl'loop (ReplStatus False "$ > " (conf, stat))
         conf = Helper.ShellConfig (Helper.SearchEnv [] [])
-        stat = Helper.ShellState 0 ([], typOperator)
+        stat = Helper.ShellState 0 builtinStore
 
 repl'loop :: (MonadIO m, MonadMask m) => StateT (ReplStatus (Helper.ShellConfig, Helper.ShellState)) (InputT m) ()
 repl'loop = do
@@ -56,8 +56,8 @@ repl'loop = do
         Right res -> do
           case res of
             Helper.LangDef decl txt -> do
-              case query @UserItem (const True) decl of
-                Just (UserItem _ ops _) -> modify (\s -> s { rState = second (Helper.addTermOperators ops) $ rState s})
+              case query @(Item (UserOperator Text)) (const True) decl of
+                Just (Item (UserOperator op) _) -> modify (\s -> s { rState = (\ss -> ss { Helper.operators = (op:) $ Helper.operators ss}) <$> rState s})
                 Nothing -> return ()
               lift . outputStrLn $ show decl
             Helper.LangExpr exp txt -> lift . outputStrLn $ show exp

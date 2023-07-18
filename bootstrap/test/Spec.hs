@@ -1,5 +1,4 @@
 import Test.Tasty
-import System.Environment
 
 import Test.Driver.Transform.GraphAndType (transformationShouldKeepTypeIntact)
 import Test.Driver.Unification (unifyingOfUnifiableTypesShouldNotGoWrong)

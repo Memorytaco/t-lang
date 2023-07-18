@@ -2,9 +2,7 @@
 -}
 
 module Driver.Graph
-  (
-    saveGraph
-  , parseTypeGrpah
+  ( parseTypeGrpah
   )
 where
 
@@ -14,31 +12,24 @@ import Text.Megaparsec
 import Data.Void (Void)
 
 import Tlang.AST
-import Tlang.Inference.Graph
-import Tlang.Graph.Dot
 
-import Control.Monad.State
 import Data.Text (Text)
-import Data.GraphViz
-import Data.Graph.Inductive
-import Data.GraphViz.Commands.IO (writeDotFile)
-
 import Algebra.Graph.Export.Dot (exportViaShow)
 
 import Driver.Transform
 
 -- | save graph as png file
-saveGraph :: (Show label, Show name, Labellable name, Ord name)
-          => (Node, Gr (GNode (GNodeLabel lit label name)) (GEdge name))
-          -> FilePath -> IO ()
-saveGraph (root, g) name = do
-  dot <- runDotGraph g root
-  void $ runGraphviz dot Png (name <> ".png")
-  writeDotFile (name <> ".dot") dot
+-- saveGraph :: (Show label, Show name, Labellable name, Ord name)
+--           => (Node, Gr (GNode (GNodeLabel lit label name)) (GEdge name))
+--           -> FilePath -> IO ()
+-- saveGraph (root, g) name = do
+--   dot <- runDotGraph g root
+--   void $ runGraphviz dot Png (name <> ".png")
+--   writeDotFile (name <> ".dot") dot
 
 parseTypeGrpah :: Text -> IO PlayG
 parseTypeGrpah typ = do
-   res <- driveParser (typOperator, []) (pratt @(TypeLang Void _) @TypeAST eof Go) "stdin" typ
+   res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
         ((_, g :: PlayG), _) <- runToGraph mempty 0 t

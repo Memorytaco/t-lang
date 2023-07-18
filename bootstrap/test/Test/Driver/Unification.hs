@@ -10,7 +10,7 @@ import Driver.Transform
 import Driver.Parser
 import Driver.Unification
 
-import Tlang.AST (typOperator, Name)
+import Tlang.AST (builtinStore, OperatorStore, Name)
 import Tlang.Parser
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
@@ -20,8 +20,8 @@ import Data.Void (Void)
 import Text.Megaparsec
 
 -- | a predefined parser used to handle type expression during testing
-parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorSpace)
-parseType = driveParser ([] , typOperator) (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
+parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorStore)
+parseType = driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
 
 getType :: MonadFail m => Text -> m TypeAST
 getType text = do
@@ -63,4 +63,6 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   , ("12", "12")
   , ("forall a b c. (a, b, c)", "forall x y. (x, y, x)")
   , ("forall a b c. (a, b, c)", "forall x y z. (x, y, z)")
+  -- , ("forall a b (c ~ (a, b)) . (a, c, b)", "forall x y z. (x, y, z)")
+  -- , ("forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c", "forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c")
   ]

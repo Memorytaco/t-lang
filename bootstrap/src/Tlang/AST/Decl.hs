@@ -36,6 +36,10 @@ newtype Decls decls info = Decls [Decl decls info] deriving (Show, Functor, Fold
 -- | declare a structure
 declare :: decl :<: decls => decl info -> Decl decls info
 declare = Decl . inj
+{-# INLINE declare #-}
+
 -- | get inner structure
-declOf :: forall decl decls info. decl :<: decls => Decl decls info -> Maybe (decl info)
+declOf :: forall decl decls info. decl :<: decls
+       => Decl decls info -> Maybe (decl info)
 declOf (Decl a) = prj a
+{-# INLINE declOf #-}

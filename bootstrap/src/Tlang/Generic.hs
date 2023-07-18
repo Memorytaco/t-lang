@@ -96,15 +96,5 @@ type (:@:) a op = Alg op a
 -- | open recursion, a template
 newtype Recursion m a b = Recursion ((a -> m b) -> (a -> m b))
 -- | open recursion, a template, for arity 2
-newtype Recursion2 m a b = Recursion2 ((a -> a -> m b) -> (a -> a -> m b))
-
-instance Semigroup (Recursion m a b) where
-  Recursion g <> Recursion f = Recursion $ g . f
-instance Monoid (Recursion m a b) where
-  mempty = Recursion id
-
-instance Semigroup (Recursion2 m a b) where
-  Recursion2 g <> Recursion2 f = Recursion2 $ g . f
-instance Monoid (Recursion2 m a b) where
-  mempty = Recursion2 id
+newtype Recursion2 m a b r = Recursion2 ((a -> b -> m r) -> (a -> b -> m r))
 

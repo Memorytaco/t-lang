@@ -24,6 +24,7 @@ import Tlang.Generic ((:+:) (..))
 import Tlang.Extension
 import Tlang.Constraint (Prefix (..), Prefixes (..))
 
+import Data.Text (Text)
 import Data.Maybe (fromMaybe)
 import Data.Kind (Constraint, Type)
 import Data.Functor.Foldable (cata)
@@ -224,8 +225,8 @@ type instance GlobalGenEnv m (UserType typ [Prefix Name typ]) a = ()
 instance GlobalGen (UserType typ [Prefix Name typ]) a where
   genGlobal _ = return Nothing
 
-type instance GlobalGenEnv m UserItem a = ()
-instance GlobalGen UserItem a where
+type instance GlobalGenEnv m (Item (UserOperator Text)) a = ()
+instance GlobalGen (Item (UserOperator Text)) a where
   genGlobal _ = return Nothing
 
 type instance GlobalGenEnv m (UserFFI typ) a = ()

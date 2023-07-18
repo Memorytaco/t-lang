@@ -41,9 +41,9 @@ import Control.Monad.State (StateT (..), MonadPlus)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Applicative (Alternative)
 
+import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Void (Void)
-import GHC.Generics (Generic)
 
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
@@ -62,7 +62,8 @@ type ASTExpr typ = Expr
   :+: (@:) typ
   ) Name
 
-type ASTDeclExt typ expr = UserItem
+type ASTDeclExt typ expr =
+      Item (UserOperator Text)
   :+: UserType typ [Prefix Name typ]
   :+: UserFFI typ
   :+: UserValue expr (Maybe typ)
@@ -73,41 +74,36 @@ type PredefExprVal = ASTExpr TypeAST
 type PredefDeclExtVal = ASTDeclExt TypeAST PredefExprVal
 type PredefDeclVal = ASTDecl TypeAST PredefExprVal
 
--- | operator space for recording every available operator
-data OperatorSpace = OperatorSpace
-  { termOperator :: [Operator Text]
-  , typeOperator :: [Operator Text]
-  } deriving (Show, Eq, Generic)
-
-type ParserMonad' e m = ParsecT e Text (StateT OperatorSpace (ReaderT OperatorSpace m))
+type ParserMonad' e m = ParsecT e Text (ReaderT ([Operator Text], [Operator Text]) (StateT OperatorStore m))
 
 newtype ParserMonad e m a = ParserMonad
-  { runParserMonad ::
-      ParsecT e Text (StateT OperatorSpace (ReaderT OperatorSpace m)) a
+  { runParserMonad :: ParserMonad' e m a
   } deriving newtype (Functor, Applicative, Monad, MonadFail, Alternative, MonadPlus, MonadParsec e Text, MonadParsecDbg e Text)
-    deriving (HasState "TermOperator" [Operator Text], HasSink "TermOperator" [Operator Text])
-        via Rename "termOperator" (Field "termOperator" () (MonadState (ParserMonad' e m)))
-    deriving (HasState "TypeOperator" [Operator Text], HasSink "TypeOperator" [Operator Text])
-        via Rename "typeOperator" (Field "typeOperator" () (MonadState (ParserMonad' e m)))
+    deriving (HasSource "OperatorStore" OperatorStore, HasSink "OperatorStore" OperatorStore)
+        via MonadState (ParserMonad' e m)
+    deriving (HasState "OperatorStore" OperatorStore)
+        via MonadState (ParserMonad' e m)
     deriving (HasReader "TermOperator" [Operator Text], HasSource "TermOperator" [Operator Text])
-        via Rename "termOperator" (Field "termOperator" () (MonadReader (ParserMonad' e m)))
+        via Rename 1 (Pos 1 () (MonadReader (ParserMonad' e m)))
     deriving (HasReader "PatternOperator" [Operator Text], HasSource "PatternOperator" [Operator Text])
-        via Rename "termOperator" (Field "termOperator" () (MonadReader (ParserMonad' e m)))
+        via Rename 1 (Pos 1 () (MonadReader (ParserMonad' e m)))
     deriving (HasReader "TypeOperator" [Operator Text], HasSource "TypeOperator" [Operator Text])
-        via Rename "typeOperator" (Field "typeOperator" () (MonadReader (ParserMonad' e m)))
+        via Rename 2 (Pos 2 () (MonadReader (ParserMonad' e m)))
 
 -- runDSL @(WholeExpr Void _ (ASTPat (TypeAST Identity) :- ASTGPat (TypeAST Identity) :- TypeAST Identity)) @(ASTExpr (TypeAST Identity)) eof
 
 -- | an all in one monad for language parser
 driveParser
   :: Monad m
-  => ([Operator Text], [Operator Text])
+  => OperatorStore
   -> ParserMonad e m a
   -> String -> Text
-  -> m (Either (ParseErrorBundle Text e) a, OperatorSpace)
-driveParser (term, typ) parser prompt text =
-  let op = OperatorSpace term typ
-   in runReaderT (runStateT (runParserT (runParserMonad parser) prompt text) op) op
+  -> m (Either (ParseErrorBundle Text e) a, OperatorStore)
+driveParser store parser prompt text =
+  let openv = mconcat $ store <&> \case
+        TypeOperator t -> ([], [t])
+        TermOperator t -> ([t], [])
+   in runStateT (runReaderT (runParserT (runParserMonad parser) prompt text) openv) store
 
 -- | declaration
 type DeclLang e m pExpr pType expr typ = WithDecl e m
@@ -188,9 +184,9 @@ instance ( MonadFail m, MonadParsec e Text m
           (lookAhead end) Go <* end
 
 -- | declaration driver
-parseDecl :: Monad m
-          => ([Operator Text], [Operator Text])
-          -> ParserMonad Void m ()
-          -> String -> Text
-          -> m (Either (ParseErrorBundle Text Void) PredefDeclVal, OperatorSpace)
-parseDecl op end = driveParser op (declaration @(PredefDeclLang _) end)
+parseDecl
+  :: Monad m
+  => OperatorStore -> ParserMonad Void m ()
+  -> String -> Text
+  -> m (Either (ParseErrorBundle Text Void) PredefDeclVal, OperatorStore)
+parseDecl store end = driveParser store (declaration @(PredefDeclLang _) end)

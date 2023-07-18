@@ -26,7 +26,7 @@ where
 
 import qualified Algebra.Graph.AdjacencyMap as AdjacencyMap
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
-import Algebra.Graph.Labelled (Graph (..), Context (..), context, edgeLabel, edgeList, replaceEdge, transpose, emap, foldg)
+import Algebra.Graph.Labelled (Graph (..), edgeLabel, edgeList, replaceEdge, transpose, emap, foldg)
 import qualified Algebra.Graph.Labelled as Algebra (edge, connect, overlay, vertices, overlays, edges)
 import Data.Functor ((<&>))
 import Data.Set (Set, singleton, toList, fromList)
@@ -148,8 +148,9 @@ matchHole f g node@(Hole (prj -> node'maybe) info) =
 -- | general predicate
 isHole :: forall node nodes info. (node :<: nodes)
        => Hole nodes info
-       -> (info -> node (Hole nodes info) -> Bool) -> Bool
-isHole (Hole (prj -> node) info) predicate = maybe False (predicate info) node
+       -> (node (Hole nodes info) -> info -> Bool) -> Bool
+isHole node p = matchHole (const False) p node
+{-# INLINE isHole #-}
 
 isLink :: forall edge edges. (edge :<: edges)
        => Link edges

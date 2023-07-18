@@ -78,7 +78,7 @@ type UnifyConstraint m ns es info =
 
 -- | a small reuseable code snippet
 newtype Unifier m ns info
-  = Unifier (Recursion2 m (Hole ns info) (Hole ns info))
+  = Unifier (Recursion2 m (Hole ns info) (Hole ns info) (Hole ns info))
 
 -- | a sequence matcher of unifier, can be converted to Unifier
 newtype CaseT m ns info = CaseT [Unifier m ns info]
@@ -415,7 +415,7 @@ sequel unify ((a,b): xs) = do
   return $ val : vals
 
 -- | get node's binder and flag
-binderInfo :: (Eq info, Eq (ns (Hole ns info)), Ord (es (Link es)), T (Bind name) :<: es, Ord info, Ord (ns (Hole ns info)))
+binderInfo :: (Ord (es (Link es)), T (Bind name) :<: es, Ord info, Ord (ns (Hole ns info)))
            => Hole ns info -> CoreG ns es info -> [(Flag, Integer, Maybe name, Hole ns info)]
 binderInfo node g = lFrom (== node) g >>= \(T (Bind flag i name), binder) -> return (flag, i, name, binder)
 

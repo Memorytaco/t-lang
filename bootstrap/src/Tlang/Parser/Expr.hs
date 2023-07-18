@@ -95,14 +95,25 @@ instance (ExprC e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operato
       Just a -> return a
       Nothing -> setOffset pos >> do fail $ "Operator is not defined in term level: " <> show op
     let nud' end =
-          if fixity `elem` [Prefix, Unifix]
+          if fixity `elem` [Prefix, Unifix, PreInfix, UniInfix]
              then parser end (Power r) <&> cons (Val $ Name op)
              else fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Prefix or Unifix"
         led' end left =
           case fixity of
             Infix -> parser end (Power r) <&> Expr . inj . Apply (Val $ Name op) left . pure
+            PreInfix -> parser end (Power r) <&> Expr . inj . Apply (Val $ Name op) left . pure
             Unifix -> return (cons (Val $ Name op) left)
             Postfix -> return (cons (Val $ Name op) left)
+            PostInfix -> do
+              right'maybe <- optional $ parser end (Power r)
+              case right'maybe of
+                Nothing -> return (cons (Val $ Name op) left)
+                Just right -> return . Expr . inj $ Apply (Val $ Name op) left [right]
+            UniInfix -> do
+              right'maybe <- optional $ parser end (Power r)
+              case right'maybe of
+                Nothing -> return (cons (Val $ Name op) left)
+                Just right -> return . Expr . inj $ Apply (Val $ Name op) left [right]
             _ -> fail $ "Wrong position of " <> show op <> ": it has fixity " <> show fixity <> " but expect Infix, Postfix or Unifix"
     return (Semantic nud' led' (return $ Power l))
 

@@ -29,7 +29,7 @@ import Tlang.Extension.Decl
 import Tlang.Generic
 
 import Capability.Reader (HasReader, local)
-import Capability.State (HasState, get, modify)
+import Capability.State (HasState, gets, modify)
 
 type ParserM e m =
   ( ShowErrorComponent e
@@ -163,53 +163,60 @@ instance ( ParserM e m
          else fail $ "type operator should be prefixed with \":\", maybe try " <> "\":" <> show (Name op) <> "\" ?"
     typVar = (:> TypPht) . Name <$> identifier
 
-instance ( ParserM e m, info ~ Name, UserItem :<: decl
-         , HasState "TermOperator" [Operator Text] m
-         , HasState "TypeOperator" [Operator Text] m
+instance ( ParserM e m, info ~ Name, Item (UserOperator Text) :<: decl
+         , HasState "OperatorStore" OperatorStore m
          )
   => ParserDSL (WithDecl e m "fixity") (Decl decl info) m where
   syntax _ end = do
-    op@(Operator _ _ _ s) <- defFixity end
-    if ":" `isPrefixOf` s then modify @"TypeOperator" (op:) else modify @"TermOperator" (op:)
-    return . declare $ UserItem (ItemSpace "default") [op] (Name s)
+    reserved "operator"
+    type'maybe <- optional (reserved "type")
+    prefix <- case type'maybe of
+      Just _ -> return TypeOperator
+      Nothing -> return TermOperator
+    op@(Operator _ _ _ s) <- defOperator end
+    modify @"OperatorStore" (prefix op:)
+    return . declare $ Item (UserOperator $ prefix op) (Name s)
 
-defFixity :: ParserM e m => m () -> m (Operator Text)
-defFixity end = (defUnifix <|> defInfix) <* end
+defOperator :: ParserM e m => m () -> m (Operator Text)
+defOperator end = do
+  left'maybe <- optional $ reserved "_"
+  op <- operator
+  right'maybe <- optional $ reserved "_"
+  val <- precedence
+  marker <- mconcat <$> some keyword
+  case (left'maybe, right'maybe) of
+    (Just _, Nothing) -> return $ Operator marker (val * 10 - 1) (val * 10) op
+    (Nothing, Just _) -> return $ Operator marker (val * 10) (val * 10 - 1) op
+    _ -> fail "only one \"_\" marker is allowed"
   where
     precedence = do
       fixity <- integer
       if fixity < 0 || fixity > 10
          then fail "precedence number is restricted from 0 to 10, including 0 and 10"
          else pure (fixity * 10)
-
-    defUnifix = reserved "unifix" *> ((,) <$> precedence <*> precedence >>= \(l, r) -> Operator Unifix l r <$> operator)
-            <|> reserved "prefix" *> (precedence >>= \bp -> Operator Prefix bp bp <$> operator)
-            <|> reserved "postfix" *> (precedence >>= \bp -> Operator Postfix bp bp <$> operator)
-
-    defInfix =  reserved "infixl" *> (precedence >>= \bp -> Operator Infix (bp-1) bp <$> operator)
-            <|> reserved "infixr" *> (precedence >>= \bp -> Operator Infix bp (bp-1) <$> operator)
-            <|> reserved "infix" *> (precedence >>= \bp -> Operator Infix bp bp <$> operator)
+    keyword = reserved "prefix" $> Prefix
+           <|> reserved "postfix" $> Postfix
+           <|> reserved "infix" $> Infix
 
 declaration'
   :: ( ParserM e m
-     , HasState "TypeOperator" [Operator Text] m
-     , HasState "TermOperator" [Operator Text] m
+     , HasState "OperatorStore" OperatorStore m
      , ParserDSL proxy (Decl decl Name) m
      )
   => Proxy proxy -> m () -> m (Decl decl Name)
 declaration' wit end = do
-  opty <- get @"TypeOperator"
-  optm <- get @"TermOperator"
-  local @"TypeOperator" (const opty)
-    $ local @"TermOperator" (const optm)
-    $ local @"PatternOperator" (const optm)
+  (termOp, typeOp) <- gets @"OperatorStore" $ mconcat . fmap \case
+    TypeOperator t -> ([], [t])
+    TermOperator t -> ([t], [])
+  local @"TypeOperator" (const typeOp)
+    $ local @"TermOperator" (const termOp)
+    $ local @"PatternOperator" (const termOp)
     $ syntax wit end
 
 declaration
   :: forall proxy decl e m
    . ( ParserM e m
-     , HasState "TypeOperator" [Operator Text] m
-     , HasState "TermOperator" [Operator Text] m
+     , HasState "OperatorStore" OperatorStore m
      , ParserDSL proxy (Decl decl Name) m
      )
   => m () -> m (Decl decl Name)

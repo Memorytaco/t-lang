@@ -9,7 +9,7 @@ import Test.Tasty.HUnit
 import Driver.Transform
 import Tlang.Parser
 import Driver.Parser
-import Tlang.AST (typOperator)
+import Tlang.AST (builtinStore, OperatorStore)
 
 import Data.Text (Text, pack)
 import Text.Megaparsec
@@ -18,8 +18,8 @@ import Data.Void (Void)
 -- ** helpers
 
 -- | a predefined parser used to handle type expression during testing
-parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorSpace)
-parseType = driveParser ([] , typOperator) (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
+parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorStore)
+parseType = driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
 
 -- | a utility function used to help define test assertion
 buildAssertion :: Text -> Assertion

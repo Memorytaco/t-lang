@@ -24,7 +24,6 @@ import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
 
 import Data.Text (Text)
-import Data.List (sortBy)
 
 import qualified Data.Kind as Data (Type, Constraint)
 
@@ -52,13 +51,10 @@ toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
 --
 -- These are general code snippets
 
-order :: Ord a => [(a, b)] -> [(a, b)]
-order = sortBy \(a, _) (b, _) -> compare a b
-
 -- | structure link from, sort by sub edge
 sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges, Ord info, Ord (nodes (Hole nodes info)))
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
-sFrom root = fmap order . asks @"graph" $ lFrom @(T Sub) (== root)
+sFrom root = asks @"graph" $ lFrom @(T Sub) (== root)
 {-# INLINE sFrom #-}
 
 -- | query whether one node has been translated into syntactic form, if so return the name
@@ -98,7 +94,7 @@ withBinding
   :: forall m nodes edges info bind rep name a. WithBindingEnv m nodes edges info bind rep name a
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- fmap order . asks @"graph" $ lTo @(T (Bind a)) (== root)
+  preBinds <- asks @"graph" $ lTo @(T (Bind a)) (== root)
   scheme <- ask @"scheme"
   localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Bind flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
   body <- local @"local" ((snd <$> localBinds) <>) m
@@ -258,9 +254,9 @@ instance UnfoldGraphType (T NodeSum) Int where
     fields <- mapM (unfoldVariantLabel @Label restore) (snd <$> subLinks)
     return . Type . inj $ Variant fields
 
-type instance GraphTypeConstrain (T (NodeHas any)) m nodes edges info bind rep name a = ()
+type instance GraphTypeConstrain (T (NodeHas any)) m nodes edges info bind rep name a = (MonadFail m)
 instance UnfoldGraphType (T (NodeHas any)) Int where
-  unfoldGraphType _ (T (NodeHas _ _)) _ = error "impossible"
+  unfoldGraphType _ (T (NodeHas _ _)) _ = fail "Illegal Label Node"
 
 unfoldRecordLabel
   :: forall tag m nodes edges info bind rep name a

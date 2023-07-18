@@ -7,7 +7,7 @@ module Tlang.Inference.Expr
   , StageConstraint (..)
 
   , ConstraintGenErr (..)
-  , failConstraintMsg
+  , failCGenMsg
 
   , PatternData (..)
 
@@ -38,8 +38,8 @@ data ConstraintGenErr
    = FailGenMsg String
    deriving (Show, Eq, Ord)
 
-failConstraintMsg :: HasThrow "fail" ConstraintGenErr m => String -> m a
-failConstraintMsg = throw @"fail" . FailGenMsg
+failCGenMsg :: HasThrow "fail" ConstraintGenErr m => String -> m a
+failCGenMsg = throw @"fail" . FailGenMsg
 
 -- | define dependency between constraints
 data ConstraintOrder
@@ -98,7 +98,7 @@ genConstraint = cata go
         Just ((mode, n) :| Inr (T (Instance i))) ->
           return $ StageConstraint (mode, g :| ValF name) g
             (overlays [gr, n -<< T (Instance i) >>- var]) mempty
-        Nothing -> failConstraintMsg $ "name not in scope: " <> show name
+        Nothing -> failCGenMsg $ "name not in scope: " <> show name
     go (ExprF v) = stageConstraint v
 
 -- ** instances
@@ -160,9 +160,9 @@ getInstance ix n@(Hole v _) gr =
     Just (G i) ->
       case lookup (T (Sub ix)) $ lFrom @(T Sub) (== n) gr of
         Just n' -> return n'
-        Nothing -> if i < ix then failConstraintMsg "Internal Error, G node doesn't have sufficient instance"
-                             else failConstraintMsg "Internal Error, G node doesn't have that instance"
-    Nothing -> failConstraintMsg "Internal Error, Expect G node, but it is not"
+        Nothing -> if i < ix then failCGenMsg "Internal Error, G node doesn't have sufficient instance"
+                             else failCGenMsg "Internal Error, G node doesn't have that instance"
+    Nothing -> failCGenMsg "Internal Error, Expect G node, but it is not"
 
 type instance
   ConstrainGraphic
@@ -265,8 +265,8 @@ genPatternConstraint = cata go
       case prj @G v of
         Just _ -> case lFrom @(T Sub) (== n) gr of
           [(T (Sub 1), n')] -> return n'
-          _  -> failConstraintMsg "Internal Error, G node doesn't have exact one type scheme"
-        Nothing -> failConstraintMsg "Internal Error, Expect G node, but it is not"
+          _  -> failCGenMsg "Internal Error, G node doesn't have exact one type scheme"
+        Nothing -> failCGenMsg "Internal Error, Expect G node, but it is not"
     arrowGM = do
       app <- node' (T $ NodeApp 3)
       arr <- node' (T $ NodeArr)

@@ -47,6 +47,7 @@ library
       Tlang.AST.Decl
       Tlang.AST.Expr
       Tlang.AST.Module
+      Tlang.AST.Name
       Tlang.AST.Operator
       Tlang.AST.Pattern
       Tlang.AST.Type
@@ -61,7 +62,6 @@ library
       Tlang.Graph.Core
       Tlang.Graph.Dot
       Tlang.Graph.Extension.Type
-      Tlang.Graph.Operation
       Tlang.Graph.Type
       Tlang.Inference
       Tlang.Inference.Expr
