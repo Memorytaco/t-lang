@@ -14,7 +14,7 @@ where
 import Driver.Transform.GraphType as GraphType
 import Driver.Transform.TypeGraph as TypeGraph
 
-import Tlang.AST (Name, Label)
+import Language.Core (Name, Label)
 import Tlang.Generic ((:+:))
 import Tlang.Graph.Extension.Type
 import Tlang.Graph.Core

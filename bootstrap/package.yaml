@@ -45,6 +45,7 @@ dependencies:
 - capability
 - algebraic-graphs == 0.7
 - prettyprinter
+- lens
 
 ghc-options:
 - -Wall

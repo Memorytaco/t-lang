@@ -16,9 +16,9 @@ module Tlang.Inference.Expr
   )
 where
 
-import Tlang.AST hiding (Type)
-import Tlang.Extension.Decl
-import Tlang.Extension
+import Language.Core hiding (Type)
+import Language.Core.Extension
+
 import Tlang.Graph.Core
 import Tlang.Unification.Graph
 import Tlang.Graph.Extension.Type

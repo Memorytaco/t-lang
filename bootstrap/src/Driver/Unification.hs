@@ -16,7 +16,7 @@ import Data.Text (Text)
 
 import Tlang.Unification.Graph
 import Tlang.Graph.Core
-import Tlang.AST (Label, Name)
+import Language.Core (Label, Name)
 
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)

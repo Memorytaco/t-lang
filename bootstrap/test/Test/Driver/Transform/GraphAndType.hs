@@ -6,10 +6,11 @@ where
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import Language.Core (builtinStore, OperatorStore)
+import Language.Parser
+
 import Driver.Transform
-import Tlang.Parser
 import Driver.Parser
-import Tlang.AST (builtinStore, OperatorStore)
 
 import Data.Text (Text, pack)
 import Text.Megaparsec

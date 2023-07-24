@@ -40,7 +40,7 @@ module Tlang.Unification.Graph
   )
 where
 
-import Tlang.AST (Name (..))
+import Language.Core (Name (..))
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Generic ((:<:), prj, Recursion2 (..))

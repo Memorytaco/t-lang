@@ -14,9 +14,9 @@ where
 
 -- import Data.Kind (Type, Constraint)
 
-import qualified Tlang.AST as AST
--- import Tlang.AST (type (>|) (..))
-import Tlang.Extension
+import qualified Language.Core as AST
+import Language.Core.Extension
+
 import Tlang.Rep
 import Tlang.Generic
 -- import Tlang.Constraint (Prefix (..))

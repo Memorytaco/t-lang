@@ -10,8 +10,8 @@ import Driver.Transform
 import Driver.Parser
 import Driver.Unification
 
-import Tlang.AST (builtinStore, OperatorStore, Name)
-import Tlang.Parser
+import Language.Core (builtinStore, OperatorStore, Name)
+import Language.Parser
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 
@@ -47,7 +47,8 @@ buildAssertion ia ib = do
     Left err -> fail $ show err
     Right (r, g :: UnifyG) -> do
       (t :: TypeAST, _) <- runGraphType g [] ("@test", 1) r
-      putStrLn $ show t
+      -- putStrLn (show t)
+      return ()
   return ()
 
 buildCase :: (String, String) -> TestTree
@@ -63,6 +64,7 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   , ("12", "12")
   , ("forall a b c. (a, b, c)", "forall x y. (x, y, x)")
   , ("forall a b c. (a, b, c)", "forall x y z. (x, y, z)")
+  , ("forall a b. (b, b)", "forall a. (a, a)")
   -- , ("forall a b (c ~ (a, b)) . (a, c, b)", "forall x y z. (x, y, z)")
   -- , ("forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c", "forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c")
   ]

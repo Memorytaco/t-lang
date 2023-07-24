@@ -20,7 +20,7 @@ where
 -- ** for graph
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
-import Tlang.Extension
+import Language.Core.Extension
 import Tlang.Generic ((:+:) (..), (:<:))
 import Tlang.Rep (Rep (..))
 
@@ -33,8 +33,8 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 
 -- ** for type
-import qualified Tlang.AST.Type as Type
-import Tlang.AST.Type (type (>|) (..))
+import qualified Language.Core as Type
+import Language.Core (type (>|) (..))
 import Tlang.Constraint (Prefix (..))
 
 -- ** for signature

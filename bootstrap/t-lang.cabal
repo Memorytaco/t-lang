@@ -27,6 +27,7 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
+      Compiler.Store
       Driver
       Driver.CodeGen
       Driver.Graph
@@ -36,31 +37,39 @@ library
       Driver.Transform.GraphType
       Driver.Transform.TypeGraph
       Driver.Unification
+      EvalLoop.Config
+      EvalLoop.Parser
+      EvalLoop.Shell
+      EvalLoop.Util.ExprParser
       Example
-      Interface.Config
-      Interface.Parser
-      Interface.Shell
       JIT.JIT
-      Tlang
-      Tlang.AST
-      Tlang.AST.Attribute
-      Tlang.AST.Class
-      Tlang.AST.Class.Decl
-      Tlang.AST.Decl
-      Tlang.AST.Expr
-      Tlang.AST.Module
-      Tlang.AST.Name
-      Tlang.AST.Operator
-      Tlang.AST.Pattern
-      Tlang.AST.Type
+      Language.Core
+      Language.Core.Attribute
+      Language.Core.Class
+      Language.Core.Class.Decl
+      Language.Core.Decl
+      Language.Core.Expr
+      Language.Core.Extension
+      Language.Core.Extension.Common
+      Language.Core.Extension.Decl
+      Language.Core.Extension.Expr
+      Language.Core.Extension.Type
+      Language.Core.Module
+      Language.Core.Name
+      Language.Core.Operator
+      Language.Core.Pattern
+      Language.Core.Type
+      Language.Parser
+      Language.Parser.Class
+      Language.Parser.Decl
+      Language.Parser.Expr
+      Language.Parser.Lexer
+      Language.Parser.Module
+      Language.Parser.Pattern
+      Language.Parser.Type
       Tlang.Codegen
       Tlang.Constraint
       Tlang.Emit
-      Tlang.Extension
-      Tlang.Extension.Common
-      Tlang.Extension.Decl
-      Tlang.Extension.Expr
-      Tlang.Extension.Type
       Tlang.Generic
       Tlang.Generic.Data
       Tlang.Generic.Subsume
@@ -72,14 +81,6 @@ library
       Tlang.Inference.Expr
       Tlang.Inference.Graph
       Tlang.Inference.Kind
-      Tlang.Parser
-      Tlang.Parser.Class
-      Tlang.Parser.Decl
-      Tlang.Parser.Expr
-      Tlang.Parser.Lexer
-      Tlang.Parser.Module
-      Tlang.Parser.Pattern
-      Tlang.Parser.Type
       Tlang.Rep
       Tlang.Rep.Class
       Tlang.Rep.Concrete
@@ -138,6 +139,7 @@ library
     , free >=5.1.9
     , graphviz
     , haskeline
+    , lens
     , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure >=9.0.0
@@ -201,6 +203,7 @@ executable t-lang-exe
     , free >=5.1.9
     , graphviz
     , haskeline
+    , lens
     , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure >=9.0.0
@@ -268,6 +271,7 @@ test-suite t-lang-test
     , free >=5.1.9
     , graphviz
     , haskeline
+    , lens
     , libffi
     , llvm-hs >=9.0.0
     , llvm-hs-pure >=9.0.0

@@ -8,11 +8,10 @@ module Tlang.Inference.Kind
   )
 where
 
-import Tlang.AST
+import Language.Core
 import Tlang.Constraint
 import Tlang.Generic (prj, type (|:) (..))
-import Tlang.Extension.Type as Ext
-import Tlang.Extension as Ext
+import Language.Core.Extension as Ext
 
 import qualified Data.Functor.Foldable as F (ListF (..))
 import Control.Monad

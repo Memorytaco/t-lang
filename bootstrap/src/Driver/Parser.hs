@@ -24,9 +24,9 @@ module Driver.Parser
   )
 where
 
-import Tlang.AST
-import Tlang.Parser
-import Tlang.Extension
+import Language.Core
+import Language.Core.Extension
+import Language.Parser
 import Tlang.Generic ((:+:))
 import Tlang.Constraint (Prefix (..), Prefixes (..))
 import qualified Data.Kind as D (Type)

@@ -13,10 +13,11 @@ module Transform.GraphType
   )
 where
 
-import Tlang.AST
+import Language.Core
+import Language.Core.Extension
+
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
-import Tlang.Extension
 import Tlang.Generic ((:<:), inj, prj, (:+:) (..))
 import Tlang.Constraint (Prefix (..))
 

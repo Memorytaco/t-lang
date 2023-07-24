@@ -11,7 +11,7 @@ module Transform.Pass
   )
 where
 
-import Tlang.AST.Expr (Expr (..))
+import Language.Core (Expr (..))
 import Data.Kind (Constraint, Type)
 import Data.Proxy (Proxy (..))
 

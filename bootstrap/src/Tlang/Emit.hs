@@ -19,9 +19,9 @@ import qualified LLVM.IRBuilder.Constant as LLVMC
 import LLVM.AST.Operand (Operand)
 import LLVM.IRBuilder
 
-import Tlang.AST hiding (Type)
+import Language.Core hiding (Type)
 import Tlang.Generic ((:+:) (..))
-import Tlang.Extension
+import Language.Core.Extension
 import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Data.Text (Text)

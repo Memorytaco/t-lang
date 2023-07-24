@@ -11,7 +11,7 @@ module Driver.Transform.GraphType
 where
 
 import Transform.GraphType
-import Tlang.AST (Type)
+import Language.Core (Type)
 import Tlang.Graph.Core
 
 import Control.Monad.Reader (ReaderT (..))

@@ -4,7 +4,7 @@ module Driver.Inference
 where
 
 -- import Tlang.Inference.Kind (NormalKind)
-import Tlang.AST (type (@:) (..), Kind (..))
+import Language.Core (type (@:) (..), Kind (..))
 
 -- defaultEnv :: [NormalKind :@ Symbol]
 defaultEnv = undefined

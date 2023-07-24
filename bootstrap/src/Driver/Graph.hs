@@ -6,12 +6,12 @@ module Driver.Graph
   )
 where
 
-import Tlang.Parser (pratt, Power (..))
+import Language.Parser (pratt, Power (..))
 import Driver.Parser (driveParser, TypeLang, TypeAST)
 import Text.Megaparsec
 import Data.Void (Void)
 
-import Tlang.AST
+import Language.Core
 
 import Data.Text (Text)
 import Algebra.Graph.Export.Dot (exportViaShow)
