@@ -9,15 +9,14 @@
 module Tlang.Extension.Decl
   (
   -- ** user data type definition
-    UserData (..)
-  , UserDataDef (..)
-  , UserEnum (..)
-  , UserStruct (..)
-  , UserCoerce (..)
-  , UserPhantom (..)
+    DataType (..)
+  , DataEnum (..)
+  , DataStruct (..)
+  , DataBody (..)
+  , DataNone (..)
 
   -- ** type alias definition
-  , UserType (..)
+  , AliasType (..)
 
   -- ** foreign function interface
   , FFI (..)
@@ -30,6 +29,10 @@ module Tlang.Extension.Decl
 
   -- ** a container for holding things
   , Item (..)
+  , DataPrefix (..)
+
+  -- ** re-export
+  , Identity (..)
   )
 where
 
@@ -37,40 +40,61 @@ import Tlang.AST.Operator
 import Tlang.AST.Attribute
 import Tlang.AST.Class.Decl
 
+import Tlang.Constraint (Prefixes (..))
+import Data.Functor.Identity (Identity (..))
+import Data.Bifunctor (first)
 
 -- | boring container
 data Item item a = Item item a
-  deriving (Show, Eq, Ord, Functor)
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+newtype DataPrefix typ name
+  = DataPrefix (Prefixes name typ)
+  deriving Show via Prefixes name typ
+instance Functor (DataPrefix typ) where
+  fmap f (DataPrefix v) = DataPrefix (first f v)
 
 -- ** extensions for data type definition
 
--- | Core definition for data, extended with declaration on type.
-data UserData vars def info = UserData info vars def deriving (Show, Eq, Functor, Foldable, Traversable)
-newtype UserDataDef ext a = UserDataDef (ext a) deriving (Show, Eq, Functor, Foldable, Traversable)
+-- | for sum type
+data DataEnum field typ
+  = DataEnum
+    { getDataEnumHead :: (field, [typ])
+    , getDataEnumTail :: [(field, [typ])]
+    }
+    deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- | a default definition for use in AST parsing
-data UserEnum field typ
-  = UserEnum field [typ]
-  | UserEnums (UserEnum field typ) [UserEnum field typ]
-  deriving (Show, Eq, Functor, Foldable, Traversable)
--- | a default definition for use in AST parsing
-data UserStruct field typ
-  = UserStruct field typ
-  | UserStructs (UserStruct field typ) [UserStruct field typ]
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+-- | for record type
+data DataStruct field typ
+  = DataStruct
+    { getDataStructHead :: (field, typ)
+    , getDataStructTail :: [(field, typ)]
+    }
+    deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- | coercible definition of data type
-data UserCoerce typ
-  = UserCoerce typ
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+-- | Core definition for data
+data DataType env xt typ name
+  = DataType
+    { getDataTypeEnv :: env typ name
+    , getDataTypeArity :: Integer
+    , getDataType :: xt typ
+    , getDataTypeName :: name
+    }
+    deriving (Show, Eq, Functor, Foldable, Traversable)
 
--- | phantom data def
-data UserPhantom typ
-  = UserPhantom
-  deriving (Show, Eq, Functor, Foldable, Traversable)
+data DataNone a = DataNone deriving (Show, Eq, Functor, Foldable, Traversable)
+
+newtype DataBody x typ = DataBody (x typ) deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | type alias
-data UserType typ vars info = UserType typ vars info deriving (Show, Eq, Functor, Foldable, Traversable)
+data AliasType env typ name
+  = AliasType
+    { getAliasTypeEnv :: env typ name
+    , getAliasTypeArity :: Integer
+    , getAliasType :: typ
+    , getAliasTypeName :: name
+    }
+    deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- ** extensions for FFI
 
@@ -101,10 +125,6 @@ data UserOperator name
 -- ** Definition of `Decl` related type class instance
 
 -- *** `DeclInfo` related
-instance DeclInfo (UserData vars def) where
-  getInfo (UserData info _ _) = info
-instance DeclInfo (UserType typ vars) where
-  getInfo (UserType _ _ info) = info
 instance DeclInfo (UserValue val typ) where
   getInfo (UserValue _ _ info) = info
 instance DeclInfo (Item a) where

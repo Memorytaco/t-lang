@@ -97,6 +97,7 @@ toplevel = do
         Nothing -> do
           liftIO . putStrLn $ "Can't find module \"" <> modName <> "\""
           return LangNone
+    Just "run" -> do undefined
     Just "gen" ->
       getInput >>= driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" >>= \case
         (Left err, _) -> do

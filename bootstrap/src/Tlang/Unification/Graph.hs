@@ -43,7 +43,7 @@ where
 import Tlang.AST (Name (..))
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
-import Tlang.Generic ((:<:) (..), Recursion2 (..))
+import Tlang.Generic ((:<:), prj, Recursion2 (..))
 
 import Control.Monad (when, unless, forM, foldM)
 import Data.Functor ((<&>), ($>))
@@ -147,7 +147,7 @@ case1 = Unifier $ Recursion2 \_unify -> match unmatch \(a, T NodeBot, _) b ->
 -- | unification: NodeBot right
 case2 :: (UnifyConstraint m ns es info, T (Bind Name) :<: es)
       => Unifier m ns info
-case2 = Unifier $ Recursion2 \_unify -> \a -> match (unmatch a) \(b, T NodeBot, _) ->
+case2 = Unifier $ Recursion2 \_unify a -> match (unmatch a) \(b, T NodeBot, _) ->
   -- merge node, keep `a`
   b ==> a >> rebind @Name a $> a
 

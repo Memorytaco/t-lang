@@ -56,10 +56,13 @@ library
       Tlang.Constraint
       Tlang.Emit
       Tlang.Extension
+      Tlang.Extension.Common
       Tlang.Extension.Decl
       Tlang.Extension.Expr
       Tlang.Extension.Type
       Tlang.Generic
+      Tlang.Generic.Data
+      Tlang.Generic.Subsume
       Tlang.Graph.Core
       Tlang.Graph.Dot
       Tlang.Graph.Extension.Type
@@ -82,13 +85,14 @@ library
       Tlang.Rep.Concrete
       Tlang.Rep.Primitive
       Tlang.TH
-      Tlang.Transform.GraphType
-      Tlang.Transform.Pass
-      Tlang.Transform.TypeGraph
-      Tlang.Transform.TypeRuntime
       Tlang.Unification
       Tlang.Unification.Graph
       Tlang.Unification.Kind
+      Transform.GraphType
+      Transform.LowerType
+      Transform.Pass
+      Transform.TypeGraph
+      Utility
   other-modules:
       Paths_t_lang
   hs-source-dirs:
@@ -140,6 +144,7 @@ library
     , megaparsec
     , mtl
     , optparse-applicative
+    , prettyprinter
     , recursion-schemes
     , tasty
     , tasty-hunit
@@ -202,6 +207,7 @@ executable t-lang-exe
     , megaparsec
     , mtl
     , optparse-applicative
+    , prettyprinter
     , recursion-schemes
     , t-lang
     , tasty
@@ -268,6 +274,7 @@ test-suite t-lang-test
     , megaparsec
     , mtl
     , optparse-applicative
+    , prettyprinter
     , recursion-schemes
     , t-lang
     , tasty

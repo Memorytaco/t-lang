@@ -17,7 +17,7 @@ import Data.Text (Text)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Data.List (find)
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:), inj)
 import Tlang.Extension (LiteralText (..), LiteralInteger (..), LiteralNumber (..), Literal (..))
 import Capability.Reader (HasReader, asks)
 

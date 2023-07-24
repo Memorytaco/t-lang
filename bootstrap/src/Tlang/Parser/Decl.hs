@@ -12,7 +12,7 @@ module Tlang.Parser.Decl
 where
 
 import Tlang.AST hiding (Type)
-import Tlang.Constraint (Prefix (..))
+import Tlang.Constraint (Prefix (..), Prefixes (..))
 import qualified Tlang.AST as AST (Type)
 
 import Tlang.Parser.Class
@@ -85,7 +85,7 @@ instance (ParserM e m, PrattToken tProxy typ m, ParserDSL eProxy expr m, info ~ 
 
 instance ( ParserM e m, PrattToken proxy typ m
          , info ~ Name, typ ~ AST.Type tbind trep Name Name
-         , UserType typ [Prefix Name typ] :<: decl
+         , Item (AliasType DataPrefix typ Name) :<: decl
          )
   => ParserDSL (WithDecl e m (Layer "type" proxy typ)) (Decl decl info) m where
   syntax _ end = do
@@ -93,7 +93,8 @@ instance ( ParserM e m, PrattToken proxy typ m
     alias <- name
     vars <- manyTill typVar (void $ reservedOp "=")
     body <- pratt @proxy @typ (lookAhead end) Go
-    end $> declare (UserType body vars alias)
+    let item = AliasType (DataPrefix $ Prefixes vars) (toInteger $ length vars) body alias
+    end $> declare (Item item alias)
     where
       name = Name <$> identifier <|> do
         op <- try $ lookAhead operator
@@ -105,56 +106,58 @@ instance ( ParserM e m, PrattToken proxy typ m
 
 data WithDataDef (e :: Type) (m :: Type -> Type) (a :: k)
 
-instance (ParserM e m, PrattToken proxy typ m, UserStruct Label :<: ext)
-  => ParserDSL (WithDataDef e m (Layer "struct" proxy typ)) (UserDataDef ext typ) m where
-  syntax _ end = braces do
+instance (ParserM e m, PrattToken proxy typ m, label ~ Label, DataStruct label :<: x)
+  => ParserDSL (WithDataDef e m (Layer "struct" proxy typ)) (DataBody x typ) m where
+  syntax _ _ = braces do
     let fieldName = identifier <|> operator <&> Label
         field = do
           constructor <- fieldName <* reservedOp ":"
           typ <- pratt @proxy @typ (void . lookAhead $ reservedOp "," <|> reservedOp "}") Go
-          return (UserStruct constructor typ)
+          return (constructor, typ)
     cs1 <- field <* optional (reservedOp ",")
     css <- commaSep field
-    end $> UserDataDef (inj $ UserStructs cs1 css)
+    return $ DataBody (inj $ DataStruct cs1 css)
 
-instance (ParserM e m, PrattToken proxy typ m, UserEnum Label :<: ext, typ ~ AST.Type tbind trep name a, a ~ Name)
-  => ParserDSL (WithDataDef e m (Layer "enum" proxy typ)) ((UserDataDef ext typ)) m where
+instance (ParserM e m, PrattToken proxy typ m, field ~ Label, typ ~ AST.Type tbind trep name a, a ~ Name, DataEnum field :<: x)
+  => ParserDSL (WithDataDef e m (Layer "enum" proxy typ)) (DataBody x typ) m where
   syntax _ end = do
     let fieldName = identifier <|> operator <&> Label
         field = TypVar . Name <$> identifier
             <|> parens (pratt @proxy @typ (void . lookAhead $ reservedOp ")") Go)
-        userEnum = reservedOp "|" >> UserEnum <$> fieldName <*> many field
-    UserEnums <$> userEnum <*> userEnum `manyTill` end <&> UserDataDef . inj
+        dataEnum = reservedOp "|" >> (,) <$> fieldName <*> many field
+    DataEnum <$> dataEnum <*> dataEnum `manyTill` end <&> DataBody . inj
 
-instance (ParserM e m, PrattToken proxy typ m, UserCoerce :<: ext)
-  => ParserDSL (WithDataDef e m (Layer "coerce" proxy typ)) ((UserDataDef ext typ)) m where
-  syntax _ end = reservedOp "=" *> pratt @proxy @typ (lookAhead end $> ()) Go
-           <&> UserDataDef . inj . UserCoerce
+instance (ParserM e m, PrattToken proxy typ m, Identity :<: x)
+  => ParserDSL (WithDataDef e m (Layer "coerce" proxy typ)) (DataBody x typ) m where
+  syntax _ end = do
+    val <- reservedOp "=" *> pratt @proxy @typ (lookAhead end $> ()) Go <&> DataBody . inj . Identity
+    end $> val
 
-instance (ParserM e m, PrattToken proxy typ m, UserPhantom :<: ext)
-  => ParserDSL (WithDataDef e m (Layer "phantom" proxy typ)) ((UserDataDef ext typ)) m where
-  syntax _ end = end $> UserDataDef (inj UserPhantom)
+instance (ParserM e m, PrattToken proxy typ m, DataNone :<: x)
+  => ParserDSL (WithDataDef e m (Layer "phantom" proxy typ)) (DataBody x typ) m where
+  syntax _ end = end $> DataBody (inj $ DataNone @typ)
 
 -- | sequence parsing
 instance ( ParserM e m
-         , ParserDSL (WithDataDef e m a) (UserDataDef ext typ) m
-         , ParserDSL (WithDataDef e m b) (UserDataDef ext typ) m
+         , ParserDSL (WithDataDef e m a) (DataBody x typ) m
+         , ParserDSL (WithDataDef e m b) (DataBody x typ) m
          )
-  => ParserDSL (WithDataDef e m (a :- b)) (UserDataDef ext typ) m where
+  => ParserDSL (WithDataDef e m (a :- b)) (DataBody x typ) m where
   syntax _ end = runDSL @(WithDataDef e m a) end
            <|> runDSL @(WithDataDef e m b) end
 
 instance ( ParserM e m
-         , info ~ Name, UserData [Prefix Name typ] def :<: decl
-         , typ ~ AST.Type tbind trep name a
-         , ParserDSL proxy def m
+         , info ~ Name, typ ~ AST.Type tbind trep name a
+         , Item (DataType DataPrefix xt typ Name) :<: decl
+         , ParserDSL proxy def m, def ~ (xt typ)
          )
   => ParserDSL (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
   syntax _ end = do
     dataName <- reserved "data" *> name
     vars :: [Prefix Name typ] <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
     body <- runDSL @proxy @def (lookAhead end)
-    end $> declare (UserData dataName vars body)
+    let item = DataType (DataPrefix $ Prefixes vars) (toInteger $ length vars) body dataName
+    end $> declare (Item item dataName)
     where
     name = Name <$> identifier <|> do
       op <- lookAhead operator

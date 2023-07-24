@@ -10,10 +10,8 @@ module Tlang.AST.Class.Decl
 where
 
 import Tlang.AST.Decl
-import Tlang.Generic ((:<:))
+import Tlang.Generic ((:<:), prj)
 import Data.Maybe (fromMaybe)
-
-import Tlang.Generic ((:<:) (..))
 
 -- ** plain method
 

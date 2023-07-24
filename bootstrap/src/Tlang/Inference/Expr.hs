@@ -22,7 +22,7 @@ import Tlang.Extension
 import Tlang.Graph.Core
 import Tlang.Unification.Graph
 import Tlang.Graph.Extension.Type
-import Tlang.Generic ((:<:) (..), (:+:) (..), type (|:) (..), Base)
+import Tlang.Generic ((:<:), inj, prj, (:+:) (..), type (|:) (..), Base)
 
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, asks)
@@ -153,7 +153,7 @@ instance ConstraintGen Apply (Mode, ExprF f name |: Hole nodes Int) Int where
                ]
         return (mode'a, g, gr)
 
-getInstance :: (G :<: ns, T Sub :<: es, Ord (es (Link es)), HasThrow "fail" ConstraintGenErr m, Eq info, Eq (ns (Hole ns info)), Ord info, Ord (ns (Hole ns info)))
+getInstance :: (G :<: ns, T Sub :<: es, Ord (es (Link es)), HasThrow "fail" ConstraintGenErr m, Ord info, Ord (ns (Hole ns info)))
             => Integer -> Hole ns info -> CoreG ns es info -> m (Hole ns info)
 getInstance ix n@(Hole v _) gr =
   case prj @G v of
@@ -262,7 +262,7 @@ genPatternConstraint
 genPatternConstraint = cata go
   where
     getNodeM n@(Hole v _) gr =
-      case prj @G v of
+      case prj @G @nodes v of
         Just _ -> case lFrom @(T Sub) (== n) gr of
           [(T (Sub 1), n')] -> return n'
           _  -> failCGenMsg "Internal Error, G node doesn't have exact one type scheme"

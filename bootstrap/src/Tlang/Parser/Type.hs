@@ -22,7 +22,7 @@ import Data.List (find)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Text.Megaparsec hiding (Label)
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:), inj)
 import Tlang.Extension
   ( Tuple (..), Forall (..), Variant (..), Record (..)
   , Scope (..), Literal (..), LiteralNatural (..), LiteralText (..)
@@ -158,7 +158,7 @@ instance (TypeC e m, Rep.Rep :<: rep)
     typ <- symbol "#[" *> (Rep.Rep . Rep.RepLift <$> prim) <* symbol "]"
     return . literal . Type $ inj typ
     where
-      prim = parens prim <|> bit <|> int <|> uint <|> float <|> ptr <|> stru <|> lft
+      prim = parens prim <|> bit <|> int <|> uint <|> lfloat <|> ptr <|> stru <|> lft
       ptr = reserved "ptr" *> (Rep.ptr <$> prim)
       bit = reserved "bit" *> (Rep.bit <$> integer)
       int = reserved "int8" $> Rep.int8
@@ -170,13 +170,13 @@ instance (TypeC e m, Rep.Rep :<: rep)
          <|> reserved "uint16" $> Rep.uint16
          <|> reserved "uint32" $> Rep.uint32
          <|> reserved "uint64" $> Rep.uint64
-      float = reserved "float" $> Rep.float
+      lfloat = reserved "float" $> Rep.float
           <|> reserved "double" $> Rep.double
-      stru = Rep.struct <$> braces (prim `sepBy1` reservedOp ",")
+      stru = Rep.struct False <$> braces (prim `sepBy1` reservedOp ",")
       lft = symbol "$" *> parens (parser (lookAhead $ symbol ")" $> ()) Go) <&> Rep.Embed . Rep.DataRep
 
 -- | `Forall` quantified type
-instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Functor rep)
+instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Functor rep, Functor bind)
   => PrattToken (WithType e m "forall") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
@@ -189,10 +189,10 @@ instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Fun
     body <- parser end Go
     return . literal $ foldr addIndex body bounds
     where
-      addIndex (name, bound) typ = TypBnd (inj $ Forall bound) (lift name typ)
+      addIndex (name, bound) typ = TypBnd (inj @(Forall (Prefix Name)) @bind $ Forall bound) (lift name typ)
 
 -- | `Scope` quantified type
-instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Functor rep)
+instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Functor rep, Functor bind)
   => PrattToken (WithType e m "abstract") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
@@ -203,7 +203,8 @@ instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Func
     body <- parser end Go
     return . literal $ foldr addIndex body bounds
     where
-      addIndex (name, bound) typ = TypBnd (inj $ Scope bound) (lift name typ)
+      -- addIndex :: Scope b :<: bind => (name, b name) -> Type bind rep name a
+      addIndex (name, bound) typ = TypBnd (inj @(Scope (Prefix Name)) @bind $ Scope bound) (lift name typ)
 
 lift :: (Eq a, Monad m, Functor f) => a -> f a -> f (a >| m a)
 lift name = fmap \a -> if name == a then New a else Inc (return a)

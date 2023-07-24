@@ -61,7 +61,8 @@ infixl 4 ??
 _mod ?? info = queryAll info (mmDecl _mod)
 
 module'
-  :: ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
+  :: forall e m decls
+   . ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
      , HasState "OperatorStore" OperatorStore m
      , Item (UserOperator Text) :<: decls)
   => [Module decls Name] -> m (Decl decls Name)
@@ -80,7 +81,7 @@ module' ms declaraton = do
   decls <- many declaraton <* eof
   return (Module name uses $ Decls decls, ms)
   where
-    itemOf = (??) @(Item (UserOperator Text))
+    itemOf = (??) @(Item (UserOperator Text)) @decls
     lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)
     lookUpModule name = find $ (== name) . mmName
     putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)

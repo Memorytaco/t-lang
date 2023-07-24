@@ -37,9 +37,7 @@ data Letrec binder expr
 --    const2: \ ?v, _ => v
 --    const3: \ ?v => \_ => v
 data Equation bind prefix expr
-  = Equation prefix
-      (bind expr, expr)
-      [(bind expr, expr)]
+  = Equation prefix (bind expr, expr) [(bind expr, expr)]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
 -- | application, this includes both value application and type application

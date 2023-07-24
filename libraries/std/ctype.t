@@ -29,9 +29,9 @@ data cuint8 = #[uint8]
 ;;
 data cuint16 = #[uint16]
 ;;
-data cuint32 = #[bit 32]
+data cuint32 = #[uint32]
 ;;
-data cuint64 = #[bit 64]
+data cuint64 = #[uint64]
 ;;
 
 // c floating

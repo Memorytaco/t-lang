@@ -1,7 +1,7 @@
 {- | * Convert graphic representation of type back to its syntactic representation
 -}
 
-module Tlang.Transform.GraphType
+module Transform.GraphType
   (
 
   -- ** transform Graphic Type back to Syntactic Type
@@ -17,7 +17,7 @@ import Tlang.AST
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 import Tlang.Extension
-import Tlang.Generic ((:<:) (..), (:+:) (..))
+import Tlang.Generic ((:<:), inj, prj, (:+:) (..))
 import Tlang.Constraint (Prefix (..))
 
 import Capability.Reader (HasReader, ask, asks, local)
@@ -85,7 +85,7 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , Ord (edges (Link edges)), Ord a
   , Eq (Hole nodes info), Eq a, Eq info
   , Forall (Prefix a) :<: bind
-  , Functor rep
+  , Functor rep, Functor bind
   , Ord info, Ord (nodes (Hole nodes info))
   )
 

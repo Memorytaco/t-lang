@@ -25,7 +25,7 @@ module Tlang.AST.Decl
   )
 where
 
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:), inj, prj)
 
 -- ** Core declaration structure
 

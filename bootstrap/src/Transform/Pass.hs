@@ -1,5 +1,5 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-module Tlang.Transform.Pass
+module Transform.Pass
   (
     -- ** defined transform for `Expr`
     TransformCata (..)

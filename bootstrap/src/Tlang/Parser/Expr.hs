@@ -23,7 +23,7 @@ import Tlang.Parser.Type (record)
 import Capability.Reader (HasReader, asks)
 
 import Tlang.Extension
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:), inj, prj)
 
 data WithExpr (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
 type ExprC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)

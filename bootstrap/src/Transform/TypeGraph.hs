@@ -4,7 +4,7 @@
     This module transform syntactic type into relevent graphic representation
 
 -}
-module Tlang.Transform.TypeGraph
+module Transform.TypeGraph
   (
   -- ** transform type into graph
     toGraph
@@ -27,7 +27,6 @@ import Tlang.Rep (Rep (..))
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, asks, local)
 import Control.Monad (forM, foldM)
-import Control.Monad.Identity (Identity (..))
 
 import Data.Functor.Foldable (cata)
 import Data.Functor ((<&>))

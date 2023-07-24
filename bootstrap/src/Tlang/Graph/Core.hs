@@ -33,7 +33,7 @@ import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
 import Data.List (sort)
 
-import Tlang.Generic ((:<:) (..))
+import Tlang.Generic ((:<:), inj, prj)
 
 -- | algebraic edge for graph
 newtype Link e = Link (e (Link e))

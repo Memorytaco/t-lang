@@ -3,7 +3,7 @@ module Driver.Transform.TypeGraph
   )
 where
 
-import Tlang.Transform.TypeGraph (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph)
+import Transform.TypeGraph (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph)
 import Tlang.AST (Type)
 import Tlang.Graph.Extension.Type
 import Tlang.Graph.Core

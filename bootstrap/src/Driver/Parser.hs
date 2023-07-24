@@ -64,10 +64,10 @@ type ASTExpr typ = Expr
 
 type ASTDeclExt typ expr =
       Item (UserOperator Text)
-  :+: UserType typ [Prefix Name typ]
+  :+: Item (AliasType DataPrefix typ Name)
   :+: Item (FFI typ Name)
   :+: UserValue expr (Maybe typ)
-  :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
+  :+: Item (DataType DataPrefix (DataBody (DataNone :+: Identity :+: DataEnum Label :+: DataStruct Label)) typ Name)
 type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Name
 
 type PredefExprVal = ASTExpr TypeAST
@@ -118,7 +118,7 @@ type DeclLang e m pExpr pType expr typ = WithDecl e m
           :- Layer "phantom" pType typ
           )
        )
-       (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
+       (DataBody (DataNone :+: Identity :+: DataEnum Label :+: DataStruct Label) typ)
   :- "fixity"
   )
 

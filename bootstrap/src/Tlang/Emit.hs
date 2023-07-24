@@ -221,9 +221,9 @@ instance (GlobalGen f a, GlobalGen g a) => GlobalGen (f :+: g) a where
   genGlobal (Inl fv) = genGlobal fv
   genGlobal (Inr fv) = genGlobal fv
 
-type instance GlobalGenEnv m (UserType typ [Prefix Name typ]) a = ()
-instance GlobalGen (UserType typ [Prefix Name typ]) a where
-  genGlobal _ = return Nothing
+-- type instance GlobalGenEnv m (UserType typ [Prefix Name typ]) a = ()
+-- instance GlobalGen (UserType typ [Prefix Name typ]) a where
+--   genGlobal _ = return Nothing
 
 type instance GlobalGenEnv m (Item (UserOperator Text)) a = ()
 instance GlobalGen (Item (UserOperator Text)) a where
@@ -237,9 +237,9 @@ type instance GlobalGenEnv m (UserValue expr (Maybe typ)) a = ()
 instance GlobalGen (UserValue expr (Maybe typ)) a where
   genGlobal _ = return Nothing
 
-type instance GlobalGenEnv m (UserData [Prefix Name typ] def) a = ()
-instance GlobalGen (UserData [Prefix Name typ] def) a where
-  genGlobal _ = return Nothing
+-- type instance GlobalGenEnv m (UserData [Prefix Name typ] def) a = ()
+-- instance GlobalGen (UserData [Prefix Name typ] def) a where
+--   genGlobal _ = return Nothing
 
 
 --   :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)

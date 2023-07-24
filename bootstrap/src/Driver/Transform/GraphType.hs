@@ -10,7 +10,7 @@ module Driver.Transform.GraphType
   )
 where
 
-import Tlang.Transform.GraphType
+import Transform.GraphType
 import Tlang.AST (Type)
 import Tlang.Graph.Core
 

@@ -44,6 +44,7 @@ dependencies:
 - tasty-hunit
 - capability
 - algebraic-graphs == 0.7
+- prettyprinter
 
 ghc-options:
 - -Wall

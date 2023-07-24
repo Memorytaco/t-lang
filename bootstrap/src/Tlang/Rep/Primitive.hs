@@ -154,7 +154,7 @@ ptr :: PrimitiveT t a -> PrimitiveT t a
 ptr = flip Ptr Nothing
 
 -- | structure with size align
-struct :: [PrimitiveT seq a] -> PrimitiveT seq a
-struct ts = Struct ts False
+struct :: Bool -> [PrimitiveT seq a] -> PrimitiveT seq a
+struct b ts = Struct ts b
 
 makeBaseFunctor $ fixQ [d| instance (Functor t) => Recursive (PrimitiveT t a) |]
