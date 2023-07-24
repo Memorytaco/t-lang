@@ -1,4 +1,4 @@
-module Tlang.JIT
+module JIT.JIT
   ( runJIT )
 where
 
