@@ -25,8 +25,8 @@ import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
 import LLVM.Context (withContext)
 import qualified Data.ByteString as B
 
-import Language.Core (builtinStore, ModuleName (..), Module (..), Decls (..))
-import Language.Parser (runDSL, module', declaration, reserved)
+import Language.Core (builtinStore, ModuleName (..), Module (..), Decls (..), TypSurface, ExprSurface)
+import Language.Parser (module', declaration, reserved)
 
 import EvalLoop.Config
 import Tlang.Emit (genExpr)
@@ -60,7 +60,7 @@ stripSpace = Text.dropWhile isSpace . Text.dropWhileEnd isSpace
 ppModuleName :: ModuleName -> [Char]
 ppModuleName (ModuleName ls l) = intercalate "/" (fmap show $ ls <> [l])
 
-toplevel :: forall m. MonadIO m => ShellParser m (ShellRes PredefDeclVal PredefExprVal Text)
+toplevel :: forall m. MonadIO m => ShellParser m (ShellRes PredefDeclVal (ExprSurface TypSurface) Text)
 toplevel = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- gets operators
@@ -116,8 +116,7 @@ toplevel = do
       resinput <- getInput
       case resinput of
         "" -> return LangNone
-        _ -> do
-          driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) "stdin" resinput >>= \case
+        _ -> parseSurfaceExpr "stdin" ops resinput >>= \case
             (Left err, _) -> do
               liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
               customFailure SubParseError
@@ -128,5 +127,8 @@ runToplevel
   => ShellConfig
   -> ShellState PredefDeclExtVal
   -> Text
-  -> m (Either (ParseErrorBundle Text ShellError) (ShellRes PredefDeclVal PredefExprVal Text), ShellState PredefDeclExtVal, ())
+  -> m ( Either (ParseErrorBundle Text ShellError) (ShellRes PredefDeclVal (ExprSurface TypSurface) Text)
+       , ShellState PredefDeclExtVal
+       , ()
+       )
 runToplevel r s txt = runRWST (runParserT (getShellParser toplevel) "stdin" txt) r s

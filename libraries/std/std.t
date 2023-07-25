@@ -6,6 +6,12 @@ data bool
 | true
 ;;
 
+type tuple a b =
+{ fst : a
+, snd : b
+}
+;;
+
 // sequence operator
 operator ; _ 0 infix
 ;;

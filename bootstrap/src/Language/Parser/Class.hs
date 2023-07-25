@@ -44,8 +44,6 @@ import GHC.TypeLits
 -- * token parser
 
 -- | intermediate name for pratt parser semantic token
---
--- TODO: find a better name
 class Monad m => PrattToken (tag :: any) (a :: Type) (m :: Type -> Type) | tag a -> m where
   tokenize :: Proxy tag -> (m () -> Power -> m a)
            -> m () -> m (Semantic m a)
@@ -121,6 +119,7 @@ data (info :: Symbol) ?- (a :: k)
 
 -- | sub expression
 data Layer (name :: k) (proxy :: any) (e :: Type)
+-- data Parse (val :: any)
 
 -- | use to hold arbitrary info
 data Hint (a :: k)

@@ -28,7 +28,6 @@ import Language.Core
 import Language.Core.Extension
 import Language.Parser
 import Tlang.Generic ((:+:))
-import Tlang.Constraint (Prefix (..), Prefixes (..))
 import qualified Data.Kind as D (Type)
 
 import Capability.Accessors
@@ -48,31 +47,17 @@ import Data.Void (Void)
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
 
-type TypeAST = StandardType Label (Prefix Name) Name Name
-type ASTGPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ :+: PatGroup) Label Name
-type ASTPat typ = Pattern (LiteralText :+: LiteralInteger :+: LiteralNumber) ((@:) typ) Label Name
+type TypeAST = TypSurface
+type ASTGPat typ = GPatSurface typ
+type ASTPat typ = PatSurface typ
 
-type ASTExpr typ = Expr
-  ( Let (ASTPat typ)
-  :+: Equation (ASTGPat typ) (Prefixes Name typ)
-  :+: Equation (Grp (ASTPat typ)) (Prefixes Name typ)
-  :+: Apply :+: Tuple :+: Record Label
-  :+: LiteralText :+: LiteralInteger :+: LiteralNumber
-  :+: Value typ :+: Selector Label :+: Constructor Label
-  :+: (@:) typ
-  ) Name
+type ASTExpr typ = ExprSurface typ
 
-type ASTDeclExt typ expr =
-      Item (UserOperator Text)
-  :+: Item (AliasType DataPrefix typ Name)
-  :+: Item (FFI typ Name)
-  :+: UserValue expr (Maybe typ)
-  :+: Item (DataType DataPrefix (DataBody (DataNone :+: Identity :+: DataEnum Label :+: DataStruct Label)) typ Name)
-type ASTDecl typ expr = Decl (ASTDeclExt typ expr) Name
+type ASTDeclExt typ expr = DeclSurfaceExt typ expr
 
-type PredefExprVal = ASTExpr TypeAST
+type PredefExprVal = ExprSurface TypSurface
 type PredefDeclExtVal = ASTDeclExt TypeAST PredefExprVal
-type PredefDeclVal = ASTDecl TypeAST PredefExprVal
+type PredefDeclVal = DeclSurface
 
 type ParserMonad' e m = ParsecT e Text (ReaderT ([Operator Text], [Operator Text]) (StateT OperatorStore m))
 
@@ -89,8 +74,6 @@ newtype ParserMonad e m a = ParserMonad
         via Rename 1 (Pos 1 () (MonadReader (ParserMonad' e m)))
     deriving (HasReader "TypeOperator" [Operator Text], HasSource "TypeOperator" [Operator Text])
         via Rename 2 (Pos 2 () (MonadReader (ParserMonad' e m)))
-
--- runDSL @(WholeExpr Void _ (ASTPat (TypeAST Identity) :- ASTGPat (TypeAST Identity) :- TypeAST Identity)) @(ASTExpr (TypeAST Identity)) eof
 
 -- | an all in one monad for language parser
 driveParser

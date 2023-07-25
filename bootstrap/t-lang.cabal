@@ -40,6 +40,7 @@ library
       EvalLoop.Config
       EvalLoop.Parser
       EvalLoop.Shell
+      EvalLoop.Store.Compiler
       EvalLoop.Util.ExprParser
       Example
       JIT.JIT
@@ -58,6 +59,7 @@ library
       Language.Core.Name
       Language.Core.Operator
       Language.Core.Pattern
+      Language.Core.Term
       Language.Core.Type
       Language.Parser
       Language.Parser.Class

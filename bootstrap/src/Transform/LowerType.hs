@@ -29,35 +29,56 @@ import Data.Functor ((<&>))
 -- | lowering partial type, reduce some highlevel constructors into primitive constructor
 --
 -- if we choose to lower record type
+--
+-- @
 -- e.g. lower (a, i8, c) = struct {a, i8#, c}
 --      lower { name: str, age: int } = struct { #[ptr (bit 8)], int32 }
+-- @
 --
 -- In this case, we have advantage to have same structure, using which we can
 -- transfrom it into graphic type and do type unification.
 --
 -- lets say we have a type:
+--
+-- @
 --    A := forall a b. {name: str, age: int, identity: a, property: b}
 --    B := forall a. {name: str, age: int, identity: a, property: likelyint a}
+-- @
 --
 -- and we have toplevel definition:
+--
+-- @
 --    type likelyint a = int
+-- @
 --
 -- we will always have this:
+--
+-- @
 --    lower (forall a. likelyint a) = int32 // if parameter "a" is locally bound
+-- @
 -- 
 -- and we choose not to lowering record type :
+--
+-- @
 --    lower A = forall a b. { name: #[ptr (bit 8)], age, int32, identity: a, property: b}
 --    lower B = forall a. { name: #[ptr (bit 8)], age: int32, identity: a, property: int32 }
+-- @
 --
 -- unify A and B we got:
+--
+-- @
 --    unify (lower A) (lower B) = { name: #[ptr (bit 8)], age: int32, identity: int32, property: int32 }
+-- @
 -- 
 -- and we can finally lower the type:
---    lower (unify (lower A) (lower B)) = struct {#[ptr (bit 8)], int32, int32, int32}
 --
--- but remember signature for `lower (unify (lower A) (lower B))` is still `Type bind rep name a`
--- and we need a final pass to lower it into `Rep Name` which is something trivial. This kind of
--- `Rep Name` thing is what we get finally to do codegen. and we can choose to transform
+-- @
+--    lower (unify (lower A) (lower B)) = struct {#[ptr (bit 8)], int32, int32, int32}
+-- @
+--
+-- but remember signature for @lower (unify (lower A) (lower B))@ is still @Type bind rep name a@
+-- and we need a final pass to lower it into @Rep Name@ which is something trivial. This kind of
+-- @Rep Name@ thing is what we get finally to do codegen. and we can choose to transform
 -- it into LLVM IR type or C type.
 -----------------------------------------------------------------------------------------
 

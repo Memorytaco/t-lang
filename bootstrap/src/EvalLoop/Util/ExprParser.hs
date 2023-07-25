@@ -3,7 +3,7 @@ module EvalLoop.Util.ExprParser
   )
 where
 
-import Language.Core (OperatorStore)
+import Language.Core (OperatorStore, ExprSurface, TypSurface)
 import Language.Parser
 
 import Driver.Parser
@@ -14,5 +14,5 @@ import Data.Void (Void)
 
 parseSurfaceExpr
   :: Monad m => String -> OperatorStore -> Text
-  -> m (Either (ParseErrorBundle Text Void) PredefExprVal, OperatorStore)
-parseSurfaceExpr prompt ops = driveParser ops (runDSL @(PredefExprLang _) @PredefExprVal eof) prompt
+  -> m (Either (ParseErrorBundle Text Void) (ExprSurface TypSurface), OperatorStore)
+parseSurfaceExpr prompt ops = driveParser ops (runDSL @(PredefExprLang _) @(ExprSurface TypSurface) eof) prompt
