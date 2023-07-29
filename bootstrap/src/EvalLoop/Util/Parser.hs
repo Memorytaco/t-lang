@@ -1,4 +1,4 @@
-module EvalLoop.Util.ExprParser
+module EvalLoop.Util.Parser
   ( parseSurfaceExpr
   )
 where

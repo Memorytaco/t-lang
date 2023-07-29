@@ -3,11 +3,18 @@ module EvalLoop.Config
   , SearchEnv (..)
 
   , ShellState (..)
+  , EvalState (..)
+  , compilerState
+  , sharedLibs
+  , objectFiles
+  , linesNumber
   )
 where
 
 import Language.Core (OperatorStore, Module, Name)
 import Data.Text (Text)
+import EvalLoop.Store.Compiler
+import Control.Lens
 
 data ShellConfig = ShellConfig
   { env :: SearchEnv
@@ -19,12 +26,19 @@ data SearchEnv
     , srcPath :: [Text]
     } deriving (Show, Eq)
 
+data EvalState
+  = EvalState
+    { _compilerState :: EvalCompilerStore
+    , _sharedLibs :: [FilePath]
+    , _objectFiles :: [FilePath]
+    , _linesNumber :: Integer
+    }
+
+makeLenses ''EvalState
+
 data ShellState decls = ShellState
   { lineCount :: Int
   , operators :: OperatorStore
   , modules :: [Module decls Name]
   }
-
-deriving instance Show (decls Name) => Show (ShellState decls)
-deriving instance Eq (decls Name) => Eq (ShellState decls)
 

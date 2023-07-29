@@ -125,8 +125,8 @@ runDefinition (b, a) m = runModuleBuilderT a (runBasicBlock b m)
 runModule :: Monad m => ShortByteString -> IRBuilderState -> LLVM m a -> m LLVM.Module
 runModule name stat m = buildModuleT name (runBasicBlock stat m)
 
-liftTop :: Monad m => LLVM m a -> CodeGenT m name a
-liftTop = CodeGenT . lift . lift
+liftLLVM :: Monad m => LLVM m a -> CodeGenT m name a
+liftLLVM = CodeGenT . lift . lift
 
 withEntry :: (IsString name, Monad m) => CodeGenT m name Operand -> LLVM m Operand
 withEntry m = do
@@ -145,4 +145,4 @@ withEntry m = do
     _ -> error "impossible in Driver.CodeGen"
 
 withEntryTop :: (Monad m, IsString name1) => CodeGenT m name1 Operand -> CodeGenT m name2 Operand
-withEntryTop m = liftTop (withEntry m)
+withEntryTop m = liftLLVM (withEntry m)

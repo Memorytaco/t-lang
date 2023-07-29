@@ -5,6 +5,7 @@
   and https://www.reddit.com/r/haskell/comments/47t5r3/ast_typing/
   and https://www.reddit.com/r/haskell/comments/1f91w3/the_ast_typing_problem/
   and http://blog.ezyang.com/2013/05/the-ast-typing-problem/
+  and https://hackage.haskell.org/package/Annotations for a recommended package
 
   The original problem comes from that we can't have nested type and Cofree annotation for every AST node
   at the same time. Some high level type wrapper tricks are needed to resolve this one.

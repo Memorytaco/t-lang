@@ -5,7 +5,7 @@ import CLI.Parser (getcommand, Command (..))
 import LLVM.Context
 import LLVM.Module
 import LLVM.Internal.Target
-import EvalLoop.Shell
+import EvalLoop.Loop
 
 -- process :: AST.Module -> (NameTable, TopSubstitution, Int) -> String -> IO (Maybe ((NameTable, TopSubstitution, Int), AST.Module))
 process m (terms, env, c) line = do undefined

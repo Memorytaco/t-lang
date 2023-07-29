@@ -27,6 +27,9 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
+      Compiler.CodeGen
+      Compiler.CodeGen.LLVM
+      Compiler.CodeGen.LLVM.IR
       Compiler.Store
       Driver
       Driver.CodeGen
@@ -38,12 +41,14 @@ library
       Driver.Transform.TypeGraph
       Driver.Unification
       EvalLoop.Config
-      EvalLoop.Parser
-      EvalLoop.Shell
+      EvalLoop.Loop
+      EvalLoop.Read
       EvalLoop.Store.Compiler
-      EvalLoop.Util.ExprParser
+      EvalLoop.Util.Parser
       Example
+      JIT.FFI
       JIT.JIT
+      JIT.LLVM
       Language.Core
       Language.Core.Attribute
       Language.Core.Class
