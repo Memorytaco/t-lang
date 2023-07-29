@@ -3,7 +3,7 @@ module Compiler.CodeGen.LLVM
     globalDefine
   , globalFunction
   , externFunction
-  , globalType
+  , globalNamedType
   )
 where
 
@@ -11,16 +11,16 @@ import qualified LLVM.IRBuilder as Builder
 import qualified LLVM.AST as IR
 import qualified LLVM.AST.Global as IR
 import qualified LLVM.AST.Constant as IR
-
-import Control.Monad.State (modify)
 import LLVM.IRBuilder.Internal.SnocList (getSnocList, snoc)
 
-import Control.Monad (forM)
+import Control.Monad (forM, forM_)
+import Control.Monad.State (modify)
 
 import Data.ByteString.Short (ShortByteString)
+import Data.Functor ((<&>))
+import qualified Data.Map as Map
 
 import Compiler.CodeGen.LLVM.IR
-import Data.Functor ((<&>))
 
 globalDefine :: Builder.MonadModuleBuilder m => IR.Definition -> m ()
 globalDefine def = Builder.liftModuleState $ modify \s ->
@@ -58,7 +58,11 @@ externFunction fname paras retType = do
     }
   return $ IR.ConstantOperand $ IR.GlobalReference fname
 
-globalType :: Builder.MonadModuleBuilder m => IR.Name -> Maybe IR.Type -> m IR.Type
-globalType tname typ'maybe = do
+-- | generate named opaque type or structure type.
+globalNamedType :: Builder.MonadModuleBuilder m => IR.Name -> Maybe IR.Type -> m IR.Type
+globalNamedType tname typ'maybe = do
   globalDefine $ IR.TypeDefinition tname typ'maybe
+  forM_ typ'maybe \typ -> Builder.liftModuleState $ modify \s ->
+    -- this map seems to be used for `typeOf` reverse type lookup
+    s { Builder.builderTypeDefs = Map.insert tname typ (Builder.builderTypeDefs s) }
   return (IR.NamedTypeReference tname)
