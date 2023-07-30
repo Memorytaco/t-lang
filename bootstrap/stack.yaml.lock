@@ -82,30 +82,30 @@ packages:
   original:
     hackage: template-haskell-2.18.0.0
 - completed:
-    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
-    git: https://github.com/llvm-hs/llvm-hs
+    commit: 93e6477dd1130d5a350ceda1bb25f7c11905bf3a
+    git: https://github.com/Memorytaco/llvm-hs
     name: llvm-hs
     pantry-tree:
-      sha256: 7a64da9e0bc8d080e9b4941044fb4585eea96fb0472e07822a8e364e9b7a91ae
+      sha256: 7d8030f9f13bb234c5aad4a5df8ae8184df606cd9858d87d2c0e7f5794d47f04
       size: 12716
     subdir: llvm-hs
     version: 15.0.0
   original:
-    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
-    git: https://github.com/llvm-hs/llvm-hs
+    commit: 93e6477dd1130d5a350ceda1bb25f7c11905bf3a
+    git: https://github.com/Memorytaco/llvm-hs
     subdir: llvm-hs
 - completed:
-    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
-    git: https://github.com/llvm-hs/llvm-hs
+    commit: 93e6477dd1130d5a350ceda1bb25f7c11905bf3a
+    git: https://github.com/Memorytaco/llvm-hs
     name: llvm-hs-pure
     pantry-tree:
-      sha256: 0eb9ec2745a283b7f8a417331510797e7f00a3359db13b04b50f32c75d8c5f52
+      sha256: b512f9e5f8f2b3e3a06bad2fa5ff053a83d817798c7efcd47e254e68c842169d
       size: 2712
     subdir: llvm-hs-pure
     version: 15.0.0
   original:
-    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
-    git: https://github.com/llvm-hs/llvm-hs
+    commit: 93e6477dd1130d5a350ceda1bb25f7c11905bf3a
+    git: https://github.com/Memorytaco/llvm-hs
     subdir: llvm-hs-pure
 - completed:
     hackage: distributive-0.6.2.1@sha256:0f99f5541cca04acf89b64432b03422b6408e830a8dff30e6c4334ef1a48680c,2996

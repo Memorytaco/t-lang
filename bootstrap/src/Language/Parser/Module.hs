@@ -2,7 +2,7 @@ module Language.Parser.Module
   (
   -- ** module relevant parser
     module'
-  , moduleHeader
+  , modulePrologue
   )
 where
 
@@ -33,9 +33,9 @@ moduleName = liftA2 ModuleName init last <$> (Name <$> identifier) `sepBy1` stri
 -- 1. a module name
 --
 -- 2. use statements
-moduleHeader :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m)
+modulePrologue :: (ShowErrorComponent e, MonadParsec e Text m, MonadFail m)
              => m ([Use Name], ModuleName)
-moduleHeader = do
+modulePrologue = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
   deps <- many stmtUse
@@ -57,7 +57,7 @@ stmtUse = do
 infixl 4 ??
 (??) :: forall decl decls info. (decl :<: decls, Query decl)
      => Module decls info -> (info -> Bool) -> [decl info]
-_mod ?? info = queryAll info (mmDecl _mod)
+_mod ?? info = queryAll info (_moduleDecls _mod)
 
 module'
   :: forall e m decls
@@ -82,5 +82,5 @@ module' ms declaraton = do
   where
     itemOf = (??) @(Item (UserOperator Text)) @decls
     lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)
-    lookUpModule name = find $ (== name) . mmName
+    lookUpModule name = find $ (== name) . _moduleHeader
     putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)

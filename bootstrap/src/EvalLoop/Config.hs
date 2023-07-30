@@ -1,34 +1,25 @@
 module EvalLoop.Config
-  ( ShellConfig (..)
-  , SearchEnv (..)
-
-  , ShellState (..)
-  , EvalState (..)
-  , compilerState
+  (
+    EvalState (..)
+  , evalStore
   , sharedLibs
   , objectFiles
   , linesNumber
+
+  , newEvalState
+
+  , module EvalLoop.Store.Compiler
   )
 where
 
-import Language.Core (OperatorStore, Module, Name)
-import Data.Text (Text)
 import EvalLoop.Store.Compiler
 import Control.Lens
-
-data ShellConfig = ShellConfig
-  { env :: SearchEnv
-  } deriving (Show, Eq)
-
-data SearchEnv
-  = SearchEnv
-    { libPath :: [Text]
-    , srcPath :: [Text]
-    } deriving (Show, Eq)
+import Control.Monad.IO.Class (MonadIO)
+import Language.Core (Name (..))
 
 data EvalState
   = EvalState
-    { _compilerState :: EvalCompilerStore
+    { _evalStore :: EvalCompilerStore
     , _sharedLibs :: [FilePath]
     , _objectFiles :: [FilePath]
     , _linesNumber :: Integer
@@ -36,9 +27,9 @@ data EvalState
 
 makeLenses ''EvalState
 
-data ShellState decls = ShellState
-  { lineCount :: Int
-  , operators :: OperatorStore
-  , modules :: [Module decls Name]
-  }
+-- | create new state for evaluation
+newEvalState :: MonadIO m => m EvalState
+newEvalState = do
+  compilerStore <- newEvalCompilerStore (Name "repl:0") "repl:0"
+  return $ EvalState compilerStore [] [] 0
 

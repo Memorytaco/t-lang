@@ -27,8 +27,14 @@ extra-deps:
   - base-orphans-0.8.7@sha256:58d5514b688ec037f53b9d60097b9d87f6b3847da68f65124987d67222c3a334,3175
   - template-haskell-2.18.0.0
 
-  - git: https://github.com/llvm-hs/llvm-hs
-    commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+  # - git: https://github.com/llvm-hs/llvm-hs
+  #   commit: 79772d75da83714e0faa4514a69c8f8bbfdf2dc4
+  #   subdirs:
+  #     - llvm-hs
+  #     - llvm-hs-pure
+
+  - git: https://github.com/Memorytaco/llvm-hs
+    commit: 93e6477dd1130d5a350ceda1bb25f7c11905bf3a
     subdirs:
       - llvm-hs
       - llvm-hs-pure

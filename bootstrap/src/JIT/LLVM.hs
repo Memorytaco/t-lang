@@ -19,6 +19,10 @@ module JIT.LLVM
 
   , addDylibFile
   , addObjectFile
+  , addLinkOrder
+  , addLinkOrders
+  , removeLinkOrder
+  , removeLinkOrders
 
   -- ** JIT Symbol
   , JITError (..)
@@ -45,6 +49,7 @@ import qualified LLVM.CodeGenOpt as Opt
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as BS
 
+import Control.Monad (forM_)
 import Control.Monad.IO.Class
 
 data LLVMJITContext
@@ -103,6 +108,18 @@ newJITClass name ctx@(LLVMJITContext {..}) = liftIO $ do
   lib <- LLVM.createJITDylib llvmJITsession (BS.toShort $ B8.pack name)
   return (ctx { llvmJITloadedDylib = (name, lib):llvmJITloadedDylib }, JITClass name lib)
 
+addLinkOrder :: MonadIO m => JITClass -> JITClass -> m ()
+addLinkOrder (JITClass _ dylib) (JITClass _ order) = liftIO $ LLVM.addLinkAgainstOrder dylib order
+
+addLinkOrders :: MonadIO m => JITClass -> [JITClass] -> m ()
+addLinkOrders dylib libs = forM_ libs $ addLinkOrder dylib
+
+removeLinkOrder :: MonadIO m => JITClass -> JITClass -> m ()
+removeLinkOrder (JITClass _ dylib) (JITClass _ order) = liftIO $ LLVM.removeLinkAgainstOrder dylib order
+
+removeLinkOrders :: MonadIO m => JITClass -> [JITClass] -> m ()
+removeLinkOrders dylib libs = forM_ libs $ removeLinkOrder dylib
+
 -- | the origin llvm module is intact
 addLLVMModule :: MonadIO m => String -> LLVM.Module -> LLVMJITContext -> m (LLVMJITContext, JITClass)
 addLLVMModule name m ctx@(LLVMJITContext { llvmJITirLayer }) = liftIO $ do
@@ -125,7 +142,6 @@ lookupSymbol name (getJITLib -> lib) (LLVMJITContext { llvmJITsession, llvmJITir
   Left (LLVM.JITSymbolError bs) -> return . Left . JITError . B8.unpack $ BS.fromShort bs
   Right r -> return (Right r)
 
--- querySymbol :: MonadIO m => String -> JITClass -> LLVMJITContext -> m (Either JITError )
 fetchFunPtr :: LLVM.JITSymbol -> FFI.FunPtr a
 fetchFunPtr = FFI.castPtrToFunPtr . castPtr
 

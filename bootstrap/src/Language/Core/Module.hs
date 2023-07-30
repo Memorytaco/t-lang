@@ -7,6 +7,10 @@ module Language.Core.Module
   -- less. query operation is implemented by `Decl` type class. So
   -- we can abstrace `Module` away from concrete `Decl` definition.
     Module (..)
+  , moduleHeader
+  , moduleImports
+  , moduleDecls
+
   , ModuleName (..)
 
   -- | import statement
@@ -16,6 +20,7 @@ where
 
 import Language.Core.Decl
 import Language.Core.Name (Name (..), Alias (..))
+import Control.Lens
 
 -- | a `ModuleName` is composed by multiple `Frag`.
 -- Language takes a style of unix file path. Everything fits in
@@ -25,12 +30,14 @@ data ModuleName = ModuleName [Name] Name deriving (Show, Eq, Ord)
 
 data Module decls info
   = Module
-    { mmName :: ModuleName        -- ^ Module name
-    , mmUses :: [Use info]        -- ^ Module imports, including lexical items
-    , mmDecl :: Decls decls info  -- ^ Module declarations
+    { _moduleHeader :: ModuleName       -- ^ Module name
+    , _moduleImports :: [Use info]      -- ^ Module imports, including lexical items
+    , _moduleDecls :: Decls decls info  -- ^ Module declarations
     } deriving (Show, Eq, Functor)
 
 -- | A use statement to import symbol name.
 -- Use (origin name, current name) [symbol list]
 data Use a = Use (Alias ModuleName) [Alias a] deriving (Show, Eq, Functor)
+
+makeLenses ''Module
 

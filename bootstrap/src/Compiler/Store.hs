@@ -1,25 +1,20 @@
 module Compiler.Store
   (
 
+  -- ** Stage Store
     StageStore (..)
-  , stageStore1
+  , parserStage
   , stageStore2
 
+  -- ** init value for Stage Store
   , initStageStore
 
-  , StageStore1 (..)
-  , searchPath
-  , focusModule1
-  , focusMutualModules1
-  , stage1Module
+  -- ** Parser stage for compiler
+  , ParserStage (..)
+  , parsedSource
+  , parsedFiles
 
-  , Stage1Module (..)
-  , version1
-  , loadedMList
-  , loadedMFilePath
-
-  , initStage1Module
-  , initStageStore1
+  , emptyParserStage
 
   , StageStore2 (..)
   , initStageStore2
@@ -34,42 +29,31 @@ import Control.Lens
 import Data.Map (Map, empty)
 import Data.Text (Text)
 
+-- | a global store for holding data in different stages of compiler
 data StageStore
   = StageStore
-    { _stageStore1 :: StageStore1
+    { _parserStage :: ParserStage
     , _stageStore2 :: StageStore2
     }
 
 initStageStore :: StageStore
-initStageStore = StageStore initStageStore1 initStageStore2
+initStageStore = StageStore emptyParserStage initStageStore2
 
 -------------------------------
--- Store for Compiler Stage 1
+-- Store for Praser in Compiler
 -------------------------------
 
-data StageStore1
-  = StageStore1
-    { -- | module search path
-      _searchPath :: [Text]
-      -- | j
-    , _focusModule1 :: Maybe (Name, ModuleSurface)
-    , _focusMutualModules1 :: [(Name, ModuleSurface)]
-    , _stage1Module :: Stage1Module
+data ParserStage
+  = ParserStage
+    {
+      -- | modules which are parsed with no problem, with operator resolved and file path tracked
+      _parsedSource :: [(FilePath, ModuleSurface)]
+      -- | the source file loaded with mangled module name as key
+    , _parsedFiles  :: Map Name Text
     }
 
-data Stage1Module
-  = Stage1Module
-    { 
-      -- | for compatible reason, defaults to (0,0,1)
-      _version1 :: (Integer, Integer, Integer)
-    , _loadedMList :: Map Name ModuleSurface
-    , _loadedMFilePath :: Map Name Text
-    }
-
-initStage1Module :: Stage1Module
-initStage1Module = Stage1Module (0, 0, 1) empty empty
-initStageStore1 :: StageStore1
-initStageStore1 = StageStore1 [] Nothing [] initStage1Module
+emptyParserStage :: ParserStage
+emptyParserStage = ParserStage [] empty
 
 -------------------------------
 -- Store for Compiler Stage 2
@@ -84,6 +68,5 @@ initStageStore2 :: StageStore2
 initStageStore2 = StageStore2
 
 makeLenses ''StageStore2
-makeLenses ''Stage1Module
-makeLenses ''StageStore1
+makeLenses ''ParserStage
 makeLenses ''StageStore

@@ -1,18 +1,16 @@
 module EvalLoop.Read
- ( ShellParser (..)
+ ( InterfaceT (..)
  , ReadError (..)
  , ReadCommand (..)
  , ReadResult (..)
- , toplevel
- , runToplevel
+ , interface
+ , driveInterface
  )
 where
 
 import Control.Monad
 import Control.Applicative (Alternative)
-import Control.Monad.State (MonadState (..), gets, modify)
-import Control.Monad.Reader (MonadReader (..))
-import Control.Monad.RWS (RWST, runRWST)
+import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.Except
 import Data.Text as Text (Text, unpack, dropWhileEnd, dropWhile)
 import Data.Char (isSpace)
@@ -21,12 +19,17 @@ import Text.Megaparsec hiding (runParser)
 import Text.Megaparsec.Char
 import Data.Void (Void)
 import Data.List (intercalate)
+import Control.Lens
 
 import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
 import LLVM.Context (withContext)
 import qualified Data.ByteString as B
 
-import Language.Core (builtinStore, ModuleName (..), Module (..), Decls (..), TypSurface, ExprSurface, DeclSurface)
+import Language.Core
+  ( Name (..), builtinStore, ModuleName (..), Decls (..)
+  , TypSurface, ExprSurface, DeclSurface, ModuleSurface
+  , moduleHeader, moduleImports, moduleDecls
+  )
 import Language.Parser (module', declaration, reserved)
 
 import EvalLoop.Config
@@ -37,10 +40,10 @@ import EvalLoop.Util.Parser
 import Driver.Parser
 import Driver.CodeGen
 
-newtype ShellParser m a = ShellParser
-  { runShellParser :: ParsecT ReadError Text (RWST ShellConfig () (ShellState PredefDeclExtVal) m) a
+newtype InterfaceT m a = InterfaceT
+  { runInterfaceT :: ParsecT ReadError Text (ReaderT EvalState m) a
   } deriving (Functor, Applicative, Monad, MonadIO, MonadFail)
-    deriving newtype (MonadState (ShellState PredefDeclExtVal), MonadReader ShellConfig)
+    deriving newtype (MonadReader EvalState)
     deriving newtype (MonadPlus, Alternative, MonadParsec ReadError Text)
 
 data ReadError
@@ -52,10 +55,13 @@ instance ShowErrorComponent ReadError where
   showErrorComponent = show
 
 data ReadCommand
-    -- | load source code from a file
-  = RLoadSource FilePath
     -- | list available modules
-  | RListModules
+  = RListModules
+    -- | show defined decls in repl
+  | RListDecls
+    -- | list current loaded source file names
+    -- or print out associated source file of a module
+  | RListSources (Maybe Name)
     -- | show information of a module
   | RShowModule Text
     -- | declare something in repl
@@ -68,6 +74,8 @@ data ReadCommand
 data ReadResult
   = ReadExpr (ExprSurface TypSurface)
   | ReadCommand ReadCommand
+  -- | load source code from a file
+  | ReadSource FilePath Text ModuleSurface
   | ReadNothing
 
 stripSpace :: Text -> Text
@@ -75,11 +83,11 @@ stripSpace = Text.dropWhile isSpace . Text.dropWhileEnd isSpace
 ppModuleName :: ModuleName -> [Char]
 ppModuleName (ModuleName ls l) = intercalate "/" (fmap show $ ls <> [l])
 
-toplevel :: forall m. MonadIO m => ShellParser m ReadResult
-toplevel = do
+interface :: forall m. MonadIO m => InterfaceT m ReadResult
+interface = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
-  ops <- gets operators
-  mods <- gets modules
+  ops <- asks (^. (evalStore . operators))
+  mods :: [ModuleSurface] <- asks (^. (evalStore . stageStore . parserStage . parsedSource)) <&> fmap snd
   case command'maybe of
     Just "def" ->
       getInput >>= parseDecl ops eof "stdin" >>= \case
@@ -95,22 +103,18 @@ toplevel = do
         (Left err, _) -> do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
-        (Right (def, _), _) -> do
-          liftIO . putStrLn $ show def
-          modify \s -> s { modules = def: modules s}
-          return ReadNothing
-    Just "mods" -> do
-      liftIO $ forM_ (mmName <$> mods) \modName -> putStrLn $ ppModuleName modName
-      return ReadNothing
+        (Right (def, _), _) -> return $ ReadSource file content def
+    Just "decls" -> return $ ReadCommand RListDecls
+    Just "mods" -> return $ ReadCommand RListModules
     Just "showm" -> do
       modName <- unpack . stripSpace <$> getInput
-      case lookup modName $ (\m -> (ppModuleName $ mmName m, m)) <$> mods of
+      case lookup modName $ (\m -> (ppModuleName $ m ^. moduleHeader, m)) <$> mods of
         Just m -> liftIO do
           putStrLn $ "module> " <> modName <> ":"
           putStrLn "==== uses:"
-          forM_ (mmUses m) \u -> putStrLn $ show u
+          forM_ (m ^. moduleImports) $ putStrLn . show
           putStrLn "==== items:"
-          forM_ (getDecls $ mmDecl m) \d -> putStrLn $ show d
+          forM_ (getDecls $ m ^. moduleDecls) $ putStrLn . show
           return ReadNothing
         Nothing -> do
           liftIO . putStrLn $ "Can't find module \"" <> modName <> "\""
@@ -122,8 +126,8 @@ toplevel = do
           liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
           customFailure SubParseError
         (Right res, _) -> do
-          module' <- runModule "repl" emptyIRBuilder $ runCodeGen emptyState emptyData (withEntryTop . fmap snd $ genExpr res)
-          liftIO $ withContext \ctx -> withModuleFromAST ctx module' \rmodule -> do
+          lmodule' <- runModule "repl" emptyIRBuilder $ runCodeGen emptyState emptyData (withEntryTop . fmap snd $ genExpr res)
+          liftIO $ withContext \ctx -> withModuleFromAST ctx lmodule' \rmodule -> do
             moduleLLVMAssembly rmodule >>= B.putStr
           return ReadNothing
     Just cmd -> customFailure $ UnknownCommand cmd
@@ -137,13 +141,7 @@ toplevel = do
               customFailure SubParseError
             (Right res, _) -> return $ ReadExpr res
 
-runToplevel
+driveInterface
   :: MonadIO m
-  => ShellConfig
-  -> ShellState PredefDeclExtVal
-  -> Text
-  -> m ( Either (ParseErrorBundle Text ReadError) ReadResult
-       , ShellState PredefDeclExtVal
-       , ()
-       )
-runToplevel r s txt = runRWST (runParserT (runShellParser toplevel) "stdin" txt) r s
+  => EvalState -> Text -> m (Either (ParseErrorBundle Text ReadError) ReadResult)
+driveInterface r txt = runReaderT (runParserT (runInterfaceT interface) "stdin" txt) r

@@ -9,65 +9,86 @@ where
 
 import Data.Text (Text, pack)
 import System.Console.Haskeline
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad (forM_)
+import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Catch (MonadMask)
 import Text.Megaparsec
-import Control.Monad.State (MonadState (..), StateT (..), modify)
+import Control.Monad.State (MonadState (..), StateT (..), modify, gets)
 import Control.Monad.Trans (MonadTrans (..))
 import Data.Functor (($>))
 
-import Driver.Parser
-import qualified EvalLoop.Read as Helper
-import qualified EvalLoop.Config as Helper
-import Language.Core (builtinStore, query)
+import Language.Core
+  ( query, Name (..), ModuleName (..), Decls (..)
+  , moduleHeader, moduleDecls
+  )
 import Language.Core.Extension.Decl (Item (..), UserOperator (..))
 
-import Control.Lens
+import qualified Data.Map as Map
+import Data.List (intercalate)
+
+import EvalLoop.Read
+import EvalLoop.Config
+
+import Control.Lens hiding (op)
 
 data LoopControl state
   = LoopControl
-    { isClosed :: Bool
-    , rPrompt :: String
-    , rState :: state
+    { _loopEnding :: Bool
+    , _loopPrompt :: String
+    , _loopState :: state
     } deriving (Show, Eq)
 
--- makeLenses ''LoopControl
+makeLenses ''LoopControl
+
+ppModuleName :: ModuleName -> [Char]
+ppModuleName (ModuleName ls l) = intercalate "/" (fmap show $ ls <> [l])
 
 shell :: IO ()
-shell =  runInputT defaultSettings loop $> ()
-  where loop = runStateT repl'loop (LoopControl False "$ > " (conf, stat))
-        conf = Helper.ShellConfig (Helper.SearchEnv [] [])
-        stat = Helper.ShellState 0 builtinStore []
+shell = do
+  stat <- newEvalState
+  let loop = runStateT repl'loop (LoopControl False "loop > " stat)
+  runInputT defaultSettings loop $> ()
 
-repl'loop :: (MonadIO m, MonadMask m) => StateT (LoopControl (Helper.ShellConfig, Helper.ShellState PredefDeclExtVal)) (InputT m) ()
+repl'loop :: (MonadIO m, MonadMask m) => StateT (LoopControl EvalState) (InputT m) ()
 repl'loop = do
-  status <- get
-  line'maybe <- lift . getInputLine $ rPrompt status
+  lControl :: LoopControl EvalState <- get
+  line'maybe <- lift $ getInputLine (lControl ^. loopPrompt)
   case line'maybe of
     Nothing ->
-      if isClosed status
+      if lControl ^. loopEnding
       then lift $ outputStrLn "done."
       else do
         lift $ outputStrLn "Prese ^D again to exit"
-        modify (\s -> s { isClosed = True })
+        modify (loopEnding .~ True)
         repl'loop
     Just txt -> do
-      (pRes'either, stat, _) <- uncurry Helper.runToplevel (rState status) (pack txt)
-      modify (\s -> s { rState = const stat <$> rState s})
+      pRes'either <- driveInterface (lControl ^. loopState) (pack txt)
       case pRes'either of
         Left bundle'err -> lift . outputStrLn $ errorBundlePretty bundle'err
         Right res -> do
           case res of
-            Helper.ReadCommand cmd ->
+            ReadCommand cmd ->
               case cmd of
-                Helper.RDefineGlobal decl -> do
+                RDefineGlobal decl -> do
                   case query @(Item (UserOperator Text)) (const True) decl of
                     Just (Item (UserOperator op) _) ->
-                      modify (\s -> s { rState = (\ss -> ss { Helper.operators = (op:) $ Helper.operators ss}) <$> rState s})
+                      modify $ loopState . evalStore . operators %~ (op:)
                     Nothing -> return ()
+                  modify (loopState . evalStore . thisModule . moduleDecls %~ (Decls . (decl:) . getDecls))
                   lift . outputStrLn $ show decl
-            Helper.ReadExpr exp -> lift . outputStrLn $ show exp
-            Helper.ReadNothing -> return ()
-      modify (\s -> s { isClosed = False })
+                RListModules -> do
+                  mods <- gets (^. (loopState . evalStore . stageStore . parserStage . parsedSource)) <&> fmap snd
+                  liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (putStrLn . ppModuleName)
+                RListDecls -> do
+                  lift $ mapM_ (outputStrLn . show) $ getDecls $ lControl ^. loopState . evalStore . thisModule . moduleDecls
+            ReadExpr e -> lift . outputStrLn $ show e
+            ReadSource path content m -> do
+              modify ( loopState . evalStore . stageStore . parserStage %~
+                        (parsedFiles %~ Map.insert (Name . pack . ppModuleName $ m ^. moduleHeader) content)
+                      . (parsedSource %~ ((path, m):))
+                     )
+              lift . outputStrLn $ "load module " <> show (ppModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
+            ReadNothing -> return ()
+      modify (loopEnding .~ False)
       repl'loop
 
