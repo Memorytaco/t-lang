@@ -16,8 +16,10 @@ module Compiler.Store
 
   , emptyStageSourceParsing
 
-  , StageStore2 (..)
-  , initStageStore2
+  , StageNameChecking (..)
+  , checkedModule
+
+  , emptyStageNameChecking
 
   )
 where
@@ -33,20 +35,19 @@ import Data.Text (Text)
 data StageStore
   = StageStore
     { _stageSourceParsing :: StageSourceParsing
-    , _stageStore2 :: StageStore2
+    , _stageStore2 :: StageNameChecking
     }
 
 initStageStore :: StageStore
-initStageStore = StageStore emptyStageSourceParsing initStageStore2
+initStageStore = StageStore emptyStageSourceParsing emptyStageNameChecking
 
------------------------------------
--- SourceParsing stage for compiler
------------------------------------
+------------------------------------
+-- | SourceParsing stage for compiler
+------------------------------------
 
 data StageSourceParsing
   = StageSourceParsing
-    {
-      -- | modules which are parsed with no problem, with operator resolved and file path tracked
+    { -- | modules which are parsed with no problem, with operator resolved and file path tracked
       _parsedSource :: [(FilePath, ModuleSurface)]
       -- | the source file loaded with mangled module name as key
     , _parsedFiles  :: Map Name Text
@@ -55,18 +56,19 @@ data StageSourceParsing
 emptyStageSourceParsing :: StageSourceParsing
 emptyStageSourceParsing = StageSourceParsing [] empty
 
--------------------------------
--- Store for Compiler Stage 2
--------------------------------
+------------------------------------
+-- | NameChecking Stage for compiler
+------------------------------------
 
-data StageStore2
-  = StageStore2
-    {
+data StageNameChecking
+  = StageNameChecking
+    { -- | modules
+      _checkedModule :: [Name]
     }
 
-initStageStore2 :: StageStore2
-initStageStore2 = StageStore2
+emptyStageNameChecking :: StageNameChecking
+emptyStageNameChecking = StageNameChecking []
 
-makeLenses ''StageStore2
+makeLenses ''StageNameChecking
 makeLenses ''StageSourceParsing
 makeLenses ''StageStore
