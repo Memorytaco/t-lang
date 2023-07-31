@@ -29,7 +29,7 @@ import Language.Core
   )
 import Language.Parser (module', declaration, reserved)
 
-import EvalLoop.Config
+import EvalLoop.Store
 import EvalLoop.Util.Parser
 
 import Driver.Parser
@@ -82,7 +82,7 @@ interface :: forall m. MonadIO m => InterfaceT m ReadResult
 interface = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- asks (^. (evalStore . operators))
-  mods :: [ModuleSurface] <- asks (^. (evalStore . stageStore . parserStage . parsedSource)) <&> fmap snd
+  mods :: [ModuleSurface] <- asks (^. (evalStore . stageStore . stageSourceParsing . parsedSource)) <&> fmap snd
   case command'maybe of
     Just "def" ->
       getInput >>= parseDecl ops eof "stdin" >>= \case

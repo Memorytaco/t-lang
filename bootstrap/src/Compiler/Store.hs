@@ -3,18 +3,18 @@ module Compiler.Store
 
   -- ** Stage Store
     StageStore (..)
-  , parserStage
+  , stageSourceParsing
   , stageStore2
 
   -- ** init value for Stage Store
   , initStageStore
 
   -- ** Parser stage for compiler
-  , ParserStage (..)
+  , StageSourceParsing (..)
   , parsedSource
   , parsedFiles
 
-  , emptyParserStage
+  , emptyStageSourceParsing
 
   , StageStore2 (..)
   , initStageStore2
@@ -32,19 +32,19 @@ import Data.Text (Text)
 -- | a global store for holding data in different stages of compiler
 data StageStore
   = StageStore
-    { _parserStage :: ParserStage
+    { _stageSourceParsing :: StageSourceParsing
     , _stageStore2 :: StageStore2
     }
 
 initStageStore :: StageStore
-initStageStore = StageStore emptyParserStage initStageStore2
+initStageStore = StageStore emptyStageSourceParsing initStageStore2
 
--------------------------------
--- Store for Praser in Compiler
--------------------------------
+-----------------------------------
+-- SourceParsing stage for compiler
+-----------------------------------
 
-data ParserStage
-  = ParserStage
+data StageSourceParsing
+  = StageSourceParsing
     {
       -- | modules which are parsed with no problem, with operator resolved and file path tracked
       _parsedSource :: [(FilePath, ModuleSurface)]
@@ -52,8 +52,8 @@ data ParserStage
     , _parsedFiles  :: Map Name Text
     }
 
-emptyParserStage :: ParserStage
-emptyParserStage = ParserStage [] empty
+emptyStageSourceParsing :: StageSourceParsing
+emptyStageSourceParsing = StageSourceParsing [] empty
 
 -------------------------------
 -- Store for Compiler Stage 2
@@ -68,5 +68,5 @@ initStageStore2 :: StageStore2
 initStageStore2 = StageStore2
 
 makeLenses ''StageStore2
-makeLenses ''ParserStage
+makeLenses ''StageSourceParsing
 makeLenses ''StageStore

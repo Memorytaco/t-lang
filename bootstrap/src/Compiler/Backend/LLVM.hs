@@ -3,7 +3,7 @@
   Resolve type -> generate LLVM IR -> return the IR Module
 -}
 
-module Tlang.Emit
+module Compiler.Backend.LLVM
   (
     OperandGen (..)
   , genExpr

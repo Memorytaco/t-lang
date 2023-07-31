@@ -1,4 +1,4 @@
-module Driver.CodeGen
+module Driver.Compiler.CodeGen.LLVM
   ( CodeGenT (..)
   , runCodeGen
   , LLVM (..)
@@ -17,7 +17,7 @@ module Driver.CodeGen
 where
 
 
-import Tlang.Emit
+import Compiler.Backend.LLVM
 
 import qualified LLVM.AST as LLVM hiding (function)
 import qualified LLVM.AST.Constant as LLVM

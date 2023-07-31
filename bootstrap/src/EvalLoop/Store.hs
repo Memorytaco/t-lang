@@ -1,4 +1,4 @@
-module EvalLoop.Config
+module EvalLoop.Store
   (
     EvalState (..)
   , evalStore
@@ -17,6 +17,7 @@ import Control.Lens
 import Control.Monad.IO.Class (MonadIO)
 import Language.Core (Name (..))
 
+-- | information related to runtime compilation and code evaluation
 data EvalState
   = EvalState
     { _evalStore :: EvalCompilerStore
