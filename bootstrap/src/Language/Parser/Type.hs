@@ -13,7 +13,6 @@ import Language.Parser.Class
 import Language.Parser.Lexer
 
 import Language.Core
-import Tlang.Constraint (Prefix (..))
 
 import qualified Tlang.Rep as Rep
 

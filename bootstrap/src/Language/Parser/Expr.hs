@@ -9,7 +9,6 @@ import Language.Parser.Lexer
 import Language.Core
 import Language.Core.Extension
 import Language.Parser.Type (record)
-import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Text.Megaparsec hiding (Label)
 import Text.Megaparsec.Debug

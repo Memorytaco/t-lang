@@ -12,6 +12,7 @@ module Language.Core.Module
   , moduleDecls
 
   , ModuleName (..)
+  , fuseModuleName
 
   -- | import statement
   , Use (..)
@@ -20,6 +21,7 @@ where
 
 import Language.Core.Decl
 import Language.Core.Name (Name (..), Alias (..))
+import Data.List (intersperse)
 import Control.Lens
 
 -- | a `ModuleName` is composed by multiple `Frag`.
@@ -27,6 +29,10 @@ import Control.Lens
 -- unix file path is supported by `ModuleName` though it is limited
 -- in some language context.
 data ModuleName = ModuleName [Name] Name deriving (Show, Eq, Ord)
+
+-- | merge a `ModuleName` into `Name`
+fuseModuleName :: ModuleName -> Name
+fuseModuleName (ModuleName ls l) = mconcat $ intersperse "/" (ls <> [l])
 
 data Module decls info
   = Module

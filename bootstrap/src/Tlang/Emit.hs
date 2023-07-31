@@ -19,13 +19,11 @@ import qualified LLVM.IRBuilder.Constant as LLVMC
 import LLVM.AST.Operand (Operand)
 import LLVM.IRBuilder
 
-import Language.Core hiding (Type)
+import Language.Core hiding (Type, Constraint)
 import Tlang.Generic ((:+:) (..))
 import Language.Core.Extension
-import Tlang.Constraint (Prefix (..), Prefixes (..))
 
 import Data.Text (Text)
-import Data.Maybe (fromMaybe)
 import Data.Kind (Constraint, Type)
 import Data.Functor.Foldable (cata)
 import Capability.Reader (HasReader, asks, ask, local)
@@ -34,9 +32,8 @@ import Control.Monad (when, foldM, forM, join)
 import Data.Text (unpack)
 import qualified Data.Map as Map
 
-type CodeGenEnv :: (Type -> Type) -> any -> Constraint
-type family CodeGenEnv m any
-class OperandGen f where
+class OperandGen m f where
+  type CodeGenEnv (m :: Type -> Type) (f :: Type -> Type) :: Constraint
   genOperand :: (MonadModuleBuilder m, MonadIRBuilder m, CodeGenEnv m f)
              => f (m (LLVM.Type, Operand)) -> m (LLVM.Type, Operand)
 
@@ -45,7 +42,7 @@ genExpr :: ( HasReader "local" [(name, (LLVM.Type, Operand))] m
            , MonadFail m
            , Show name, Eq name
            , MonadModuleBuilder m, MonadIRBuilder m
-           , OperandGen f, CodeGenEnv m f, Functor f
+           , OperandGen m f, CodeGenEnv m f, Functor f
            )
         => Expr f name -> m (LLVM.Type, Operand)
 genExpr = cata go
@@ -57,17 +54,17 @@ genExpr = cata go
         Nothing -> fail $ "No definition for name " <> show name
     go (ExprF fv) = genOperand fv
 
-type instance CodeGenEnv m (f :+: g) = (CodeGenEnv m f, CodeGenEnv m g)
-instance (OperandGen f, OperandGen g) => OperandGen (f :+: g) where
+instance (OperandGen m f, OperandGen m g) => OperandGen m (f :+: g) where
+  type CodeGenEnv m (f :+: g) = (CodeGenEnv m f, CodeGenEnv m g)
   genOperand (Inl fv) = genOperand fv
   genOperand (Inr fv) = genOperand fv
 
-type instance CodeGenEnv m (Value typ) = (MonadFail m)
-instance OperandGen (Value typ) where
+instance OperandGen m (Value typ) where
+  type CodeGenEnv m (Value typ) = (MonadFail m)
   genOperand _ = fail "VisibleType is not supported for now"
 
-type instance CodeGenEnv m Apply = (MonadFail m)
-instance OperandGen Apply where
+instance OperandGen m Apply where
+  type CodeGenEnv m Apply = (MonadFail m)
   genOperand (Apply mf ma mas) = do
     (ftyp, f) <- mf
     (typ, args) <- case ftyp of
@@ -85,8 +82,8 @@ data GlobalResource = GlobalResource
   { strStore :: Map.Map String Operand
   }
 
-type instance CodeGenEnv m LiteralText = (HasState "resource" GlobalResource m, HasState "unnamed" Word m)
-instance OperandGen LiteralText where
+instance OperandGen m LiteralText where
+  type CodeGenEnv m LiteralText = (HasState "resource" GlobalResource m, HasState "unnamed" Word m)
   genOperand (LiteralText (Literal (unpack -> text))) = do
     resource <- gets @"resource" strStore
     case Map.lookup text resource of
@@ -97,16 +94,16 @@ instance OperandGen LiteralText where
         modify @"resource" \r -> r { strStore = Map.insert text val (strStore r) }
         return (LLVM.ptr, val)
 
-type instance CodeGenEnv m LiteralNumber = ()
-instance OperandGen LiteralNumber where
+instance OperandGen m LiteralNumber where
+  type CodeGenEnv m LiteralNumber = ()
   genOperand (LiteralNumber (Literal num)) = return (LLVM.double , LLVMC.double num)
 
-type instance CodeGenEnv m LiteralInteger = ()
-instance OperandGen LiteralInteger where
+instance OperandGen m LiteralInteger where
+  type CodeGenEnv m LiteralInteger = ()
   genOperand (LiteralInteger (Literal num)) = return (LLVM.i32 , LLVMC.int32 num)
 
-type instance CodeGenEnv m Tuple = ()
-instance OperandGen Tuple where
+instance OperandGen m Tuple where
+  type CodeGenEnv m Tuple = ()
   genOperand (Tuple ms) = do
     vals <- sequence ms
     let typ = LLVM.StructureType False $ fst <$> vals
@@ -116,31 +113,20 @@ instance OperandGen Tuple where
     store ptr 1 final
     (typ,) <$> load typ ptr 1
 
-type instance CodeGenEnv m (Let binder) =
-  ( CodeGenEnv m binder, HasState "unnamed" Word m
-  , HasReader "destruct" [(LLVM.Type, Operand)] m
-  , HasReader "context" (m (LLVM.Type, Operand)) m
-  )
-instance OperandGen binder => OperandGen (Let binder) where
+instance OperandGen m binder => OperandGen m (Let binder) where
+  type CodeGenEnv m (Let binder) =
+    ( CodeGenEnv m binder, HasState "unnamed" Word m
+    , HasReader "destruct" [(LLVM.Type, Operand)] m
+    , HasReader "context" (m (LLVM.Type, Operand)) m
+    )
   genOperand (Let binder ma mv) = ma >>= \a ->
     local @"destruct" (const [a]) . local @"context" (const mv)
     $ genOperand binder
 
-type instance CodeGenEnv m (Grp g) =
-  ()
-instance OperandGen (Grp g) where
+instance OperandGen m (Grp g) where
+  type CodeGenEnv m (Grp g) = ()
   genOperand _ = error "not implemented"
 
-type instance CodeGenEnv m (Pattern lit ext label name) =
-  ( HasState "unnamed" Word m
-  , HasReader "destruct" [(LLVM.Type, Operand)] m
-  , HasReader "isPattern" Bool m
-  , HasReader "context" (m (LLVM.Type, Operand)) m
-  , HasReader "local" [(name, (LLVM.Type, Operand))] m
-  , HasState "pattern" [(name, (LLVM.Type, Operand))] m
-  , MonadFail m, Functor lit, Functor ext
-  , CodeGenEnv m lit
-  )
 -- | a pattern itself is no more than a parser combinator targeting
 -- binary value and equipped with some effects
 --
@@ -149,7 +135,17 @@ type instance CodeGenEnv m (Pattern lit ext label name) =
 -- of value returned by sub patterns, then it should apply
 -- accumulated effects to its branch value.
 --
-instance OperandGen lit => OperandGen (Pattern lit ext label name) where
+instance OperandGen m lit => OperandGen m (Pattern lit ext label name) where
+  type CodeGenEnv m (Pattern lit ext label name) =
+    ( HasState "unnamed" Word m
+    , HasReader "destruct" [(LLVM.Type, Operand)] m
+    , HasReader "isPattern" Bool m
+    , HasReader "context" (m (LLVM.Type, Operand)) m
+    , HasReader "local" [(name, (LLVM.Type, Operand))] m
+    , HasState "pattern" [(name, (LLVM.Type, Operand))] m
+    , MonadFail m, Functor lit, Functor ext
+    , CodeGenEnv m lit
+    )
   genOperand v = do
     (binds, _) <- cata go v
     ask @"context" >>= local @"local" (binds <>)
@@ -161,7 +157,7 @@ instance OperandGen lit => OperandGen (Pattern lit ext label name) where
       go PatWildF = return ([], ret 1)
       go PatUnitF = return ([], ret 0)  -- FIXME: complete definition
       go (PatVarF name) = getValue >>= \a -> return ([(name, a)], ret 1)
-      go (PatPrmF lv) = error "undefined literal match" -- local @"isPattern" (const True) $ genOperand lv
+      go (PatPrmF _) = error "undefined literal match" -- local @"isPattern" (const True) $ genOperand lv
       go (PatTupF ls) = do
         (typ, val) <- getValue
         typs <- case typ of
@@ -180,28 +176,28 @@ instance OperandGen lit => OperandGen (Pattern lit ext label name) where
         return (join $ fst <$> res, ret 1)
       go _ = error "not yet defined pattern code"
 
-type instance CodeGenEnv m (Record Label) = ()
-instance OperandGen (Record Label) where
+instance OperandGen m (Record Label) where
+  type CodeGenEnv m (Record Label) = ()
   genOperand _ = do
     error "record not defined"
 
-type instance CodeGenEnv m (Selector l) = ()
-instance OperandGen (Selector l) where
+instance OperandGen m (Selector l) where
+  type CodeGenEnv m (Selector l) = ()
   genOperand _ = do
     error "selector not defined"
 
-type instance CodeGenEnv m (Constructor l) = ()
-instance OperandGen (Constructor l) where
+instance OperandGen m (Constructor l) where
+  type CodeGenEnv m (Constructor l) = ()
   genOperand _ = do
     error "constructor not defined"
 
-type instance CodeGenEnv m (Equation pattern' prefix) = ()
-instance OperandGen pattern' => OperandGen (Equation pattern' prefix) where
+instance OperandGen m pattern' => OperandGen m (Equation pattern' prefix) where
+  type CodeGenEnv m (Equation pattern' prefix) = ()
   genOperand _ = do
     error "lambda not defined"
 
-type instance CodeGenEnv m ((@:) typ) = ()
-instance OperandGen ((@:) typ) where
+instance OperandGen m ((@:) typ) where
+  type CodeGenEnv m ((@:) typ) = ()
   genOperand (v :@ _) = v
 
 -- **** global definition
@@ -236,10 +232,5 @@ instance GlobalGen (Item (FFI typ Name)) Name where
 type instance GlobalGenEnv m (UserValue expr (Maybe typ)) a = ()
 instance GlobalGen (UserValue expr (Maybe typ)) a where
   genGlobal _ = return Nothing
-
--- type instance GlobalGenEnv m (UserData [Prefix Name typ] def) a = ()
--- instance GlobalGen (UserData [Prefix Name typ] def) a where
---   genGlobal _ = return Nothing
-
 
 --   :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)

@@ -16,7 +16,7 @@ module Tlang.Inference.Expr
   )
 where
 
-import Language.Core hiding (Type)
+import Language.Core hiding (Type, Constraint)
 import Language.Core.Extension
 
 import Tlang.Graph.Core

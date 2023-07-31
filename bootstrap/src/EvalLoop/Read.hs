@@ -18,27 +18,21 @@ import qualified Data.Text.IO as Text
 import Text.Megaparsec hiding (runParser)
 import Text.Megaparsec.Char
 import Data.Void (Void)
-import Data.List (intercalate)
 import Control.Lens
 
-import LLVM.Module (withModuleFromAST, moduleLLVMAssembly)
-import LLVM.Context (withContext)
-import qualified Data.ByteString as B
+import Data.Functor (($>))
 
 import Language.Core
-  ( Name (..), builtinStore, ModuleName (..), Decls (..)
+  ( Name (..), builtinStore, Decls (..)
   , TypSurface, ExprSurface, DeclSurface, ModuleSurface
-  , moduleHeader, moduleImports, moduleDecls
+  , moduleHeader, moduleImports, moduleDecls, fuseModuleName
   )
 import Language.Parser (module', declaration, reserved)
 
 import EvalLoop.Config
-import Tlang.Emit (genExpr)
-
 import EvalLoop.Util.Parser
 
 import Driver.Parser
-import Driver.CodeGen
 
 newtype InterfaceT m a = InterfaceT
   { runInterfaceT :: ParsecT ReadError Text (ReaderT EvalState m) a
@@ -61,7 +55,7 @@ data ReadCommand
   | RListDecls
     -- | list current loaded source file names
     -- or print out associated source file of a module
-  | RListSources (Maybe Name)
+  | RListSource (Maybe Name)
     -- | show information of a module
   | RShowModule Text
     -- | declare something in repl
@@ -70,6 +64,8 @@ data ReadCommand
   | RLoadObject FilePath
     -- | load a dynamic object file from a path
   | RLoadShared FilePath
+    -- | dump llvm bit code for an expression
+  | RDumpBitcode (ExprSurface TypSurface)
 
 data ReadResult
   = ReadExpr (ExprSurface TypSurface)
@@ -80,9 +76,8 @@ data ReadResult
 
 stripSpace :: Text -> Text
 stripSpace = Text.dropWhile isSpace . Text.dropWhileEnd isSpace
-ppModuleName :: ModuleName -> [Char]
-ppModuleName (ModuleName ls l) = intercalate "/" (fmap show $ ls <> [l])
 
+-- | TODO: after fixing parser error, we delay error handling using SubParseError
 interface :: forall m. MonadIO m => InterfaceT m ReadResult
 interface = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
@@ -104,32 +99,38 @@ interface = do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         (Right (def, _), _) -> return $ ReadSource file content def
-    Just "decls" -> return $ ReadCommand RListDecls
-    Just "mods" -> return $ ReadCommand RListModules
+    Just "list" -> reserved "module" $> ReadCommand RListModules
+               <|> reserved "source" $> ReadCommand (RListSource Nothing)
+               <|> return (ReadCommand RListDecls)
+    Just "source" -> do
+      name <- Name . stripSpace <$> getInput
+      if name == Name ""
+         then do liftIO $ putStrLn "expect a module name"
+                 return ReadNothing
+         else  return . ReadCommand $ RListSource (Just name)
     Just "showm" -> do
-      modName <- unpack . stripSpace <$> getInput
-      case lookup modName $ (\m -> (ppModuleName $ m ^. moduleHeader, m)) <$> mods of
+      name <- Name . stripSpace <$> getInput
+      case lookup name $ (\m -> (fuseModuleName $ m ^. moduleHeader, m)) <$> mods of
         Just m -> liftIO do
-          putStrLn $ "module> " <> modName <> ":"
+          putStrLn $ "module> " <> show name <> ":"
           putStrLn "==== uses:"
           forM_ (m ^. moduleImports) $ putStrLn . show
           putStrLn "==== items:"
           forM_ (getDecls $ m ^. moduleDecls) $ putStrLn . show
           return ReadNothing
         Nothing -> do
-          liftIO . putStrLn $ "Can't find module \"" <> modName <> "\""
+          liftIO . putStrLn $ "Can't find module \"" <> show name <> "\""
           return ReadNothing
     Just "run" -> do undefined
-    Just "gen" ->
+    Just "dump" ->
       getInput >>= parseSurfaceExpr "stdin" ops >>= \case
         (Left err, _) -> do
           liftIO . putStrLn $ errorBundlePretty (err :: ParseErrorBundle Text Void)
           customFailure SubParseError
-        (Right res, _) -> do
-          lmodule' <- runModule "repl" emptyIRBuilder $ runCodeGen emptyState emptyData (withEntryTop . fmap snd $ genExpr res)
-          liftIO $ withContext \ctx -> withModuleFromAST ctx lmodule' \rmodule -> do
-            moduleLLVMAssembly rmodule >>= B.putStr
-          return ReadNothing
+        (Right res, _) -> return $ ReadCommand $ RDumpBitcode res
+          -- lmodule' <- runModule "repl" emptyIRBuilder $ runCodeGen emptyState emptyData (withEntryTop . fmap snd $ genExpr res)
+          -- liftIO $ withContext \ctx -> withModuleFromAST ctx lmodule' \rmodule -> do
+          --   moduleLLVMAssembly rmodule >>= B.putStr
     Just cmd -> customFailure $ UnknownCommand cmd
     Nothing -> do
       resinput <- getInput

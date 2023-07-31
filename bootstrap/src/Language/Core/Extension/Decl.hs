@@ -38,9 +38,9 @@ where
 
 import Language.Core.Operator
 import Language.Core.Attribute
+import Language.Core.Constraint (Prefixes (..))
 import Language.Core.Class.Decl
 
-import Tlang.Constraint (Prefixes (..))
 import Data.Functor.Identity (Identity (..))
 import Data.Bifunctor (first)
 

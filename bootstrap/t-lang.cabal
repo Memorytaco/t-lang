@@ -53,6 +53,7 @@ library
       Language.Core.Attribute
       Language.Core.Class
       Language.Core.Class.Decl
+      Language.Core.Constraint
       Language.Core.Decl
       Language.Core.Expr
       Language.Core.Extension
@@ -75,7 +76,6 @@ library
       Language.Parser.Pattern
       Language.Parser.Type
       Tlang.Codegen
-      Tlang.Constraint
       Tlang.Emit
       Tlang.Generic
       Tlang.Generic.Data

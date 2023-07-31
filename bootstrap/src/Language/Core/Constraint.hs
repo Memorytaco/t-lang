@@ -1,4 +1,4 @@
-module Tlang.Constraint
+module Language.Core.Constraint
   ( Constraint (..)
   , ConstraintF (..)
   , (:<>) (..)

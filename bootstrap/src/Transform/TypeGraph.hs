@@ -34,8 +34,7 @@ import Data.Text (Text)
 
 -- ** for type
 import qualified Language.Core as Type
-import Language.Core (type (>|) (..))
-import Tlang.Constraint (Prefix (..))
+import Language.Core (type (>|) (..), Prefix (..))
 
 -- ** for signature
 import Data.Kind (Constraint, Type)

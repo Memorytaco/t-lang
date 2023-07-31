@@ -49,6 +49,7 @@ module Language.Core
   , module Name
   , module Attribute
   , module Class
+  , module Constraint
 
   )
 where
@@ -62,11 +63,11 @@ import Language.Core.Decl as Decl
 import Language.Core.Pattern as Pattern
 import Language.Core.Name as Name
 import Language.Core.Attribute as Attribute
+import Language.Core.Constraint as Constraint
 import Language.Core.Class as Class
 
 -- ** required imports
 import Language.Core.Extension as Ext
-import Tlang.Constraint
 import Tlang.Generic
 import Tlang.Rep (Rep (..))
 import Data.Text (Text)

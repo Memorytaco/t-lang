@@ -9,7 +9,7 @@ module Tlang.Inference.Kind
 where
 
 import Language.Core
-import Tlang.Constraint
+import Language.Core.Constraint
 import Tlang.Generic (prj, type (|:) (..))
 import Language.Core.Extension as Ext
 

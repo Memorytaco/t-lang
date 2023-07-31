@@ -13,7 +13,6 @@ where
 
 import Language.Core hiding (Type)
 import Language.Core.Extension.Decl
-import Tlang.Constraint (Prefix (..), Prefixes (..))
 import qualified Language.Core as AST (Type)
 
 import Language.Parser.Class
