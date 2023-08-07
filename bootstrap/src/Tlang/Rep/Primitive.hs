@@ -5,6 +5,7 @@
 
 module Tlang.Rep.Primitive
   ( PrimitiveT (..)
+  , PrimitiveTF (..)
 
   , ptr
   , bit
@@ -17,7 +18,7 @@ module Tlang.Rep.Primitive
   )
 where
 
-import Tlang.Rep.Class (LLVMTypeEncode (..), LLVMTypeClass (..), TypeClass (..))
+import Tlang.Rep.Class (EncodeLLVMType (..), LLVMTypeClass (..), TypeClass (..))
 import Tlang.TH (fixQ)
 
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
@@ -30,8 +31,11 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 
 -- | primitive type, as the type name suggests.
--- we use it to do a direct translation between host type and llvm IR type.
+--
+-- we can use it to do a direct translation between host type and llvm IR type.
 data PrimitiveT seq a where
+  -- | void to mean empty value inhabitance of type
+  VoidT :: PrimitiveT seq a
   -- | see `PrimScalaType`
   Scala   :: ScalaType -> PrimitiveT seq a
   -- | pointer type
@@ -65,6 +69,7 @@ data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
 
 instance (Show a, Show (t (PrimitiveT t a))) => Show (PrimitiveT t a) where
+  show VoidT = "void#"
   show (Scala t) = show t <> "#"
   show (Ptr t _) = show t <> "*"
   show (Seq t) = show t
@@ -84,32 +89,34 @@ instance Show NumType where
 instance Show BitType where
   show (Bit len) = "u" <> show len
 
-instance LLVMTypeEncode NumType where
-  encode (IntegerT I8)   = IntegerType 8
-  encode (IntegerT I16)  = IntegerType 16
-  encode (IntegerT I32)  = IntegerType 32
-  encode (IntegerT I64)  = IntegerType 64
-  encode (IntegerT I128) = IntegerType 128
-  encode (FloatT F32)    = FloatingPointType FloatFP
-  encode (FloatT F64)    = FloatingPointType DoubleFP
-  encode (FloatT F128)   = FloatingPointType FP128FP
-instance LLVMTypeEncode BitType where
-  encode (Bit i) = IntegerType $ fromInteger i
-instance LLVMTypeEncode ScalaType where
-  encode (NumT t) = encode t
-  encode (DataT t) = encode t
-instance (LLVMTypeEncode a, LLVMTypeEncode (t (PrimitiveT t a))) => LLVMTypeEncode (PrimitiveT t a) where
-  encode (Scala t) = encode t
-  encode (Ptr _ addr'maybe) =
+instance EncodeLLVMType NumType where
+  encodeLLVMType (IntegerT I8)   = IntegerType 8
+  encodeLLVMType (IntegerT I16)  = IntegerType 16
+  encodeLLVMType (IntegerT I32)  = IntegerType 32
+  encodeLLVMType (IntegerT I64)  = IntegerType 64
+  encodeLLVMType (IntegerT I128) = IntegerType 128
+  encodeLLVMType (FloatT F32)    = FloatingPointType FloatFP
+  encodeLLVMType (FloatT F64)    = FloatingPointType DoubleFP
+  encodeLLVMType (FloatT F128)   = FloatingPointType FP128FP
+instance EncodeLLVMType BitType where
+  encodeLLVMType (Bit i) = IntegerType $ fromInteger i
+instance EncodeLLVMType ScalaType where
+  encodeLLVMType (NumT t) = encodeLLVMType t
+  encodeLLVMType (DataT t) = encodeLLVMType t
+instance (EncodeLLVMType a, EncodeLLVMType (t (PrimitiveT t a))) => EncodeLLVMType (PrimitiveT t a) where
+  encodeLLVMType VoidT = VoidType
+  encodeLLVMType (Scala t) = encodeLLVMType t
+  encodeLLVMType (Ptr _ addr'maybe) =
     case addr'maybe of
       Nothing -> PointerType $ AddrSpace 0
       Just space  -> PointerType $ AddrSpace (fromInteger space)
-  encode (Seq t) = encode t
+  encodeLLVMType (Seq t) = encodeLLVMType t
   -- struct with 0 elements is valid in llvm IR, so we simply keep it.
-  encode (Struct ts packed) = StructureType packed $ encode <$> ts
-  encode (Embed t) = encode t
+  encodeLLVMType (Struct ts packed) = StructureType packed $ encodeLLVMType <$> ts
+  encodeLLVMType (Embed t) = encodeLLVMType t
 
 instance (LLVMTypeClass (t (PrimitiveT t a)), LLVMTypeClass a) => LLVMTypeClass (PrimitiveT t a) where
+  classOf VoidT = Primitive
   classOf (Scala _) = Primitive
   classOf (Ptr _ _) = Primitive
   classOf (Seq t) = classOf t

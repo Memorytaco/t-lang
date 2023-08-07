@@ -1,6 +1,6 @@
 module Tlang.Rep.Class
   ( TypeMangle (..)
-  , LLVMTypeEncode (..)
+  , EncodeLLVMType (..)
 
   , LLVMTypeClass (..)
   , TypeClass (..)
@@ -20,8 +20,8 @@ class TypeMangle a where
   demangle :: String -> Either TypeMangleError a
 
 -- encode type to LLVM IR lowlevel type.
-class LLVMTypeEncode a where
-  encode :: a -> T.Type
+class EncodeLLVMType a where
+  encodeLLVMType :: a -> T.Type
 
 -- | used to help choosing vector or list in llvm IR
 data TypeClass = Primitive | Aggregate deriving (Show, Eq)

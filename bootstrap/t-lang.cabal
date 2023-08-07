@@ -28,9 +28,9 @@ library
   exposed-modules:
       CLI.Parser
       Compiler.Backend.LLVM
+      Compiler.Backend.LLVM.IR
       Compiler.CodeGen
       Compiler.CodeGen.LLVM
-      Compiler.CodeGen.LLVM.IR
       Compiler.Store
       Driver
       Driver.Compiler.CodeGen.LLVM
@@ -48,7 +48,6 @@ library
       EvalLoop.Util.Parser
       Example
       JIT.FFI
-      JIT.JIT
       JIT.LLVM
       Language.Core
       Language.Core.Attribute
@@ -90,7 +89,7 @@ library
       Tlang.Inference.Kind
       Tlang.Rep
       Tlang.Rep.Class
-      Tlang.Rep.Concrete
+      Tlang.Rep.DataRep
       Tlang.Rep.Primitive
       Tlang.TH
       Tlang.Unification

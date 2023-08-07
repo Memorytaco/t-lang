@@ -17,7 +17,7 @@ module Driver.Compiler.CodeGen.LLVM
 where
 
 
-import Compiler.Backend.LLVM
+import Compiler.CodeGen.LLVM
 
 import qualified LLVM.AST as LLVM hiding (function)
 import qualified LLVM.AST.Constant as LLVM

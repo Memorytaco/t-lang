@@ -1,6 +1,6 @@
 {- | A wrapper to LLVM.IRBuilder for IR
   -}
-module Compiler.CodeGen.LLVM.IR
+module Compiler.Backend.LLVM.IR
   (
     safeIRBuilderState
   , ensureBlockEnd

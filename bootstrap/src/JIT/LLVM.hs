@@ -16,6 +16,7 @@ module JIT.LLVM
 
   -- *** Operators for JIT Lib
   , addLLVMModule
+  , addLLVMModuleFromAST
 
   , addDylibFile
   , addObjectFile
@@ -39,12 +40,14 @@ where
 import Foreign.LibFFI as FFI
 import qualified Foreign.Ptr as FFI
 
+import qualified LLVM.Context as LLVM
 import qualified LLVM.OrcJIT as LLVM
 import qualified LLVM.Module as LLVM
 import qualified LLVM.Target as LLVM
 import qualified LLVM.Relocation as ModelR
 import qualified LLVM.CodeModel as ModelC
 import qualified LLVM.CodeGenOpt as Opt
+import qualified LLVM.AST as LAST
 
 import qualified Data.ByteString.Char8 as B8
 import qualified Data.ByteString.Short as BS
@@ -120,13 +123,20 @@ removeLinkOrder (JITClass _ dylib) (JITClass _ order) = liftIO $ LLVM.removeLink
 removeLinkOrders :: MonadIO m => JITClass -> [JITClass] -> m ()
 removeLinkOrders dylib libs = forM_ libs $ removeLinkOrder dylib
 
--- | the origin llvm module is intact
+-- | the origin llvm module is intact, this adds a module to jit context
 addLLVMModule :: MonadIO m => String -> LLVM.Module -> LLVMJITContext -> m (LLVMJITContext, JITClass)
 addLLVMModule name m ctx@(LLVMJITContext { llvmJITirLayer }) = liftIO $ do
   (ctx', jitClass) <- newJITClass name ctx
   LLVM.withClonedThreadSafeModule m \tsm ->
     LLVM.addModule tsm (getJITLib jitClass) llvmJITirLayer
   return (ctx' { llvmJITmodules = m: llvmJITmodules ctx' }, jitClass)
+
+-- | this add an ast module to jit context, it may throw exception. See `LLVM.Module`
+addLLVMModuleFromAST :: MonadIO m => String -> LAST.Module -> LLVMJITContext -> m (LLVMJITContext, JITClass)
+addLLVMModuleFromAST name am ctx = liftIO $
+  LLVM.withContext \lctx ->
+    LLVM.withModuleFromAST lctx am \m ->
+      addLLVMModule name m ctx
 
 data JITError
   = JITNotFound

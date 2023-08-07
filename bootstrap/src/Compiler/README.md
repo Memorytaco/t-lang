@@ -28,15 +28,21 @@
 ┌▽─▽───────────┐
 │CoreGenerating│
 └┬─────────────┘
-┌▽────────────────┐
-│Optimising       │
-└┬───────────────┬┘
-┌▽─────────────┐┌▽───────────┐
-│ByteGenerating││MCGenerating│
-└┬─────────────┘└┬───────────┘
-┌▽───────────────▽┐
-│Emiting          │
-└─────────────────┘
+┌▽─────────┐
+│Optimising│
+└┬─┬───────┘
+ │┌▽─────────────┐
+ ││ByteGenerating│
+ │└┬─────────────┘
+┌▽─▽─────┐
+│Lowering│
+└┬───────┘
+┌▽───────────┐
+│MCGenerating│
+└┬───────────┘
+┌▽──────┐
+│Emiting│
+└───────┘
 ```
 
 - SourceParsing:
@@ -58,10 +64,18 @@
   - Every toplevel definition will be translated into this form to some extent.
   - Finally we can have this to generate code or to type check other codes.
 - Optimising:
-  - There is nothing to say about this.
-  - This stage will be added after compiler is first released.
-- ByteGenerating and MCGenerating:
+  - There is nothing to say about this for now, and this stage will be added after compiler is released.
+- ByteGenerating (Interface Generating):
+  - ByteGenerating is used for emiting intermediate module interface where core language and type checked module is stored.
+- Lowering:
+  - This stage actually has multiple passes and it now includes:
+    - specialization
+      - We may use type passing methods or type directed specialization to reduce CoreLanguage into a more machine friendly format where we have type erasure semantics for core language.
+  - The purpose of adding this stage is to make core language useful or there is no help from core language for generating code, which is weird and may indicate some design flaw in compiler pipeline.
+  - This stage may or may not be target independent.
+- MCGenerating (Machine Code Generating):
+  - Place where we generate native codes and backend techniques can happen here, like ISelection and IScheduling.
   - We now use LLVM IR as MCGenerating target, so we can have targets to multiple platforms for free.
-  - ByteGenerating is used for intermediate module interface where core language and type checked module is stored.
+  - Another chance to optimise codes.
 - Emiting:
-  - All jobs are done, we invoke linker to emit executable or object.
+  - All jobs are done, we emit executable or object.
