@@ -52,17 +52,17 @@ instance ( PrattToken (WithExpr e m a) (Expr f name) m
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
                         $ tokenize (Proxy @(WithExpr e m a)) parser end
 
-instance ( ParserDSL (WithExpr e m a) (Expr f name) m
+instance ( Rule (WithExpr e m a) (Expr f name) m
          , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => ParserDSL (WithExpr e m (msg ?- a)) (Expr f name) m where
-  syntax _ end = dbg' (symbolVal $ Proxy @msg)
-               $ syntax (Proxy @(WithExpr e m a)) end
+  => Rule (WithExpr e m (msg ?- a)) (Expr f name) m where
+  rule _ end = dbg' (symbolVal $ Proxy @msg)
+               $ rule (Proxy @(WithExpr e m a)) end
 
-instance ( ParserDSL (WithExpr e m (msg ?- a)) (Expr f name) m
+instance ( Rule (WithExpr e m (msg ?- a)) (Expr f name) m
          , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => ParserDSL (msg ?- WithExpr e m a) (Expr f name) m where
-  syntax _ end = dbg' (symbolVal $ Proxy @msg)
-               $ syntax (Proxy @(WithExpr e m (msg ?- a))) end
+  => Rule (msg ?- WithExpr e m a) (Expr f name) m where
+  rule _ end = dbg' (symbolVal $ Proxy @msg)
+               $ rule (Proxy @(WithExpr e m (msg ?- a))) end
 
 -- | expression identifier
 instance (ExprC e m, name ~ Name, Apply :<: f)

@@ -22,16 +22,6 @@ module Tlang.Inference.Graph
   )
 where
 
-import Control.Monad
-import Control.Monad.Reader (MonadReader (..), asks)
-import Control.Monad.State (MonadState (..), modify, gets)
-import Control.Monad.RWS (RWST (..))
-import Data.Functor ((<&>))
-import Data.Bifunctor (first, second, bimap)
-import Data.List (sortBy, union, nub, intersect)
-import Data.Graph.Inductive hiding (edges, nodes)
-import Data.Maybe (fromJust)
-
 import Tlang.Graph.Type
 
 -- TODO: add a set of test cases

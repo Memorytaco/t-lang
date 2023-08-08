@@ -7,9 +7,9 @@ module Language.Parser.Class
   , Power (..)
   , PrattToken (..)
 
-  -- ** parser DSL
-  , ParserDSL (..)
-  , runDSL
+  -- ** parser DSL, with hand written non recursive rule
+  , Rule (..)
+  , parseRule
 
   -- ** tag helper, used for defing DSL
   , (:-)
@@ -48,15 +48,76 @@ class Monad m => PrattToken (tag :: any) (a :: Type) (m :: Type -> Type) | tag a
   tokenize :: Proxy tag -> (m () -> Power -> m a)
            -> m () -> m (Semantic m a)
 
--- | the class where to define syntax of type level parser DSL
+-- | This is the class where we define syntax of type level parser DSL.
 --
--- TODO: find a better name for it
-class ParserDSL (lang :: any) (target :: Type) (m :: Type -> Type) | lang target -> m where
-  syntax :: Proxy lang -> m () -> m target
+-- Let's say we have following simple syntax definition:
+--
+-- @
+-- integer := (0..9)+
+-- float := integer {"." integer}
+-- target := float | integer
+-- @
+--
+-- and we have primitive rule for digit 0..9. Then, we can then try to define our
+-- type level syntax as:
+--
+-- @
+-- import GHC.TypeLits (Symbol)
+-- data Token (a :: Symbol) (m :: Type -> Type) -- to hold our rule name and environment
+-- data Combine (a :: k1) (b :: k2) (m :: Type -> Type) -- i will use this to provide a way of abstraction
+-- @
+--
+-- and we can assign semantic to these syntax by writing parsing target and Rule instance:
+--
+-- @
+-- data Target = GetInteger Integer | GetFloat Float deriving (Show, Eq, Ord)
+--
+-- -- The simple integer rule, with rule name `Token "integer"` and Integer as parse Target
+-- instance (Monad m) => Rule (Token "integer" m) Integer m where
+--   rule _ _ = do
+--     nums :: [Int] <- some digit
+--     integer <- {logic to convert "nums" into Integer}
+--     return integer
+--
+-- -- This indicates rule (Token "float" m) rely on (Token "integer" m) and it requires
+-- -- that rule (Token "integer" m) needs return Integer as result.
+-- instance (Rule (Token "integer" m) Integer m)
+--   => Rule (Token "float" m) Float m where
+--  rule _ e = do
+--    let integer = rule (Proxy :: Proxy (Token "integer")) e :: m Integer
+--    (deci, frac'maybe) \<- (,) \<$\> integer \<*\> optional (string "." *\> integer)
+--    number :: Float <- {logic to convert "decimal" and optional "fractional part" into Float}
+--    return number
+--
+-- -- Here, we define a shorthand to combine two rules. Since we have only
+-- -- two syntax rules, we don't need abstraction here and can provide a concrete
+-- -- syntax to user.
+-- --
+-- -- e.g. rule @@(Combine "integer" "float") @@Target endCondition
+-- --
+-- -- If user provides wrong syntax like @@(Combine "int" "float"), GHC will
+-- -- complain no instance for (Rule (Token "int" m).
+-- instance
+--   ( Rule (Token a m) Integer m
+--   , Rule (Token b m) Float m
+--   )
+--   => Rule (Combine a b m) Target m where
+--   rule _ e = do
+--     let floatPart = rule (Proxy :: Proxy (Token b)) e
+--         integerPart = rule (Proxy :: Proxy (Token a)) e
+--     GetFloat <$> floatPart <|> GetInteger <$> integerPart
+-- @
+class Rule (rule :: r) (target :: Type) (m :: Type -> Type) | rule target -> m where
+  -- | rule is the place to put a direct style definition for syntax
+  rule :: Proxy rule -> m () -> m target
 
--- | a short hand of `syntax`
-runDSL :: forall lang a m. ParserDSL lang a m => m () -> m a
-runDSL = syntax (Proxy @lang)
+-- | a shorthand for `rule`.
+--
+-- @
+-- parseRule @(full rule to apply) end
+-- @
+parseRule :: forall rule a m. Rule rule a m => m () -> m a
+parseRule = rule (Proxy @rule)
 
 -- | semantic token, this is the way how do we interprete the token we find.
 data Semantic m a = Semantic
@@ -89,7 +150,8 @@ pratt' sel end rbp = do
                    (end $> left') <|> loop left'
            else return left
 
--- | if language defined `PrattToken`, then it has a pratt parser automatically.
+-- | if language defined `PrattToken`, then it has a pratt parser automatically
+-- built from this "token".
 --
 -- To use this parser, you need to feed it with following type level things:
 --
@@ -121,7 +183,7 @@ data (info :: Symbol) ?- (a :: k)
 data Layer (name :: k) (proxy :: any) (e :: Type)
 -- data Parse (val :: any)
 
--- | use to hold arbitrary info
+-- | use to hold arbitrary info where a `Type` is required.
 data Hint (a :: k)
 
 -- | effect expression, not useful for now

@@ -26,8 +26,8 @@ import Tlang.Rep
 import Tlang.Generic
 -- import Tlang.Constraint (Prefix (..))
 
-import Capability.Reader (HasReader)
-import Control.Lens hiding ((:~:))
+-- import Capability.Reader (HasReader)
+import Control.Lens ( (<&>), (^.) )
 import Control.Monad (forM)
 import Data.List (sortBy)
 import Data.Kind (Type, Constraint)
@@ -56,8 +56,8 @@ instance Ord label => LowerType (Record label) (Rep a) where
                       <&> Rep . RepLift . struct False
 
 -- | sequential type
-instance LowerType ([]) (Rep a) where
-  type LowerTypeContext ([]) (Rep a) m = Monad m
+instance LowerType [] (Rep a) where
+  type LowerTypeContext [] (Rep a) m = Monad m
   lowerType ms = forM ms (fmap $ Embed . (^. _Rep)) <&> Rep . RepLift . struct False
 
 instance LowerType (Variant label) (Rep a) where
@@ -68,7 +68,7 @@ instance (Functor rep, Functor bind, LowerType rep (Rep a)) => LowerType (AST.Ty
   type LowerTypeContext (AST.Type bind rep name) (Rep a) m = (LowerTypeContext rep (Rep a) m, MonadFail m)
   lowerType = cata go
     where
-      go (TypPhtF) = fail "Invalid Bottom ecountered during lowering type"
+      go TypPhtF = fail "Invalid Bottom ecountered during lowering type"
       go (TypVarF ma) = ma
       go (TypConF _ _) = fail "Invalid Type Application ecountered during lowering type"
       go (TypBndF _ _) = fail "Invalid Type Bounds ecountered during lowering type"
@@ -184,7 +184,7 @@ lowerTypeRepPartial
   -> AST.Type bind rep name a -> m (AST.Type bind rep name a)
 lowerTypeRepPartial handle = cata go
   where
-    go (TypPhtF) = return TypPht
+    go TypPhtF = return TypPht
     go (TypVarF a) = return $ TypVar a
     go (TypConF m ms) = TypCon <$> m <*> sequence ms
     go (TypBndF fbind f) = do
@@ -202,7 +202,7 @@ lowerTypeRep
   -> AST.Type bind f name a -> m (AST.Type bind g name a)
 lowerTypeRep handle = cata go
   where
-    go (TypPhtF) = return TypPht
+    go TypPhtF = return TypPht
     go (TypVarF a) = return $ TypVar a
     go (TypConF m ms) = TypCon <$> m <*> sequence ms
     go (TypBndF fbind f) = do

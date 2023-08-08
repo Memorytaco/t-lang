@@ -23,13 +23,12 @@ import Language.Core hiding (Type, Constraint)
 import Tlang.Generic ((:+:) (..))
 import Language.Core.Extension
 
-import Data.Text (Text)
+import Data.Text (Text, unpack)
 import Data.Kind (Constraint, Type)
 import Data.Functor.Foldable (cata)
 import Capability.Reader (HasReader, asks, ask, local)
 import Capability.State (HasState, gets, modify, get)
 import Control.Monad (when, foldM, forM, join)
-import Data.Text (unpack)
 import qualified Data.Map as Map
 
 class LLVMIRGen m f where
@@ -173,7 +172,7 @@ instance LLVMIRGen m lit => LLVMIRGen m (Pattern lit ext label name) where
             Right t -> return t
             Left err -> fail $ "LLVM: " <> err
           local @"destruct" (const [(t, v)]) mend
-        return (join $ fst <$> res, ret 1)
+        return (fst =<< res, ret 1)
       go _ = error "not yet defined pattern code"
 
 instance LLVMIRGen m (Record Label) where

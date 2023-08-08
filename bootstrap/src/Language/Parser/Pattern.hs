@@ -56,11 +56,11 @@ instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
                         $ tokenize (Proxy @(WithPattern e m (msg ?- a))) parser end
 
-instance ( ParserDSL (WithPattern e m a) (Pattern lit ext label name expr) m
+instance ( Rule (WithPattern e m a) (Pattern lit ext label name expr) m
          , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
-  => ParserDSL (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
-  syntax _ end = dbg' (symbolVal $ Proxy @msg)
-               $ syntax (Proxy @(WithPattern e m a)) end
+  => Rule (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
+  rule _ end = dbg' (symbolVal $ Proxy @msg)
+               $ rule (Proxy @(WithPattern e m a)) end
 
 -- | wild pattern
 instance PatternC e m
@@ -158,10 +158,10 @@ instance (PatternC e m)
     return $ literal tup
 
 -- | view pattern
-instance (PatternC e m, ParserDSL proxy expr m)
+instance (PatternC e m, Rule proxy expr m)
   => PrattToken (WithPattern e m (Layer "view" proxy expr)) (Pattern lit ext label name expr) m where
   tokenize _ parser end = do
-    e <- runDSL @proxy (lookAhead (reservedOp "->") $> ()) <* reservedOp "->"
+    e <- parseRule @proxy (lookAhead (reservedOp "->") $> ()) <* reservedOp "->"
     pat <- parser end Go
     return $ literal (PatView e pat)
 

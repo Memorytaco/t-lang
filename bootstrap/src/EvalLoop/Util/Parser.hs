@@ -15,4 +15,4 @@ import Data.Void (Void)
 parseSurfaceExpr
   :: Monad m => String -> OperatorStore -> Text
   -> m (Either (ParseErrorBundle Text Void) (ExprSurface TypSurface), OperatorStore)
-parseSurfaceExpr prompt ops = driveParser ops (runDSL @(PredefExprLang _) @(ExprSurface TypSurface) eof) prompt
+parseSurfaceExpr prompt ops = driveParser ops (parseRule @(PredefExprLang _) @(ExprSurface TypSurface) eof) prompt

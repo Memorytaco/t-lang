@@ -11,7 +11,14 @@
   at the same time. Some high level type wrapper tricks are needed to resolve this one.
   -}
 module Language.Core.Term
-
+  (
+    Term (..)
+  , Plain (..)
+  , (:++:) (..)
+  , App (..)
+  , App2 (..)
+  , Bound (..)
+  )
 where
 
 -- | This is a `Free` monad

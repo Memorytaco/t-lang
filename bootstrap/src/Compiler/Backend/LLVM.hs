@@ -11,7 +11,7 @@ import qualified LLVM.IRBuilder as Builder
 import qualified LLVM.AST as IR
 import qualified LLVM.AST.Global as IR
 import qualified LLVM.AST.Constant as IR
-import LLVM.IRBuilder.Internal.SnocList (getSnocList, snoc)
+import LLVM.IRBuilder.Internal.SnocList (snoc)
 
 import Control.Monad (forM, forM_)
 import Control.Monad.State (modify)

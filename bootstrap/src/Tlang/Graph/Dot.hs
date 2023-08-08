@@ -7,15 +7,6 @@ where
 {- this module handles visualizing graphic type based on dot.
 -}
 
-import Tlang.Graph.Type
-
-import Data.Graph.Inductive
-import Data.GraphViz hiding (DotGraph)
-import Data.GraphViz.Types.Monadic
-import Data.GraphViz.Types.Generalised (DotGraph)
-import Control.Monad.Reader
-import Data.List (nub, sortBy)
-
 -- runDotGraph :: (Show label, Show name, Labellable name, Ord name, Monad m)
 --             => Gr (GNode (GNodeLabel lit label name)) (GEdge name)
 --             -> Node -> m (DotGraph Node)

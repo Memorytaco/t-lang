@@ -160,8 +160,8 @@ instance ( MonadFail m, MonadParsec e Text m
            (Expr f name) m
          , MonadParsecDbg e Text m
          )
-  => ParserDSL (WholeExpr e m (pat :- bpat :- typ)) (Expr f name) m where
-  syntax _ end =
+  => Rule (WholeExpr e m (pat :- bpat :- typ)) (Expr f name) m where
+  rule _ end =
     pratt @(ExprLang e m typ pat bpat (TypeLang e m)
             (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ))))
           (lookAhead end) Go <* end
