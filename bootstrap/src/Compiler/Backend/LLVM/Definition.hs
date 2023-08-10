@@ -1,9 +1,14 @@
-module Compiler.Backend.LLVM
+{-# OPTIONS_GHC -Wno-incomplete-record-updates #-}
+module Compiler.Backend.LLVM.Definition
   (
     globalDefine
   , globalFunction
   , externFunction
   , globalNamedType
+
+  , MonadLLVMBuilder
+  , Builder.MonadModuleBuilder
+  , Builder.MonadIRBuilder
   )
 where
 
@@ -21,6 +26,9 @@ import Data.Functor ((<&>))
 import qualified Data.Map as Map
 
 import Compiler.Backend.LLVM.IR
+
+-- | a shorthand for ModuleBuilder and IRBuilder
+type MonadLLVMBuilder m = (Builder.MonadModuleBuilder m, Builder.MonadIRBuilder m)
 
 globalDefine :: Builder.MonadModuleBuilder m => IR.Definition -> m ()
 globalDefine def = Builder.liftModuleState $ modify \s ->

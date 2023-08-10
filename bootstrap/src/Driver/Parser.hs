@@ -7,6 +7,7 @@ module Driver.Parser
 
   -- ** core driver
   , driveParser
+  , driveParserFail
 
   -- *** available parser for core driver
   , surfaceDecl
@@ -47,7 +48,7 @@ import Data.Functor ((<&>))
 import Data.Text (Text)
 import Data.Void (Void)
 
-import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
+import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead, errorBundlePretty, ShowErrorComponent)
 import Text.Megaparsec.Debug (MonadParsecDbg)
 import Control.Monad.IO.Class (MonadIO)
 
@@ -80,6 +81,21 @@ driveParser store parser prompt text =
         TypeOperator t -> ([], [t])
         TermOperator t -> ([t], [])
    in runStateT (runReaderT (runParserT (runParserMonad parser) prompt text) openv) store
+
+-- | allow automatic failing for parser
+driveParserFail :: (MonadFail m, ShowErrorComponent e)
+  => OperatorStore
+  -> ParserMonad e m a
+  -> String -> Text
+  -> m (a, OperatorStore)
+driveParserFail store parser prompt text = do
+  let openv = mconcat $ store <&> \case
+        TypeOperator t -> ([], [t])
+        TermOperator t -> ([t], [])
+  (res'either , s) <- runStateT (runReaderT (runParserT (runParserMonad parser) prompt text) openv) store
+  case res'either of
+    Right a -> return (a, s)
+    Left e -> fail $ errorBundlePretty e
 
 -- | declaration
 type DeclLang e m pExpr pType expr typ = WithDecl e m

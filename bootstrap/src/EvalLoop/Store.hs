@@ -16,6 +16,7 @@ import EvalLoop.Store.Compiler
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO)
 import Language.Core (Name (..))
+import GHC.Generics (Generic)
 
 -- | information related to runtime compilation and code evaluation
 data EvalState
@@ -24,7 +25,7 @@ data EvalState
     , _sharedLibs :: [FilePath]
     , _objectFiles :: [FilePath]
     , _linesNumber :: Integer
-    }
+    } deriving Generic
 
 makeLenses ''EvalState
 

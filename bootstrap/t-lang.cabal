@@ -27,10 +27,12 @@ source-repository head
 library
   exposed-modules:
       CLI.Parser
-      Compiler.Backend.LLVM
+      Compiler.Backend.LLVM.Definition
       Compiler.Backend.LLVM.IR
+      Compiler.Backend.LLVM.Runtime
       Compiler.CodeGen
       Compiler.CodeGen.LLVM
+      Compiler.NameChecking
       Compiler.SourceParsing
       Compiler.Store
       Driver
@@ -46,7 +48,6 @@ library
       EvalLoop.Read
       EvalLoop.Store
       EvalLoop.Store.Compiler
-      EvalLoop.Util.Parser
       Example
       JIT.FFI
       JIT.LLVM

@@ -1,4 +1,5 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# OPTIONS_GHC -Wno-missing-signatures #-}
 {- | ** unification driver code
 -}
 module Driver.Unification

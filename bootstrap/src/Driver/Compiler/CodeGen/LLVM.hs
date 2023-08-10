@@ -7,6 +7,7 @@ module Driver.Compiler.CodeGen.LLVM
   , runBasicBlock
   , runDefinition
   , runModule
+  , runWithDefaultMain
   , withEntry
   , withEntryTop
 
@@ -33,7 +34,7 @@ import LLVM.IRBuilder.Module (ModuleBuilderT (..), MonadModuleBuilder, runModule
 import LLVM.IRBuilder.Monad (IRBuilderT (..), runIRBuilderT, MonadIRBuilder, IRBuilderState, emptyIRBuilder)
 
 import Capability.Accessors
-import Capability.Reader (HasReader, MonadReader (..))
+import Capability.Reader (HasReader, MonadReader (..), local)
 import Capability.State (HasState, MonadState (..))
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)
@@ -46,6 +47,7 @@ import Control.Monad (void)
 import Control.Monad.State (StateT (..))
 import Control.Monad.Reader (ReaderT (..))
 import GHC.Generics (Generic)
+import Compiler.Backend.LLVM.Runtime (wrapMain)
 
 data CodeGenData m name = CodeGenData
   { localval :: [(name, (LLVM.Type, Operand))]
@@ -128,6 +130,12 @@ runModule name stat m = buildModuleT name (runBasicBlock stat m)
 liftLLVM :: Monad m => LLVM m a -> CodeGenT m name a
 liftLLVM = CodeGenT . lift . lift
 
+runWithDefaultMain :: (IsString name, Monad m) =>
+  ShortByteString -> CodeGenT m name Operand -> m LLVM.Module
+runWithDefaultMain name m =
+  runModule name emptyIRBuilder . runCodeGen emptyState emptyData $
+  wrapMain \names -> local @"local" (<> names) m
+
 withEntry :: (IsString name, Monad m) => CodeGenT m name Operand -> LLVM m Operand
 withEntry m = do
   LLVM . IRBuilderT . lift
@@ -143,6 +151,22 @@ withEntry m = do
           preData = emptyData { localval = [("argc", (LLVM.i32, argc)), ("argv", (LLVM.ptr, argv))]}
       void $ runLLVM (runCodeGen emptyState preData (start >> m >>= end))
     _ -> error "impossible in Driver.CodeGen"
+
+-- withEntry :: (IsString name, Monad m) => CodeGenT m name Operand -> LLVM m Operand
+-- withEntry m = do
+--   LLVM . IRBuilderT . lift
+--     $ LLVM.function "main" [(LLVM.i32, LLVM.ParameterName "argc"), (LLVM.ptr, LLVM.ParameterName "argv")] LLVM.i32
+--     \case
+--     [argc, argv] -> do
+--       let start = LLVM.fresh `LLVM.named` "start" >>= LLVM.emitBlockStart
+--           end a = do
+--             v <- LLVM.typeOf a
+--             case v of
+--               Right (LLVM.IntegerType _) -> LLVM.ret a
+--               _ -> LLVM.ret (LLVMC.int32 0)
+--           preData = emptyData { localval = [("argc", (LLVM.i32, argc)), ("argv", (LLVM.ptr, argv))]}
+--       void $ runLLVM (runCodeGen emptyState preData (start >> m >>= end))
+--     _ -> error "impossible in Driver.CodeGen"
 
 withEntryTop :: (Monad m, IsString name1) => CodeGenT m name1 Operand -> CodeGenT m name2 Operand
 withEntryTop m = liftLLVM (withEntry m)

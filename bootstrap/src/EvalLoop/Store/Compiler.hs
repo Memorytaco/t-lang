@@ -26,6 +26,7 @@ import qualified LLVM.Module as LLVM (Module)
 
 import Control.Lens
 import Control.Monad.IO.Class (MonadIO)
+import GHC.Generics (Generic)
 
 data EvalCompilerStore
   = EvalCompilerStore
@@ -35,14 +36,14 @@ data EvalCompilerStore
     , _thisModule :: ModuleSurface
     , _compiledModules :: [(Name, LLVM.Module)]
     , _evalJITSession :: EvalJITSession
-    }
+    } deriving Generic
 
 data EvalJITSession
   = EvalJITSession
     { _jitContext :: JIT.LLVMJITContext -- ^ main context, to which ShellJITSession's lifetime is bound
     , _jitSession :: JIT.JITClass -- ^ current class, in which symbols are linked and executed
     , _jitSessions :: [String]  -- ^ available JITClasses, with a unique name for each
-    }
+    } deriving Generic
 
 makeLenses ''EvalJITSession
 makeLenses ''EvalCompilerStore

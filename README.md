@@ -13,12 +13,15 @@ This repository has the `bootstrap` directory (which is the only meaningful dire
 switch into the bootstrap directory and using stack tool to build the project by `stack build`.
 Then you are free to try `stack run repl` command, which brings up an interpreter with following commands:
 
-1. `:gen` : to show generated llvm ir code for expression
-2. `:def` : to define global structures like a type declaration or value definition or FFI
-3. `:load` : to load a source file and parse it, then print raw AST structure
-4. `:mods` : to show modules available in scope. The names can be used for command `:showm`.
-5. `:showm` : to show contents of a module.
-6. it defaults to print out parsed AST of your typing
+1. `:dump` : to show generated llvm ir code for expression.
+2. `:def` : to define global structures like a type declaration or value definition or FFI.
+3. `:load` : to load a source file and parse it, then print raw AST structure.
+4. `:list` : list definitions available for current repl session after `:def` command.
+5. `:list module` : to show modules available in scope. The names can be used for command `:showm`.
+6. `:list source` : to print original source file names for modules.
+7. `:source` : to print original source file content for a module.
+8. `:showm` : to show contents of a module.
+9. it defaults to print out parsed AST of your typing.
 
 > You are guaranteed to get a successful running on the `main` branch.
 

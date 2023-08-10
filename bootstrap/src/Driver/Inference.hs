@@ -3,10 +3,8 @@ module Driver.Inference
   )
 where
 
--- import Tlang.Inference.Kind (NormalKind)
-import Language.Core (type (@:) (..), Kind (..))
-
 -- defaultEnv :: [NormalKind :@ Symbol]
+defaultEnv :: a
 defaultEnv = undefined
 --   [ Op "->" :@ (KindType ::> KindType ::> KindType)
 --   , Symbol "maybe" :@ (KindType ::> KindType)
