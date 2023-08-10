@@ -31,6 +31,7 @@ library
       Compiler.Backend.LLVM.IR
       Compiler.CodeGen
       Compiler.CodeGen.LLVM
+      Compiler.SourceParsing
       Compiler.Store
       Driver
       Driver.Compiler.CodeGen.LLVM

@@ -22,7 +22,6 @@ import Control.Monad (void)
 import Data.Functor ((<&>), ($>))
 import Data.Text (Text, isPrefixOf)
 import Text.Megaparsec hiding (Label)
-import Data.Maybe (fromMaybe)
 import Data.Kind (Type)
 
 import Tlang.Generic
@@ -59,7 +58,7 @@ instance (ParserM e m, PrattToken proxy typ m, info ~ Name, Item (FFI typ Name) 
     name <- Name <$> identifier
     void $ reservedOp ":" <|> fail "FFI declaration requires type signature!"
     sig <- pratt @proxy @typ (lookAhead end) Go
-    end $> declare (Item (FFI (fromMaybe (AttrS []) $ AttrS <$> attrs) sig name) name)
+    end $> declare (Item (FFI (maybe (AttrS []) AttrS attrs) sig name) name)
     where
       attr = str <|> int <|> sym <|> list <|> record
         where
@@ -148,7 +147,7 @@ instance ( ParserM e m
 instance ( ParserM e m
          , info ~ Name, typ ~ AST.Type tbind trep name a
          , Item (DataType DataPrefix xt typ Name) :<: decl
-         , Rule proxy def m, def ~ (xt typ)
+         , Rule proxy def m, def ~ xt typ
          )
   => Rule (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
   rule _ end = do

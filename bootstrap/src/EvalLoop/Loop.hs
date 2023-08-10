@@ -75,24 +75,24 @@ repl'loop = do
                   modify (loopState . evalStore . thisModule . moduleDecls %~ (Decls . (decl:) . getDecls))
                   lift . outputStrLn $ show decl
                 RListSource (Just name) -> do
-                  sourceStore <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . parsedFiles))
+                  sourceStore <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spFiles))
                   case Map.lookup name sourceStore of
                     Nothing -> lift $ outputStrLn $ "source for module " <> show name <> " is not available"
                     Just content -> liftIO $ Text.putStrLn content
                 RListSource Nothing -> do
-                  pairs <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . parsedSource))
+                  pairs <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources))
                   let outputs = pairs & traverse %~ (\(path, m) -> show (fuseModuleName $ m ^. moduleHeader) <> ": " <> path)
                   lift $ forM_ outputs outputStrLn
                 RListModules -> do
-                  mods <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . parsedSource)) <&> fmap snd
+                  mods <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources)) <&> fmap snd
                   liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (putStrLn . show . fuseModuleName)
                 RListDecls -> do
                   lift $ mapM_ (outputStrLn . show) $ getDecls $ lControl ^. loopState . evalStore . thisModule . moduleDecls
             ReadExpr e -> lift . outputStrLn $ show e
             ReadSource path content m -> do
               modify ( loopState . evalStore . stageStore . stageSourceParsing %~
-                        (parsedFiles %~ Map.insert (fuseModuleName $ m ^. moduleHeader) content)
-                      . (parsedSource %~ ((path, m):))
+                        (spFiles %~ Map.insert (fuseModuleName $ m ^. moduleHeader) content)
+                      . (spSources %~ ((path, m):))
                      )
               lift . outputStrLn $ "load module " <> show (fuseModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
             ReadNothing -> return ()

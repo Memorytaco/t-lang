@@ -7,11 +7,11 @@ module Driver.Graph
 where
 
 import Language.Parser (pratt, Power (..))
-import Driver.Parser (driveParser, TypeLang, TypeAST)
+import Driver.Parser (driveParser, TypeLang)
 import Text.Megaparsec
 import Data.Void (Void)
 
-import Language.Core
+import Language.Core ( builtinStore, TypSurface )
 
 import Data.Text (Text)
 import Algebra.Graph.Export.Dot (exportViaShow)
@@ -29,7 +29,7 @@ import Driver.Transform
 
 parseTypeGrpah :: Text -> IO PlayG
 parseTypeGrpah typ = do
-   res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "stdin" typ
+   res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypSurface eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
         ((_, g :: PlayG), _) <- runToGraph mempty 0 t

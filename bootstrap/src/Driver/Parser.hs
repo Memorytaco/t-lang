@@ -2,25 +2,28 @@
 -}
 module Driver.Parser
   ( OperatorSpace (..)
-  , driveParser
-  , parseDecl
+
   , ParserMonad (..)
 
-  -- ** available language
+  -- ** core driver
+  , driveParser
+
+  -- *** available parser for core driver
+  , surfaceDecl
+  , surfaceExpr
+  , surfaceType
+  , surfaceModule
+
+  -- ** low level definition
+
+  -- *** available language
   , DeclLang
   , TypeLang
   , ExprLang, PatLang
-  , TypeAST
-  , ASTPat
-  , ASTGPat
-  , ASTExpr
   , WholeExpr
 
   , PredefExprLang
   , PredefDeclLang
-  , PredefExprVal
-  , PredefDeclExtVal
-  , PredefDeclVal
   )
 where
 
@@ -46,28 +49,18 @@ import Data.Void (Void)
 
 import Text.Megaparsec (MonadParsec, ParseErrorBundle, ParsecT, runParserT, lookAhead)
 import Text.Megaparsec.Debug (MonadParsecDbg)
-
-type TypeAST = TypSurface
-type ASTGPat typ = GPatSurface typ
-type ASTPat typ = PatSurface typ
-
-type ASTExpr typ = ExprSurface typ
-
-type ASTDeclExt typ expr = DeclSurfaceExt typ expr
-
-type PredefExprVal = ExprSurface TypSurface
-type PredefDeclExtVal = ASTDeclExt TypeAST PredefExprVal
-type PredefDeclVal = DeclSurface
+import Control.Monad.IO.Class (MonadIO)
 
 type ParserMonad' e m = ParsecT e Text (ReaderT ([Operator Text], [Operator Text]) (StateT OperatorStore m))
 
 newtype ParserMonad e m a = ParserMonad
   { runParserMonad :: ParserMonad' e m a
-  } deriving newtype (Functor, Applicative, Monad, MonadFail, Alternative, MonadPlus, MonadParsec e Text, MonadParsecDbg e Text)
+  } deriving newtype (Functor, Applicative, Monad, MonadFail, MonadIO, Alternative, MonadPlus, MonadParsec e Text, MonadParsecDbg e Text)
     deriving (HasSource "OperatorStore" OperatorStore, HasSink "OperatorStore" OperatorStore)
         via MonadState (ParserMonad' e m)
     deriving (HasState "OperatorStore" OperatorStore)
         via MonadState (ParserMonad' e m)
+
     deriving (HasReader "TermOperator" [Operator Text], HasSource "TermOperator" [Operator Text])
         via Rename 1 (Pos 1 () (MonadReader (ParserMonad' e m)))
     deriving (HasReader "PatternOperator" [Operator Text], HasSource "PatternOperator" [Operator Text])
@@ -105,7 +98,7 @@ type DeclLang e m pExpr pType expr typ = WithDecl e m
   :- "fixity"
   )
 
-type PredefDeclLang m = DeclLang Void m (PredefExprLang m) (TypeLang Void m) PredefExprVal TypeAST
+type PredefDeclLang m = DeclLang Void m (PredefExprLang m) (TypeLang Void m) (ExprSurface TypSurface) TypSurface
 
 -- | type language
 type TypeLang e m = WithType e m
@@ -144,7 +137,7 @@ type PatLang e m typ expr ltyp lexpr = WithPattern e m
   )
 
 data WholeExpr (e :: D.Type) (m :: D.Type -> D.Type) (t :: D.Type)
-type PredefExprLang m = WholeExpr Void m (ASTPat TypeAST :- ASTGPat TypeAST :- TypeAST)
+type PredefExprLang m = WholeExpr Void m (PatSurface TypSurface :- GPatSurface TypSurface :- TypSurface)
 
 instance ( MonadFail m, MonadParsec e Text m
          , name ~ Name
@@ -166,10 +159,53 @@ instance ( MonadFail m, MonadParsec e Text m
             (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ))))
           (lookAhead end) Go <* end
 
--- | declaration driver
-parseDecl
-  :: Monad m
-  => OperatorStore -> ParserMonad Void m ()
-  -> String -> Text
-  -> m (Either (ParseErrorBundle Text Void) PredefDeclVal, OperatorStore)
-parseDecl store end = driveParser store (declaration @(PredefDeclLang _) end)
+------------------------
+-- ** predefined parsers
+------------------------
+
+-- | a parser for surface declaration, you can use it with `driveParser`
+surfaceDecl ::
+  ( MonadFail m,
+    MonadParsecDbg Void Text m,
+    HasReader "TermOperator" [Operator Text] m,
+    HasReader "TypeOperator" [Operator Text] m,
+    HasReader "PatternOperator" [Operator Text] m,
+    HasState "OperatorStore" OperatorStore m
+  ) => m () -> m DeclSurface
+surfaceDecl = declaration @(PredefDeclLang _) @(DeclSurfaceExt TypSurface (ExprSurface TypSurface))
+
+-- | a parser for type, you can use it with `driveParser`
+surfaceType ::
+  ( MonadParsec Void Text m,
+    MonadFail m,
+    HasReader "TypeOperator" [Operator Text] m
+  ) =>
+  m () -> m TypSurface
+surfaceType e = pratt @(TypeLang Void _) @TypSurface e Go
+
+-- | a parser for expression, you can use it with `driveParser`
+surfaceExpr ::
+  ( MonadFail m,
+    HasReader "TermOperator" [Operator Text] m,
+    HasReader "TypeOperator" [Operator Text] m,
+    HasReader "PatternOperator" [Operator Text] m,
+    MonadParsecDbg Void Text m
+  ) =>
+  m () -> m (ExprSurface TypSurface)
+surfaceExpr = parseRule @(PredefExprLang _) @(ExprSurface TypSurface)
+
+-- | a parser for module, you can use it with `driveParser`
+--
+-- @
+-- surfaceModule parsedModules declDelimiter end
+-- @
+surfaceModule ::
+  ( MonadFail m,
+    HasState "OperatorStore" OperatorStore m,
+    MonadParsecDbg Void Text m,
+    HasReader "TermOperator" [Operator Text] m,
+    HasReader "TypeOperator" [Operator Text] m,
+    HasReader "PatternOperator" [Operator Text] m
+  ) => [ModuleSurface] -> m () -> m ()
+  -> m ModuleSurface
+surfaceModule ms sep = module' ms (surfaceDecl (lookAhead sep) <* sep)

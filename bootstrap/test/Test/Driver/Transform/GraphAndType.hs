@@ -6,28 +6,22 @@ where
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Language.Core (builtinStore, OperatorStore)
-import Language.Parser
+import Language.Core (builtinStore)
 
 import Driver.Transform
-import Driver.Parser
 
 import Data.Text (Text, pack)
 import Text.Megaparsec
-import Data.Void (Void)
+import Compiler.SourceParsing
 
 -- ** helpers
-
--- | a predefined parser used to handle type expression during testing
-parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorStore)
-parseType = driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
 
 -- | a utility function used to help define test assertion
 buildAssertion :: Text -> Assertion
 buildAssertion text = do
   -- get parsed AST
-  (res, _) <- parseType text
-  typ <- case res of
+  res'either <- getSurfaceType builtinStore "Under Testing" text
+  typ <- case res'either of
     Left err -> fail $ "Parser Error: " <> errorBundlePretty err
     Right t -> return t
 

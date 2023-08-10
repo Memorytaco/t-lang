@@ -11,7 +11,6 @@ where
 
 import Language.Core.Decl
 import Tlang.Generic ((:<:), prj)
-import Data.Maybe (fromMaybe)
 
 -- ** plain method
 
@@ -20,7 +19,7 @@ class Query decl where
   query :: decl :<: decls => (info -> Bool) -> Decl decls info -> Maybe (decl info)
 
 queryAll :: (Query decl, decl :<: decls) => (info -> Bool) -> Decls decls info -> [decl info]
-queryAll info (Decls decls) = fromMaybe [] $ mapM (query info) decls
+queryAll p (Decls decls) = query p <$> decls >>= \case Just a -> [a]; Nothing -> []
 
 -- | allow fetching inner information
 class DeclInfo decl where

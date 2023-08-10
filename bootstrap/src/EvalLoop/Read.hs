@@ -16,7 +16,7 @@ import Data.Text as Text (Text, unpack, dropWhileEnd, dropWhile)
 import Data.Char (isSpace)
 import qualified Data.Text.IO as Text
 import Text.Megaparsec hiding (runParser)
-import Text.Megaparsec.Char
+import Text.Megaparsec.Char ( char, letterChar, spaceChar )
 import Data.Void (Void)
 import Control.Lens
 
@@ -27,7 +27,7 @@ import Language.Core
   , TypSurface, ExprSurface, DeclSurface, ModuleSurface
   , moduleHeader, moduleImports, moduleDecls, fuseModuleName
   )
-import Language.Parser (module', declaration, reserved)
+import Language.Parser (reserved)
 
 import EvalLoop.Store
 import EvalLoop.Util.Parser
@@ -82,23 +82,23 @@ interface :: forall m. MonadIO m => InterfaceT m ReadResult
 interface = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- asks (^. (evalStore . operators))
-  mods :: [ModuleSurface] <- asks (^. (evalStore . stageStore . stageSourceParsing . parsedSource)) <&> fmap snd
+  mods :: [ModuleSurface] <- asks (^. (evalStore . stageStore . stageSourceParsing . spSources)) <&> fmap snd
   case command'maybe of
     Just "def" ->
-      getInput >>= parseDecl ops eof "stdin" >>= \case
+      getInput >>= driveParser ops (surfaceDecl eof) "stdin" >>= \case
         (Left err, _) -> do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         (Right res, _) -> return . ReadCommand $ RDefineGlobal res
     Just "load" -> do
       file :: String <- unpack . stripSpace <$> getInput
-      let parseFile = module' mods (declaration @(PredefDeclLang _) (void $ reserved ";;"))
+      let parseFile = surfaceModule mods (void $ reserved ";;") eof
       content <- liftIO $ Text.readFile file
       driveParser builtinStore parseFile file content >>= \case
         (Left err, _) -> do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
-        (Right (def, _), _) -> return $ ReadSource file content def
+        (Right def, _) -> return $ ReadSource file content def
     Just "list" -> reserved "module" $> ReadCommand RListModules
                <|> reserved "source" $> ReadCommand (RListSource Nothing)
                <|> return (ReadCommand RListDecls)
@@ -114,9 +114,9 @@ interface = do
         Just m -> liftIO do
           putStrLn $ "module> " <> show name <> ":"
           putStrLn "==== uses:"
-          forM_ (m ^. moduleImports) $ putStrLn . show
+          forM_ (m ^. moduleImports) print
           putStrLn "==== items:"
-          forM_ (getDecls $ m ^. moduleDecls) $ putStrLn . show
+          forM_ (getDecls $ m ^. moduleDecls) print
           return ReadNothing
         Nothing -> do
           liftIO . putStrLn $ "Can't find module \"" <> show name <> "\""

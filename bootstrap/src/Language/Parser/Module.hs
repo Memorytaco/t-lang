@@ -65,8 +65,8 @@ module'
      , HasState "OperatorStore" OperatorStore m
      , Item (UserOperator Text) :<: decls)
   => [Module decls Name] -> m (Decl decls Name)
-  -> m (Module decls Name, [Module decls Name])
-module' ms declaraton = do
+  -> m () -> m (Module decls Name)
+module' ms declaraton e = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
   uses <- many stmtUse >>= \deps -> do
@@ -77,8 +77,8 @@ module' ms declaraton = do
           Nothing -> fail
             $ "module (" <> show namespace <> ") does not contain definition for " <> show sym <> " or it does not exist"
       return u
-  decls <- many declaraton <* eof
-  return (Module name uses $ Decls decls, ms)
+  decls <- many declaraton <* e
+  return (Module name uses $ Decls decls)
   where
     itemOf = (??) @(Item (UserOperator Text)) @decls
     lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)

@@ -7,33 +7,28 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Driver.Transform
-import Driver.Parser
 import Driver.Unification
 
-import Language.Core (builtinStore, OperatorStore, Name)
-import Language.Parser
+import Language.Core (builtinStore, Name, TypSurface)
 import Tlang.Graph.Core
 import Tlang.Graph.Extension.Type
 
 import Data.Text (Text, pack)
-import Data.Void (Void)
 import Text.Megaparsec
 
--- | a predefined parser used to handle type expression during testing
-parseType :: Monad m => Text -> m (Either (ParseErrorBundle Text Void) TypeAST, OperatorStore)
-parseType = driveParser builtinStore (pratt @(TypeLang Void _) @TypeAST eof Go) "Under Testing"
+import Compiler.SourceParsing
 
-getType :: MonadFail m => Text -> m TypeAST
-getType text = do
-  (res, _) <- parseType text
-  case res of
+assertType :: MonadFail m => Text -> m TypSurface
+assertType text = do
+  res'either <- getSurfaceType builtinStore "Under Testing" text
+  case res'either of
     Left err -> fail $ "Parser Error: " <> errorBundlePretty err
     Right t -> return t
 
 buildAssertion :: Text -> Text -> Assertion
 buildAssertion ia ib = do
-  ta <- getType ia
-  tb <- getType ib
+  ta <- assertType ia
+  tb <- assertType ib
   ((r1, g1 :: UnifyG), i) <- runToGraph mempty 1 ta
   ((r2, g2 :: UnifyG), j) <- runToGraph mempty i tb
   let root = hole (j + 1) (G 1)
@@ -46,8 +41,7 @@ buildAssertion ia ib = do
   case res of
     Left err -> fail $ show err
     Right (r, g :: UnifyG) -> do
-      (t :: TypeAST, _) <- runGraphType g [] ("@test", 1) r
-      -- putStrLn (show t)
+      (_ :: TypSurface, _) <- runGraphType g [] ("@test", 1) r
       return ()
   return ()
 

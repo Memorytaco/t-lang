@@ -4,7 +4,7 @@ module EvalLoop.Util.Parser
 where
 
 import Language.Core (OperatorStore, ExprSurface, TypSurface)
-import Language.Parser
+import Language.Parser.Class ( parseRule )
 
 import Driver.Parser
 
