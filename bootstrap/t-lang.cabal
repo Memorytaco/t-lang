@@ -32,6 +32,7 @@ library
       Compiler.Backend.LLVM.Runtime
       Compiler.CodeGen
       Compiler.CodeGen.LLVM
+      Compiler.CodeGen.LLVM.Lambda
       Compiler.NameChecking
       Compiler.SourceParsing
       Compiler.Store

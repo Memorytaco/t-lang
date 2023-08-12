@@ -9,22 +9,12 @@ module Tlang.Inference.Kind
 where
 
 import Language.Core
-import Language.Core.Constraint
-import Tlang.Generic (prj, type (|:) (..))
-import Language.Core.Extension as Ext
+import Tlang.Generic (type (|:) (..))
 
 import qualified Data.Functor.Foldable as F (ListF (..))
-import Control.Monad
-import Control.Monad.Except (MonadError (..), ExceptT, runExcept, lift)
-import Control.Applicative (Const (..))
-import Data.Bifunctor
-import Data.Functor (($>), (<&>))
 import Data.Functor.Foldable hiding (ListF (..))
-import Data.List (union, find, nub)
-import Data.Maybe (fromJust)
-import Control.Applicative ((<|>))
 
-import Capability.Reader (HasReader, ask)
+import Capability.Reader (HasReader)
 import Capability.State (HasState, get, modify)
 import Capability.Error (HasThrow, throw)
 
@@ -32,6 +22,7 @@ import Capability.Error (HasThrow, throw)
 newtype AnnotatedType bind rep name a anno = AnnotatedType (Base (Type bind rep name a) |: anno)
   deriving (Functor, Foldable, Traversable)
 
+shift :: (Eq a, Monad m1, Monad m2) => a -> m1 a -> m1 (a >| m2 a)
 shift val term = do
   var <- term
   if var == val

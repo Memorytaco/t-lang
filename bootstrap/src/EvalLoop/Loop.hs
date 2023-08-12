@@ -4,6 +4,7 @@
 module EvalLoop.Loop
   ( repl'loop
   , shell
+  , UseLoop
   )
 where
 
@@ -60,6 +61,8 @@ shell = do
 
 data UseLoop
 type LoopT' m = StateT (LoopControl EvalState) (InputT m)
+type UseStageStoreField'UseLoop m =
+  Rename "_stageStore" (Field "_stageStore" "_evalStore" (Field "_evalStore" "_loopState" (Field "_loopState" UseLoop m)))
 
 newtype LoopT m a
   = LoopT
@@ -72,11 +75,11 @@ newtype LoopT m a
     deriving (HasReader UseLoop (LoopControl EvalState))
         via ReadState (LoopT m)
     deriving (HasSource UseCompilerStore StageStore, HasSink UseCompilerStore StageStore)
-        via Rename "_stageStore" (Field "_stageStore" "_evalStore" (Field "_evalStore" "_loopState" (Field "_loopState" UseLoop (LoopT m))))
+        via (UseStageStoreField'UseLoop (LoopT m))
     deriving (HasState UseCompilerStore StageStore)
-        via Rename "_stageStore" (Field "_stageStore" "_evalStore" (Field "_evalStore" "_loopState" (Field "_loopState" UseLoop (LoopT m))))
+        via (UseStageStoreField'UseLoop (LoopT m))
     deriving (HasReader UseCompilerStore StageStore)
-        via Rename "_stageStore" (Field "_stageStore" "_evalStore" (Field "_evalStore" "_loopState" (Field "_loopState" UseLoop (LoopT m))))
+        via (UseStageStoreField'UseLoop (LoopT m))
 
 
 driveLoopT :: LoopControl EvalState -> LoopT m a -> InputT m (a, LoopControl EvalState)

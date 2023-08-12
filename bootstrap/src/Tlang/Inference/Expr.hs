@@ -9,6 +9,8 @@ module Tlang.Inference.Expr
   , ConstraintGenErr (..)
   , failCGenMsg
 
+  , ConstraintOrder
+
   , PatternData (..)
 
   , genConstraint
@@ -20,7 +22,6 @@ import Language.Core hiding (Type, Constraint)
 import Language.Core.Extension
 
 import Tlang.Graph.Core
-import Tlang.Unification.Graph
 import Tlang.Graph.Extension.Type
 import Tlang.Generic ((:<:), inj, prj, (:+:) (..), type (|:) (..), Base)
 
@@ -29,13 +30,14 @@ import Capability.Reader (HasReader, asks)
 import Capability.Error (HasThrow, throw)
 import Control.Monad (forM, foldM)
 import Data.Functor.Foldable (cata)
-import Data.Functor ((<&>), ($>))
+import Data.Functor ((<&>))
 
 import Data.Kind (Constraint, Type)
 import Data.Text (Text)
 
 data ConstraintGenErr
    = FailGenMsg String
+   | FailUnexpect
    deriving (Show, Eq, Ord)
 
 failCGenMsg :: HasThrow "fail" ConstraintGenErr m => String -> m a
@@ -236,7 +238,7 @@ node' v = node <&> hole' v
 genPatternConstraint
   :: forall lits injs label name a a' target m nodes edges f
   .  ( -- for pattern
-       target ~ (PatternData lits injs nodes label name a)
+       target ~ PatternData lits injs nodes label name a
      , ConstraintGen lits target Int, ConstrainGraphic lits target m nodes edges Int
      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
 
@@ -248,7 +250,6 @@ genPatternConstraint
      , T NodeBot :<: nodes, G :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
      , T NodeTup :<: nodes, T NodeRec :<: nodes, T (NodeHas label) :<: nodes
      , Ord (edges (Link edges))
-     , Eq (nodes (Hole nodes Int))
      , Show name, Eq name
      , Traversable lits, Traversable injs
      , Traversable f

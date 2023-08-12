@@ -18,8 +18,6 @@ module Driver.Compiler.CodeGen.LLVM
 where
 
 
-import Compiler.CodeGen.LLVM
-
 import qualified LLVM.AST as LLVM hiding (function)
 import qualified LLVM.AST.Constant as LLVM
 import qualified LLVM.AST.Type as LLVM
@@ -57,8 +55,7 @@ data CodeGenData m name = CodeGenData
   } deriving (Generic)
 
 data CodeGenState name = CodeGenState
-  { resource :: GlobalResource
-  , unnamed :: Word
+  { unnamed :: Word
   , globalval :: [(name, (LLVM.Type, Operand))]
   , bindings :: [(name, (LLVM.Type, Operand))]
   } deriving Generic
@@ -93,8 +90,6 @@ newtype CodeGenT m name a = CodeGenT
         via (Field "isPattern" () (MonadReader (T CodeGenT m name)))
 
     -- state definition
-    deriving (HasState "resource" GlobalResource, HasSink "resource" GlobalResource, HasSource "resource" GlobalResource)
-        via Field "resource" () (MonadState (T CodeGenT m name))
     deriving (HasState "unnamed" Word, HasSink "unnamed" Word, HasSource "unnamed" Word)
         via Field "unnamed" () (MonadState (T CodeGenT m name))
     deriving ( HasState "global" [(name, (LLVM.Type, Operand))]
@@ -109,7 +104,7 @@ newtype CodeGenT m name a = CodeGenT
 emptyData :: Monad m => CodeGenData (CodeGenT m name) name
 emptyData = CodeGenData [] [] (return (LLVM.i1, LLVM.ConstantOperand $ LLVM.Int 1 1)) False
 emptyState :: CodeGenState name
-emptyState = CodeGenState (GlobalResource mempty) 0 [] []
+emptyState = CodeGenState 0 [] []
 
 runCodeGen :: CodeGenState name -> CodeGenData (CodeGenT m name) name -> CodeGenT m name a
            -> LLVM m (a, CodeGenState name)

@@ -1,14 +1,13 @@
-{- * Module where we emit llvm ir code
-
-  Resolve type -> generate LLVM IR -> return the IR Module
+{- * Module where we generate llvm IR
+--
+-- 
 -}
 
 module Compiler.CodeGen.LLVM
   (
     LLVMIRGen (..)
   , genExpr
-
-  , GlobalResource (..)
+  , declGen
   )
 where
 
@@ -23,17 +22,19 @@ import Language.Core hiding (Type, Constraint)
 import Tlang.Generic ((:+:) (..))
 import Language.Core.Extension
 
+import Compiler.Backend.LLVM.Definition (MonadLLVMBuilder)
+import Compiler.Backend.LLVM.Runtime (globalString)
+
 import Data.Text (Text, unpack)
 import Data.Kind (Constraint, Type)
 import Data.Functor.Foldable (cata)
 import Capability.Reader (HasReader, asks, ask, local)
 import Capability.State (HasState, gets, modify, get)
-import Control.Monad (when, foldM, forM, join)
-import qualified Data.Map as Map
+import Control.Monad (when, foldM, forM)
 
 class LLVMIRGen m f where
-  type LLVMIRGenConstraint (m :: Type -> Type) (f :: Type -> Type) :: Constraint
-  genOperand :: (MonadModuleBuilder m, MonadIRBuilder m, LLVMIRGenConstraint m f)
+  type LLVMIRGenContext (m :: Type -> Type) (f :: Type -> Type) :: Constraint
+  genOperand :: (MonadLLVMBuilder m, LLVMIRGenContext m f)
              => f (m (LLVM.Type, Operand)) -> m (LLVM.Type, Operand)
 
 genExpr :: ( HasReader "local" [(name, (LLVM.Type, Operand))] m
@@ -41,7 +42,7 @@ genExpr :: ( HasReader "local" [(name, (LLVM.Type, Operand))] m
            , MonadFail m
            , Show name, Eq name
            , MonadModuleBuilder m, MonadIRBuilder m
-           , LLVMIRGen m f, LLVMIRGenConstraint m f, Functor f
+           , LLVMIRGen m f, LLVMIRGenContext m f, Functor f
            )
         => Expr f name -> m (LLVM.Type, Operand)
 genExpr = cata go
@@ -54,16 +55,16 @@ genExpr = cata go
     go (ExprF fv) = genOperand fv
 
 instance (LLVMIRGen m f, LLVMIRGen m g) => LLVMIRGen m (f :+: g) where
-  type LLVMIRGenConstraint m (f :+: g) = (LLVMIRGenConstraint m f, LLVMIRGenConstraint m g)
+  type LLVMIRGenContext m (f :+: g) = (LLVMIRGenContext m f, LLVMIRGenContext m g)
   genOperand (Inl fv) = genOperand fv
   genOperand (Inr fv) = genOperand fv
 
 instance LLVMIRGen m (Value typ) where
-  type LLVMIRGenConstraint m (Value typ) = (MonadFail m)
+  type LLVMIRGenContext m (Value typ) = (MonadFail m)
   genOperand _ = fail "VisibleType is not supported for now"
 
 instance LLVMIRGen m Apply where
-  type LLVMIRGenConstraint m Apply = (MonadFail m)
+  type LLVMIRGenContext m Apply = (MonadFail m)
   genOperand (Apply mf ma mas) = do
     (ftyp, f) <- mf
     (typ, args) <- case ftyp of
@@ -77,32 +78,23 @@ instance LLVMIRGen m Apply where
     res <- call typ f ((,[]) <$> a:as)
     return (typ, res)
 
-data GlobalResource = GlobalResource
-  { strStore :: Map.Map String Operand
-  }
-
 instance LLVMIRGen m LiteralText where
-  type LLVMIRGenConstraint m LiteralText = (HasState "resource" GlobalResource m, HasState "unnamed" Word m)
+  type LLVMIRGenContext m LiteralText = (HasState "unnamed" Word m)
   genOperand (LiteralText (Literal (unpack -> text))) = do
-    resource <- gets @"resource" strStore
-    case Map.lookup text resource of
-      Just val -> return (LLVM.ptr, val)
-      Nothing -> do
-        name <- modify @"unnamed" (+1) >> get @"unnamed"
-        val <- LLVM.ConstantOperand <$> globalStringPtr text (LLVM.UnName name)
-        modify @"resource" \r -> r { strStore = Map.insert text val (strStore r) }
-        return (LLVM.ptr, val)
+    name <- modify @"unnamed" (+1) >> get @"unnamed"
+    val <- globalString text (LLVM.UnName name)
+    return (LLVM.ptr, val)
 
 instance LLVMIRGen m LiteralNumber where
-  type LLVMIRGenConstraint m LiteralNumber = ()
+  type LLVMIRGenContext m LiteralNumber = ()
   genOperand (LiteralNumber (Literal num)) = return (LLVM.double , LLVMC.double num)
 
 instance LLVMIRGen m LiteralInteger where
-  type LLVMIRGenConstraint m LiteralInteger = ()
+  type LLVMIRGenContext m LiteralInteger = ()
   genOperand (LiteralInteger (Literal num)) = return (LLVM.i32 , LLVMC.int32 num)
 
 instance LLVMIRGen m Tuple where
-  type LLVMIRGenConstraint m Tuple = ()
+  type LLVMIRGenContext m Tuple = ()
   genOperand (Tuple ms) = do
     vals <- sequence ms
     let typ = LLVM.StructureType False $ fst <$> vals
@@ -113,8 +105,8 @@ instance LLVMIRGen m Tuple where
     (typ,) <$> load typ ptr 1
 
 instance LLVMIRGen m binder => LLVMIRGen m (Let binder) where
-  type LLVMIRGenConstraint m (Let binder) =
-    ( LLVMIRGenConstraint m binder, HasState "unnamed" Word m
+  type LLVMIRGenContext m (Let binder) =
+    ( LLVMIRGenContext m binder, HasState "unnamed" Word m
     , HasReader "destruct" [(LLVM.Type, Operand)] m
     , HasReader "context" (m (LLVM.Type, Operand)) m
     )
@@ -123,7 +115,7 @@ instance LLVMIRGen m binder => LLVMIRGen m (Let binder) where
     $ genOperand binder
 
 instance LLVMIRGen m (Grp g) where
-  type LLVMIRGenConstraint m (Grp g) = ()
+  type LLVMIRGenContext m (Grp g) = ()
   genOperand _ = error "not implemented"
 
 -- | a pattern itself is no more than a parser combinator targeting
@@ -135,7 +127,7 @@ instance LLVMIRGen m (Grp g) where
 -- accumulated effects to its branch value.
 --
 instance LLVMIRGen m lit => LLVMIRGen m (Pattern lit ext label name) where
-  type LLVMIRGenConstraint m (Pattern lit ext label name) =
+  type LLVMIRGenContext m (Pattern lit ext label name) =
     ( HasState "unnamed" Word m
     , HasReader "destruct" [(LLVM.Type, Operand)] m
     , HasReader "isPattern" Bool m
@@ -143,19 +135,19 @@ instance LLVMIRGen m lit => LLVMIRGen m (Pattern lit ext label name) where
     , HasReader "local" [(name, (LLVM.Type, Operand))] m
     , HasState "pattern" [(name, (LLVM.Type, Operand))] m
     , MonadFail m, Functor lit, Functor ext
-    , LLVMIRGenConstraint m lit
+    , LLVMIRGenContext m lit
     )
   genOperand v = do
     (binds, _) <- cata go v
     ask @"context" >>= local @"local" (binds <>)
     where
-      ret a = (LLVM.i1, LLVMC.bit a)
+      retBool a = (LLVM.i1, LLVMC.bit a)
       getValue = ask @"destruct" >>= \case
         a:_ -> return a
         _ -> fail "Internal error: pattern var doesn't have destructor value"
-      go PatWildF = return ([], ret 1)
-      go PatUnitF = return ([], ret 0)  -- FIXME: complete definition
-      go (PatVarF name) = getValue >>= \a -> return ([(name, a)], ret 1)
+      go PatWildF = return ([], retBool 1)
+      go PatUnitF = return ([], retBool 0)  -- FIXME: complete definition
+      go (PatVarF name) = getValue >>= \a -> return ([(name, a)], retBool 1)
       go (PatPrmF _) = error "undefined literal match" -- local @"isPattern" (const True) $ genOperand lv
       go (PatTupF ls) = do
         (typ, val) <- getValue
@@ -172,31 +164,31 @@ instance LLVMIRGen m lit => LLVMIRGen m (Pattern lit ext label name) where
             Right t -> return t
             Left err -> fail $ "LLVM: " <> err
           local @"destruct" (const [(t, v)]) mend
-        return (fst =<< res, ret 1)
+        return (fst =<< res, retBool 1)
       go _ = error "not yet defined pattern code"
 
 instance LLVMIRGen m (Record Label) where
-  type LLVMIRGenConstraint m (Record Label) = ()
+  type LLVMIRGenContext m (Record Label) = ()
   genOperand _ = do
     error "record not defined"
 
 instance LLVMIRGen m (Selector l) where
-  type LLVMIRGenConstraint m (Selector l) = ()
+  type LLVMIRGenContext m (Selector l) = ()
   genOperand _ = do
     error "selector not defined"
 
 instance LLVMIRGen m (Constructor l) where
-  type LLVMIRGenConstraint m (Constructor l) = ()
+  type LLVMIRGenContext m (Constructor l) = ()
   genOperand _ = do
     error "constructor not defined"
 
 instance LLVMIRGen m pattern' => LLVMIRGen m (Equation pattern' prefix) where
-  type LLVMIRGenConstraint m (Equation pattern' prefix) = ()
+  type LLVMIRGenContext m (Equation pattern' prefix) = ()
   genOperand _ = do
     error "lambda not defined"
 
 instance LLVMIRGen m ((@:) typ) where
-  type LLVMIRGenConstraint m ((@:) typ) = ()
+  type LLVMIRGenContext m ((@:) typ) = ()
   genOperand (v :@ _) = v
 
 -- **** global definition
@@ -231,5 +223,3 @@ instance GlobalGen (Item (FFI typ Name)) Name where
 type instance GlobalGenEnv m (UserValue expr (Maybe typ)) a = ()
 instance GlobalGen (UserValue expr (Maybe typ)) a where
   genGlobal _ = return Nothing
-
---   :+: UserData [Prefix Name typ] (UserDataDef (UserPhantom :+: UserCoerce :+: UserEnum Label :+: UserStruct Label) typ)
