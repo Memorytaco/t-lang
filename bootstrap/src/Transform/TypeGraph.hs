@@ -19,9 +19,9 @@ where
 
 -- ** for graph
 import Tlang.Graph.Core
-import Tlang.Graph.Extension.Type
+import Tlang.Graph.Extension.GraphicType
 import Language.Core.Extension
-import Tlang.Generic ((:+:) (..), (:<:))
+import Language.Generic ((:+:) (..), (:<:))
 import Tlang.Rep (Rep (..))
 
 import Capability.State (HasState, get, modify)
@@ -133,7 +133,7 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
         top <- node <&> hole' (T $ NodeApp len)
         gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . T $ Sub i) (Vertex top) (Vertex sub) <> subg
         return (top, overlays gs)
-      go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv >>= return . \case
+      go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv <&> \case
         New name -> asks @"local" (lookup name) >>= \case
           Just v -> return v
           Nothing -> fail $ "Unable to find local binding of " <> show name

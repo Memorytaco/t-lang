@@ -9,7 +9,7 @@ module Tlang.Inference.Kind
 where
 
 import Language.Core
-import Tlang.Generic (type (|:) (..))
+import Language.Generic (type (|:) (..))
 
 import qualified Data.Functor.Foldable as F (ListF (..))
 import Data.Functor.Foldable hiding (ListF (..))

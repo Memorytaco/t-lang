@@ -10,7 +10,7 @@ module Language.Core.Class.Decl
 where
 
 import Language.Core.Decl
-import Tlang.Generic ((:<:), prj)
+import Language.Generic ((:<:), prj)
 
 -- ** plain method
 

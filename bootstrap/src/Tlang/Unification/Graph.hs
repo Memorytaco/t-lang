@@ -42,8 +42,8 @@ where
 
 import Language.Core (Name (..))
 import Tlang.Graph.Core
-import Tlang.Graph.Extension.Type
-import Tlang.Generic ((:<:), prj, Recursion2 (..))
+import Tlang.Graph.Extension.GraphicType
+import Language.Generic ((:<:), prj, Recursion2 (..))
 
 import Control.Monad (when, unless, forM, foldM)
 import Data.Functor ((<&>), ($>))

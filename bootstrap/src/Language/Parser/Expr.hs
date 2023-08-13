@@ -22,7 +22,7 @@ import Data.Maybe (fromMaybe)
 
 import Capability.Reader (HasReader, asks)
 
-import Tlang.Generic ((:<:), inj, prj)
+import Language.Generic ((:<:), inj, prj)
 
 data WithExpr (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
 type ExprC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)

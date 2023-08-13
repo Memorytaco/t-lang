@@ -70,6 +70,9 @@ library
       Language.Core.Pattern
       Language.Core.Term
       Language.Core.Type
+      Language.Generic
+      Language.Generic.Data
+      Language.Generic.Subsume
       Language.Parser
       Language.Parser.Class
       Language.Parser.Decl
@@ -79,13 +82,8 @@ library
       Language.Parser.Pattern
       Language.Parser.Type
       Tlang.Codegen
-      Tlang.Generic
-      Tlang.Generic.Data
-      Tlang.Generic.Subsume
       Tlang.Graph.Core
-      Tlang.Graph.Dot
-      Tlang.Graph.Extension.Type
-      Tlang.Graph.Type
+      Tlang.Graph.Extension.GraphicType
       Tlang.Inference
       Tlang.Inference.Expr
       Tlang.Inference.Graph

@@ -18,7 +18,7 @@ import Data.Text (Text)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Data.List (find)
-import Tlang.Generic ((:<:), inj)
+import Language.Generic ((:<:), inj)
 import Capability.Reader (HasReader, asks)
 
 -- | the `a` is where to define and use syntax

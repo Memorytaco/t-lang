@@ -11,7 +11,7 @@ import Driver.Unification
 
 import Language.Core (builtinStore, Name, TypSurface)
 import Tlang.Graph.Core
-import Tlang.Graph.Extension.Type
+import Tlang.Graph.Extension.GraphicType
 
 import Data.Text (Text, pack)
 import Text.Megaparsec

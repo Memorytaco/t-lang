@@ -68,7 +68,7 @@ import Language.Core.Class as Class
 
 -- ** required imports
 import Language.Core.Extension as Ext
-import Tlang.Generic
+import Language.Generic
 import Tlang.Rep (Rep (..))
 import Data.Text (Text)
 

@@ -1,5 +1,5 @@
 {-# LANGUAGE ExplicitNamespaces #-}
-module Tlang.Generic
+module Language.Generic
   (
   -- ** Definitions
     Alg (..)
@@ -25,8 +25,8 @@ where
 import Prelude hiding (Either (..))
 import Data.Functor.Foldable as FunctorFoldable
 
-import Tlang.Generic.Subsume as Subsume
-import Tlang.Generic.Data as Data
+import Language.Generic.Subsume as Subsume
+import Language.Generic.Data as Data
 
 import GHC.Generics (Generic (..))
 
@@ -41,7 +41,7 @@ type instance Base (X f) = f
 instance Functor f => Recursive (X f) where
   project (X v) = v
 instance Functor f => Corecursive (X f) where
-  embed v = X v
+  embed = X
 
 -- | general algebra operation
 class Alg f a | a -> f where

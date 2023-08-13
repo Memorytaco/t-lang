@@ -21,7 +21,7 @@ import Data.List (find)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Text.Megaparsec hiding (Label)
-import Tlang.Generic ((:<:), inj)
+import Language.Generic ((:<:), inj)
 import Language.Core.Extension
   ( Tuple (..), Forall (..), Variant (..), Record (..)
   , Scope (..), Literal (..), LiteralNatural (..), LiteralText (..)

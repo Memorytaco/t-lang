@@ -23,7 +23,7 @@ import Language.Core hiding (Type, Constraint)
 import Language.Core.Extension
 
 import Tlang.Rep
-import Tlang.Generic
+import Language.Generic
 -- import Tlang.Constraint (Prefix (..))
 
 -- import Capability.Reader (HasReader)
@@ -210,7 +210,7 @@ lowerTypeRep handle = cata go
       body <- sequence $ bodym <&> sequence
       bind <- sequence fbind
       return $ TypBnd bind body
-    go (TypeF rma) = split handle (fmap AST.Type . sequence) rma
+    go (TypeF rma) = match2 handle (fmap AST.Type . sequence) rma
 
 lowerTuple :: (f :~: (Tuple :+: g), Rep :<: g, Traversable g, Functor f, Traversable bind, Monad m)
            => AST.Type bind f name a -> m (AST.Type bind g name a)

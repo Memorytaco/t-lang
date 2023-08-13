@@ -25,7 +25,7 @@ module Language.Core.Decl
   )
 where
 
-import Tlang.Generic ((:<:), inj, prj)
+import Language.Generic ((:<:), inj, prj)
 
 -- ** Core declaration structure
 

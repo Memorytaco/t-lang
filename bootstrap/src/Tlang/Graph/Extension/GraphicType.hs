@@ -1,7 +1,30 @@
-module Tlang.Graph.Extension.Type
+{- | We put definitions for graphic type constraints here.
+--
+-- Nodes are classified with 3 categories:
+--
+-- 1. type nodes: nodes which are wrapped by `T`
+-- 2. constraint nodes: nodes like `G`. since we are constructing gMLF graphci constraint, constraint
+--    nodes are not allowed appearing under type nodes.
+-- 3. functional nodes: nodes like `Histo`. functional nodes are not "real nodes", they should not
+--    affect structure of term graph and they should not affect meaning of constraints.
+--
+-- Edges act as both labels and structures. The most common edge type is `Sub` which acts
+-- as most common, number labelled edge. When it is wrapped with `T`, it is structure edge.
+-- And it indicates instances of a constraint `G` if it is wrapped with `C`. Since we have only
+-- one type of constraint edge, we usually directly use `Sub`.
+--
+-- Wrappers are used to assign context relevant meaning to nodes and edges. We have
+--
+-- * `T` : to mean a node (edge) is part of a type
+-- * `C` : to mean a node (edge) is part of constraint and it should not appear under a type node
+--   > anything wrapped by `C` should not be linked by `Sub` in type graph
+-- * `Pht` : to mean a node (edge) is only useful to a specific algorithm. We will never know its meaning
+     unless we know what algorithm is using it.
+-}
+module Tlang.Graph.Extension.GraphicType
   (
 
-  -- ** Constant node
+  -- ** Constant type node
     NodeSum (..)
   , NodeRec (..)
   , NodeHas (..)
@@ -15,13 +38,18 @@ module Tlang.Graph.Extension.Type
   , NodeArr (..)
   , NodePht (..)
 
+  -- ** Constraint node
+  , G (..)
+
+  -- ** Functional node
+  , Histo (..)
+
   -- ** a wrapper to make difference among type nodes and constraint nodes
   -- or structure edges and constraint edges
-  , G (..)
   , T (..)
-  , Histo (..)
   , Pht (..)
   , C (..)
+  , NDDelegate
 
   -- ** Edge
   , E (..)
@@ -33,10 +61,11 @@ module Tlang.Graph.Extension.Type
   , Instance (..)
   , Unify (..)
 
-  -- ** utility structures
+  -- ** utility structures, usually used with nodes or edges
 
   -- *** permission
   , P (..)
+
   -- *** binding flag
   , Flag (..)
   )
@@ -81,7 +110,8 @@ data NodeArr = NodeArr deriving (Show, Eq, Ord)
 data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | TODO: to replace `Histo` nodes
-data NodeDelegate
+-- This node family is meant to define a family of functional nodes.
+data family NDDelegate
 
 -- | a `Histo` is meant to remember every merged node
 newtype Histo a = Histo [a]
@@ -134,7 +164,7 @@ data a +. b
 data family E (proxy :: k)
 
 -- | indexed edge
-data instance E "structure"
+newtype instance E "structure"
   = E Integer
   deriving (Show, Eq, Ord)
 
@@ -186,4 +216,4 @@ data P
 data Unify = Unify deriving (Show, Eq, Ord)
 
 -- | instance constraint edge
-data Instance = Instance Integer deriving (Show, Eq, Ord)
+newtype Instance = Instance Integer deriving (Show, Eq, Ord)

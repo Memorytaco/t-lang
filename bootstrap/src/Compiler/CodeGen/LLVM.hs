@@ -19,7 +19,7 @@ import LLVM.AST.Operand (Operand)
 import LLVM.IRBuilder
 
 import Language.Core hiding (Type, Constraint)
-import Tlang.Generic ((:+:) (..))
+import Language.Generic ((:+:) (..))
 import Language.Core.Extension
 
 import Compiler.Backend.LLVM.Definition (MonadLLVMBuilder)
@@ -118,8 +118,8 @@ instance LLVMIRGen m (Grp g) where
   type LLVMIRGenContext m (Grp g) = ()
   genOperand _ = error "not implemented"
 
--- | a pattern itself is no more than a parser combinator targeting
--- binary value and equipped with some effects
+-- | a pattern itself is no more complex than a parser combinator targeting
+-- binary value and equipped with some effects.
 --
 -- the generated code for a pattern should return whether this is a
 -- successful matching and outer most pattern should take care

@@ -24,7 +24,7 @@ import Data.Text (Text, isPrefixOf)
 import Text.Megaparsec hiding (Label)
 import Data.Kind (Type)
 
-import Tlang.Generic
+import Language.Generic
 
 import Capability.Reader (HasReader, local)
 import Capability.State (HasState, gets, modify)

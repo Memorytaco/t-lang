@@ -10,19 +10,11 @@
 -}
 
 module Tlang.Inference.Graph
-  ( GEdge (..)
-  , GConstraint (..)
-  , GFlag (..)
-  , Perm (..)
-  , GNode (..)
-  , GNodeLabel (..)
-  , NodeArity (..)
-
-
+  ( 
   )
 where
 
-import Tlang.Graph.Type
+-- import Tlang.Graph.Type
 
 -- TODO: add a set of test cases
 -- here is one: forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c

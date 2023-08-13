@@ -31,7 +31,7 @@ where
 import Language.Core
 import Language.Core.Extension
 import Language.Parser
-import Tlang.Generic ((:+:))
+import Language.Generic ((:+:))
 import qualified Data.Kind as D (Type)
 
 import Capability.Accessors

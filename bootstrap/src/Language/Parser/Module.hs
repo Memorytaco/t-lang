@@ -11,7 +11,7 @@ import Text.Megaparsec
 import Language.Parser.Lexer
 
 import Language.Core
-import Tlang.Generic ((:<:))
+import Language.Generic ((:<:))
 import Language.Core.Extension.Decl
 
 import Data.Text (Text)

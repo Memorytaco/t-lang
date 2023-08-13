@@ -22,8 +22,8 @@ import Language.Core hiding (Type, Constraint)
 import Language.Core.Extension
 
 import Tlang.Graph.Core
-import Tlang.Graph.Extension.Type
-import Tlang.Generic ((:<:), inj, prj, (:+:) (..), type (|:) (..), Base)
+import Tlang.Graph.Extension.GraphicType
+import Language.Generic ((:<:), inj, prj, (:+:) (..), type (|:) (..), Base)
 
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, asks)

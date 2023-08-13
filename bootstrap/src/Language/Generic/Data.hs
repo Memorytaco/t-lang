@@ -1,4 +1,4 @@
-module Tlang.Generic.Data
+module Language.Generic.Data
   ( (:+:) (..)
   , type (|:) (..)
   , type (|:$) (..)

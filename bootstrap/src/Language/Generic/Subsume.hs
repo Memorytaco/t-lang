@@ -3,11 +3,11 @@
 
   please refer https://dl.acm.org/doi/10.1145/2633628.2633635 for more information.
   -}
-module Tlang.Generic.Subsume
+module Language.Generic.Subsume
   (
 
   -- ** operators
-    inj, prj, split
+    inj, prj, match2
 
   -- ** type constraint
   , (:<:), (:~:)
@@ -15,10 +15,10 @@ module Tlang.Generic.Subsume
   )
 where
 
-import Tlang.Generic.Data
+import Language.Generic.Data ( type (:+:)(..) )
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 
-import Data.Kind (Type, Constraint)
+import Data.Kind (Type)
 import Data.Proxy (Proxy (..))
 import Control.Applicative ((<|>))
 
@@ -87,22 +87,22 @@ instance (TypeError ('Text "The Following Type:" ':$$: ('Text "  " ':<>: 'ShowTy
 instance NoDup f 'False
 
 -- Check whether `Elem` Reduction gets stucked
-type family Check (a :: Constraint) (res :: Result) :: Constraint where
-  Check _ ('Found a) = ((), ())
-  Check _ _ = ()
+-- type family Check (a :: Constraint) (res :: Result) :: Constraint where
+--   Check _ ('Found a) = ((), ())
+--   Check _ _ = ()
 
-type family PotentialParameter (l :: Type -> Type) (r :: Type -> Type) :: Constraint where
-  PotentialParameter l r = TypeError
-    ( 'Text "When Checking Subsumption, The Following Type:" ':$$:
-      'Text "On Left:" ':$$:
-      ('Text "  " ':<>: 'ShowType l) ':$$:
-      'Text "On Right:" ':$$:
-      ('Text "  " ':<>: 'ShowType r) ':$$:
-      'Text "May Contain Type Variables Which Gets Stucked." ':$$:
-      'Text "Try To Manually Add Constraint On Signature:" ':$$:
-      ('Text "  (" ':<>: 'ShowType l ':<>: 'Text ") :<: (" ':<>: 'ShowType r ':<>: 'Text ")") :$$:
-      'Text "Or Specific The Type Use TypeApplication"
-    )
+-- type family PotentialParameter (l :: Type -> Type) (r :: Type -> Type) :: Constraint where
+--   PotentialParameter l r = TypeError
+--     ( 'Text "When Checking Subsumption, The Following Type:" ':$$:
+--       'Text "On Left:" ':$$:
+--       ('Text "  " ':<>: 'ShowType l) ':$$:
+--       'Text "On Right:" ':$$:
+--       ('Text "  " ':<>: 'ShowType r) ':$$:
+--       'Text "May Contain Type Variables Which Gets Stucked." ':$$:
+--       'Text "Try To Manually Add Constraint On Signature:" ':$$:
+--       ('Text "  (" ':<>: 'ShowType l ':<>: 'Text ") :<: (" ':<>: 'ShowType r ':<>: 'Text ")") :$$:
+--       'Text "Or Specific The Type Use TypeApplication"
+--     )
 
 -- | Generic definition to save typing, a type indexed method
 type f :<: g = (Subsume (Elem f g) f g, NoDup f (Dup f '[]), NoDup g (Dup g '[]))
@@ -117,8 +117,8 @@ inj = inj' (Proxy @(Elem f g))
 prj :: forall f g a. (f :<: g) => g a -> Maybe (f a)
 prj = prj' (Proxy @(Elem f g))
 -- | matcher
-split :: (f :~: (l :+: r)) => (l a -> b) -> (r a -> b) -> f a -> b
-split l r x =
+match2 :: (f :~: (l :+: r)) => (l a -> b) -> (r a -> b) -> f a -> b
+match2 l r x =
   case inj x of
     Inl y -> l y
     Inr y -> r y
