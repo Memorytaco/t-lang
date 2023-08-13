@@ -50,6 +50,8 @@ library
       EvalLoop.Store
       EvalLoop.Store.Compiler
       Example
+      Graph.Core
+      Graph.Extension.GraphicType
       JIT.FFI
       JIT.LLVM
       Language.Core
@@ -82,8 +84,6 @@ library
       Language.Parser.Pattern
       Language.Parser.Type
       Tlang.Codegen
-      Tlang.Graph.Core
-      Tlang.Graph.Extension.GraphicType
       Tlang.Inference
       Tlang.Inference.Expr
       Tlang.Inference.Graph
@@ -94,7 +94,7 @@ library
       Tlang.Rep.Primitive
       Tlang.TH
       Tlang.Unification
-      Tlang.Unification.Graph
+      Tlang.Unification.GraphicType
       Tlang.Unification.Kind
       Transform.GraphType
       Transform.LowerType

@@ -12,7 +12,7 @@ where
 
 import Transform.GraphType
 import Language.Core (Type)
-import Tlang.Graph.Core
+import Graph.Core
 
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (StateT (..))

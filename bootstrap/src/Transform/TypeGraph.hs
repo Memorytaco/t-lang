@@ -18,8 +18,8 @@ module Transform.TypeGraph
 where
 
 -- ** for graph
-import Tlang.Graph.Core
-import Tlang.Graph.Extension.GraphicType
+import Graph.Core
+import Graph.Extension.GraphicType
 import Language.Core.Extension
 import Language.Generic ((:+:) (..), (:<:))
 import Tlang.Rep (Rep (..))

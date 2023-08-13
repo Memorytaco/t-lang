@@ -1,4 +1,12 @@
-module Tlang.Graph.Core
+{- | Graph related definition
+--
+-- We use definitions here as core structure for graph and
+-- use `Graph.Extension` to assign meaning to graph.
+--
+-- This module contains common operations on graph and also
+-- some simple algorithms like dfs.
+-}
+module Graph.Core
   (
   -- ** Core structure
     Link (..)
@@ -28,7 +36,6 @@ import qualified Algebra.Graph.AdjacencyMap as AdjacencyMap
 import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
 import Algebra.Graph.Labelled (Graph (..), edgeLabel, edgeList, replaceEdge, transpose, emap, foldg)
 import qualified Algebra.Graph.Labelled as Algebra (edge, connect, overlay, vertices, overlays, edges)
-import Data.Functor ((<&>))
 import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
 import Data.List (sort)
@@ -120,19 +127,13 @@ vertices = Algebra.vertices
 -- | query adjacent edges and nodes
 linkFrom, linkTo :: (Ord (es (Link es)), Ord info, Ord (ns (Hole ns info)))
                  => (Hole ns info -> Bool) -> CoreG ns es info -> [(Link es, Hole ns info)]
-linkFrom p g = sort $ edgeList g >>= \(es, a, b) -> if p a then toList es <&> (,b) else []
-linkTo p g = sort $ edgeList g >>= \(es, a, b) -> if p b then toList es <&> (,a) else []
+linkFrom p g = sort [(e, b)|(es, a, b) <- edgeList g, p a, e <- toList es]
+linkTo p g = sort [(e, a)|(es, a, b) <- edgeList g, p b, e <- toList es]
 
 lFrom, lTo :: forall e es ns info. (e :<: es, Ord (es (Link es)), Ord info, Ord (ns (Hole ns info)))
            => (Hole ns info -> Bool) -> CoreG ns es info -> [(e (Link es), Hole ns info)]
-lFrom p g = linkFrom p g >>= \(Link e, n) ->
-  case prj @e e of
-    Just v -> pure (v, n)
-    Nothing -> mempty
-lTo p g = linkTo p g >>= \(Link e, n) ->
-  case prj @e e of
-    Just v -> pure (v, n)
-    Nothing -> mempty
+lFrom p g = [(v, n)| (Link e, n) <- linkFrom p g, Just v <- [prj @e e]]
+lTo p g = [(v, n)| (Link e, n) <- linkTo p g, Just v <- [prj @e e]]
 
 matchHole
   :: forall node nodes info a. (node :<: nodes)

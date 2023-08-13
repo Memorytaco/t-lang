@@ -16,8 +16,8 @@ where
 import Language.Core
 import Language.Core.Extension
 
-import Tlang.Graph.Core
-import Tlang.Graph.Extension.GraphicType
+import Graph.Core
+import Graph.Extension.GraphicType
 import Language.Generic ((:<:), inj, prj, (:+:) (..))
 
 import Capability.Reader (HasReader, ask, asks, local)

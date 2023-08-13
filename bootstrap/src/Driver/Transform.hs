@@ -16,8 +16,8 @@ import Driver.Transform.TypeGraph as TypeGraph
 
 import Language.Core (Name, Label)
 import Language.Generic ((:+:))
-import Tlang.Graph.Extension.GraphicType
-import Tlang.Graph.Core
+import Graph.Extension.GraphicType
+import Graph.Core
 
 import Data.Text (Text)
 

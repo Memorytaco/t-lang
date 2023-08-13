@@ -4,7 +4,7 @@
 -}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Tlang.Unification.Graph
+module Tlang.Unification.GraphicType
   (
 
   -- ** Core environment
@@ -41,8 +41,8 @@ module Tlang.Unification.Graph
 where
 
 import Language.Core (Name (..))
-import Tlang.Graph.Core
-import Tlang.Graph.Extension.GraphicType
+import Graph.Core
+import Graph.Extension.GraphicType
 import Language.Generic ((:<:), prj, Recursion2 (..))
 
 import Control.Monad (when, unless, forM, foldM)

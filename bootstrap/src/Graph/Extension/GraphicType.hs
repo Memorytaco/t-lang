@@ -21,7 +21,7 @@
 -- * `Pht` : to mean a node (edge) is only useful to a specific algorithm. We will never know its meaning
      unless we know what algorithm is using it.
 -}
-module Tlang.Graph.Extension.GraphicType
+module Graph.Extension.GraphicType
   (
 
   -- ** Constant type node

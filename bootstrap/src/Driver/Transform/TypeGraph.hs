@@ -5,8 +5,8 @@ where
 
 import Transform.TypeGraph (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph)
 import Language.Core (Type)
-import Tlang.Graph.Extension.GraphicType
-import Tlang.Graph.Core
+import Graph.Extension.GraphicType
+import Graph.Core
 import Language.Generic ((:<:))
 
 import Control.Monad.Reader (ReaderT (..))
