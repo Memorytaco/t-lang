@@ -205,5 +205,5 @@ instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Func
       -- addIndex :: Scope b :<: bind => (name, b name) -> Type bind rep name a
       addIndex (name, bound) typ = TypBnd (inj @(Scope (Prefix Name)) @bind $ Scope bound) (lift name typ)
 
-lift :: (Eq a, Monad m, Functor f) => a -> f a -> f (a >| m a)
-lift name = fmap \a -> if name == a then New a else Inc (return a)
+lift :: (Eq a, Monad m, Functor f) => a -> f a -> f (a +> m a)
+lift name = fmap \a -> if name == a then Bind a else Free (return a)

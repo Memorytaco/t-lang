@@ -15,13 +15,16 @@ module Language.Core.Term
     Term (..)
   , Plain (..)
   , (:++:) (..)
-  , App (..)
-  , App2 (..)
+  , App1 (..)
+  , Cons1 (..)
+  , Const1 (..)
   , Bound (..)
   )
 where
 
--- | This is a `Free` monad
+-- | General data type representing lambda calculus.
+--
+-- This is a `Free` monad.
 data Term f a
   = Var a
   | Term (f (Term f a))
@@ -59,14 +62,20 @@ data (f :++: g) h a
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | an extension to express application concept
-data App f e = App (f e) (f e)
+data App1 f e = App1 (f e) (f e) [f e]
   deriving (Functor, Foldable, Traversable)
 
 -- | a different style of application
-data App2 f e = App2 (f e) [f e]
+data Cons1 f e = Cons1 (f e) [f e]
   deriving (Functor, Foldable, Traversable)
 
--- | see Scope in https://hackage.haskell.org/package/bound
+-- | a different constant.
+data Const1 c f e = Const1 c
+  deriving (Functor, Foldable, Traversable)
+
+-- | a utility to express bounded variables.
+--
+-- see Scope in https://hackage.haskell.org/package/bound
 newtype Bound name f a = Bound (f (Either name (f a)))
   deriving (Functor, Foldable, Traversable)
 

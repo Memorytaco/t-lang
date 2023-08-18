@@ -72,6 +72,7 @@ library
       Language.Core.Pattern
       Language.Core.Term
       Language.Core.Type
+      Language.Core.Utility
       Language.Generic
       Language.Generic.Data
       Language.Generic.Subsume

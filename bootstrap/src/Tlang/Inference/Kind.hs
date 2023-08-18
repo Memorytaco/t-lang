@@ -13,6 +13,7 @@ import Language.Generic (type (|:) (..))
 
 import qualified Data.Functor.Foldable as F (ListF (..))
 import Data.Functor.Foldable hiding (ListF (..))
+import Control.Monad (join)
 
 import Capability.Reader (HasReader)
 import Capability.State (HasState, get, modify)
@@ -22,17 +23,16 @@ import Capability.Error (HasThrow, throw)
 newtype AnnotatedType bind rep name a anno = AnnotatedType (Base (Type bind rep name a) |: anno)
   deriving (Functor, Foldable, Traversable)
 
-shift :: (Eq a, Monad m1, Monad m2) => a -> m1 a -> m1 (a >| m2 a)
+shift :: (Eq a, Monad m1, Monad m2) => a -> m1 a -> m1 (a +> m2 a)
 shift val term = do
   var <- term
   if var == val
-     then return (New var)
-     else return . Inc $ return var
+     then return (Bind var)
+     else return . Free $ return var
 
 -- | take a list of variables, generalise the kind, add binder on top
 generalize :: (Functor f, Eq a) => [a] -> Kind f a a -> Kind f a a
-generalize [] kind = kind
-generalize (a:as) kind = generalize as $ KindBnd a (shift a kind)
+generalize = flip $ foldl $ \ kind a -> KindBnd a (shift a kind)
 
 -- | take an unknown kind term, return a closed term
 close :: Traversable f => Kind f info a -> Maybe (Kind f info b)
@@ -50,20 +50,19 @@ clean :: Traversable f => Kind f name a -> Kind f name a
 clean (Kind v) = Kind (clean <$> v)
 clean (a :-> b) = clean a :-> clean b
 clean (KindBnd i val) =
-  let iter (New _) = Nothing
-      iter (Inc v) = Just v
+  let iter (Bind _) = Nothing
+      iter (Free v) = Just v
    in case traverse iter val of
-        Just mval -> clean $ mval >>= id
+        Just mval -> clean (join mval)
         Nothing -> KindBnd i (fmap clean <$> val)
 clean a = a
 
 data KindUnifyError k
-  = KindUnMatch k k
-  | InvalidRefIndex Integer k
+  = KindMismatch k k
   | InvalidPolyKind
-  deriving (Show, Eq)
+  deriving (Show, Eq, Ord)
 
-failUnify :: HasThrow KindUnifyError (KindUnifyError k) m => (KindUnifyError k) -> m a
+failUnify :: HasThrow KindUnifyError (KindUnifyError k) m => KindUnifyError k -> m a
 failUnify = throw @KindUnifyError
 
 mkGraft :: (Functor f, Eq a) => a :>> Kind f name a -> Kind f name a -> Kind f name a
@@ -85,8 +84,8 @@ unify = refold shrink rollup
     solve (k :<> KindVar v) = return [v :>> k]
 
     solve (KindStar :<> KindStar) = pure []
-    solve (k1@KindStar :<> k2) = failUnify $ KindUnMatch k1 k2
-    solve (k1 :<> k2@KindStar) = failUnify $ KindUnMatch k1 k2
+    solve (k1@KindStar :<> k2) = failUnify $ KindMismatch k1 k2
+    solve (k1 :<> k2@KindStar) = failUnify $ KindMismatch k1 k2
 
     solve (KindBnd _ _ :<> _) = failUnify InvalidPolyKind
     solve (_ :<> KindBnd _ _) = failUnify InvalidPolyKind

@@ -74,7 +74,7 @@ class ConstraintGen f a info | f a -> info where
 genConstraint
    :: ( target ~ (Mode, ExprF f name |: Hole nodes Int) -- ^ annotate each expression with type node
       , ConstraintGen f target Int, ConstrainGraphic f target m nodes edges Int
-      , T Sub :<: edges, T (Bind name) :<: edges, T Instance :<: edges, T Unify :<: edges
+      , T Sub :<: edges, T (Binding name) :<: edges, T Instance :<: edges, T Unify :<: edges
       , T NodeBot :<: nodes, G :<: nodes
       , Ord (edges (Link edges)), Traversable f
       , Show name, Eq name
@@ -91,7 +91,7 @@ genConstraint = cata go
       var <- node' (T $ NodeBot)
       let gr = overlays
              [ g -<< T (Sub 1) >>- var
-             , var -<< T (Bind Flexible 1 $ Just name) >>- g
+             , var -<< T (Binding Flexible 1 $ Just name) >>- g
              ]
       case val'maybe of
         Just ((mode, n) :| Inl (T Unify)) ->
@@ -109,7 +109,7 @@ genConstraint = cata go
 type instance ConstrainGraphic Apply (Mode, ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
     , Apply :<: f
-    , T (Bind name) :<: edges, T Sub :<: edges, T Instance :<: edges, T Unify :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges, T Instance :<: edges, T Unify :<: edges
     , G :<: nodes, T NodeBot :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
     , HasThrow "fail" ConstraintGenErr m
     , HasState "node" Int m
@@ -150,7 +150,7 @@ instance ConstraintGen Apply (Mode, ExprF f name |: Hole nodes Int) Int where
                , app -<< T (Sub 2) >>- domain
                , app -<< T (Sub 3) >>- codomain
                , g -<< T (Sub 1) >>- codomain
-               , overlays $ [r'a, r'b, app, arr, domain, codomain] <&> \n -> n -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+               , overlays $ [r'a, r'b, app, arr, domain, codomain] <&> \n -> n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
                , gr1, gr2
                ]
         return (mode'a, g, gr)
@@ -181,7 +181,7 @@ type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes
   = ( ns ~ nodes
     , Literal t :<: f
     , G :<: nodes, T (NodeLit t) :<: nodes
-    , T Sub :<: edges, T (Bind name) :<: edges
+    , T Sub :<: edges, T (Binding name) :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
@@ -191,7 +191,7 @@ instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
     g <- node' (G 1)
     n <- node' (T $ NodeLit t)
     return $ StageConstraint (g :| ExprF (inj $ Literal t))
-      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 -- | expression Tuple literal
@@ -199,7 +199,7 @@ type instance ConstrainGraphic Tuple (Mode, ExprF f name |: Hole ns Int) m nodes
   = ( ns ~ nodes
     , Tuple :<: f
     , G :<: nodes, T NodeTup :<: nodes
-    , T Sub :<: edges, T (Bind name) :<: edges
+    , T Sub :<: edges, T (Binding name) :<: edges
     , Ord (edges (Link edges)), Eq (nodes (Hole nodes Int))
     , HasState "node" Int m
     , HasThrow "fail" ConstraintGenErr m
@@ -216,11 +216,11 @@ instance ConstraintGen Tuple (Mode, ExprF f name |: Hole nodes Int) Int where
       n <- getInstance 1 g' gr'
       return $ overlays
         [ tup -<< T (Sub ix) >>- n
-        , g' -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+        , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
         , gr'
         ]
     return $ StageConstraint (Poly, g :| ExprF (inj . Tuple $ snd . _atInfo . snd <$> sia))
-      g (overlays [gr, g -<< T (Sub 1) >>- tup, tup -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [gr, g -<< T (Sub 1) >>- tup, tup -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       (mconcat $ _atDep . snd <$> sia)
 
 -- *** Generate Pattern Constraint
@@ -246,7 +246,7 @@ genPatternConstraint
      , a ~ Expr f name, a' ~ (Mode, Base a |: Hole nodes Int)
      , ConstraintGen f a' Int, ConstrainGraphic f a' m nodes edges Int
 
-     , T Sub :<: edges, T (Bind name) :<: edges, T Instance :<: edges, T Unify :<: edges
+     , T Sub :<: edges, T (Binding name) :<: edges, T Instance :<: edges, T Unify :<: edges
      , T NodeBot :<: nodes, G :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
      , T NodeTup :<: nodes, T NodeRec :<: nodes, T (NodeHas label) :<: nodes
      , Ord (edges (Link edges))
@@ -277,7 +277,7 @@ genPatternConstraint = cata go
              [ app -<< T (Sub 1) >>- arr
              , app -<< T (Sub 2) >>- domain
              , app -<< T (Sub 3) >>- codomain
-             , Connect (link . T . Bind Flexible 1 $ Nothing @name)
+             , Connect (link . T . Binding Flexible 1 $ Nothing @name)
                  (overlays $ Vertex <$> [arr, domain, codomain])
                  (Vertex app)
              ]
@@ -289,14 +289,14 @@ genPatternConstraint = cata go
       var <- node <&> hole' (T NodeBot)
       return $ StageConstraint (PatternData (g :| PatWildF) []) g
         (overlays [ g -<< T (Sub 1) >>- var
-                  , var -<< (T . Bind Flexible 1 $ Nothing @name) >>- g
+                  , var -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
                   ]) mempty
     go (PatUnitF) = do
       g <- node' (G 1)
       n <- node' (T $ NodeTup 0)
       let patd = PatternData (g :| PatUnitF) []
           gr = overlays
-               [ n -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+               [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
                , g -<< T (Sub 1) >>- n
                ]
       return $ StageConstraint patd g gr mempty
@@ -305,7 +305,7 @@ genPatternConstraint = cata go
       var <- node' (T NodeBot)
       let gr = overlays
                [ g -<< T (Sub 1) >>- var
-               , var -<< (T . Bind Flexible 1 $ Just name) >>- g
+               , var -<< (T . Binding Flexible 1 $ Just name) >>- g
                ]
       return $ StageConstraint (PatternData (g :| PatVarF name) [(name, (Instance 1, g))]) g gr mempty
     go (PatPrmF litm) = stageConstraint litm
@@ -316,10 +316,10 @@ genPatternConstraint = cata go
       sia <- (`zip` [1..len]) <$> sequence sma
       gr <- overlays <$> forM sia \(StageConstraint _ n gr _, i) -> do
         n' <- getNodeM n gr
-        return $ overlays [gr, n -<< (T . Bind Flexible 1 $ Nothing @name) >>- tup, tup -<< T (Sub i) >>- n']
+        return $ overlays [gr, n -<< (T . Binding Flexible 1 $ Nothing @name) >>- tup, tup -<< T (Sub i) >>- n']
       let patd = PatternData (g :| PatTupF (sia >>= pure . patterns . _atInfo . fst)) (sia >>= bindings . _atInfo . fst)
       return $ StageConstraint patd g
-        (overlays [gr, tup -<< (T . Bind Flexible 1 $ Nothing @name) >>- g, g -<< T (Sub 1) >>- tup])
+        (overlays [gr, tup -<< (T . Binding Flexible 1 $ Nothing @name) >>- g, g -<< T (Sub 1) >>- tup])
         (mconcat $ _atDep . fst <$> sia)
     go (PatRecF sma) = do
       let len = toInteger $ length sma
@@ -331,15 +331,15 @@ genPatternConstraint = cata go
         has <- node' (T $ NodeHas True label)
         return $ overlays
           [ gr
-          , has -<< (T . Bind Flexible 1 $ Nothing @name) >>- recn
+          , has -<< (T . Binding Flexible 1 $ Nothing @name) >>- recn
           , recn -<< T (Sub i) >>- has
           , has -<< T (Sub i) >>- n'
-          , n -<< (T . Bind Flexible 1 $ Nothing @name) >>- has
+          , n -<< (T . Binding Flexible 1 $ Nothing @name) >>- has
           ]
       let patd = PatternData (g :| PatRecF (sia >>= pure . fmap (patterns . _atInfo) . fst))
                              (sia >>= bindings . _atInfo . snd . fst)
       return $ StageConstraint patd g
-        (overlays [gr, recn -<< (T . Bind Flexible 1 $ Nothing @name) >>- g, g -<< T (Sub 1) >>- recn])
+        (overlays [gr, recn -<< (T . Binding Flexible 1 $ Nothing @name) >>- g, g -<< T (Sub 1) >>- recn])
         (mconcat $ _atDep . snd . fst <$> sia)
     go (PatSymF _ _) = error "wait for whole pass being completed"
     go (PatViewF e ma) = do
@@ -353,13 +353,13 @@ genPatternConstraint = cata go
               [ arr'gr, pat'gr, e'gr
               -- connect result node
               , g -<< T (Sub 1) >>- domain
-              , app -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+              , app -<< T (Binding Flexible 1 $ Nothing @name) >>- g
               -- connect right pattern node
-              , pat'root -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+              , pat'root -<< T (Binding Flexible 1 $ Nothing @name) >>- g
               , codomain -<< T Unify >>- pat'
               , pat' -<< T Unify >>- codomain
               -- connect left expr node
-              , e'root -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+              , e'root -<< T (Binding Flexible 1 $ Nothing @name) >>- g
               , e'root -<< T (Instance 1) >>- app
               ]
       return $ StageConstraint patd g gr (e'dep <> pat'dep)
@@ -373,11 +373,11 @@ genPatternConstraint = cata go
             [ a'gr
             -- bind new bottom node
             , g -<< T (Sub 1) >>- var
-            , var -<< T (Bind Flexible 1 (Just name)) >>- g
+            , var -<< T (Binding Flexible 1 (Just name)) >>- g
             -- unify two type nodes
             , var -<< T Unify >>- n', n' -<< T Unify >>- var
             -- bind sub G node to root
-            , a'n -<< T (Bind Flexible 1 $ Nothing @name) >>- g
+            , a'n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
             ]
           ) a'dep
     go (PatExtF injm) = stageConstraint injm
@@ -387,7 +387,7 @@ type instance ConstrainGraphic LiteralText (PatternData lits injs ns label name 
   = ( ns ~ nodes
     , LiteralText :<: lits
     , T (NodeLit Text) :<: nodes, G :<: nodes
-    , T (Bind name) :<: edges, T Sub :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
@@ -397,7 +397,7 @@ instance ConstraintGen LiteralText (PatternData lits injs nodes label name expr)
     n :: Hole nodes Int <- node' (T $ NodeLit t)
     let patd = PatternData (g :| PatPrmF (inj . LiteralText $ Literal t)) mempty
     return $ StageConstraint patd
-      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 -- | handle general literal
@@ -405,7 +405,7 @@ type instance ConstrainGraphic (Literal t) (PatternData lits injs ns label name 
   = ( ns ~ nodes
     , Literal t :<: lits
     , T (NodeLit t) :<: nodes, G :<: nodes
-    , T (Bind name) :<: edges, T Sub :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
@@ -415,7 +415,7 @@ instance ConstraintGen (Literal t) (PatternData lits injs nodes label name expr)
     n :: Hole nodes Int <- node' (T $ NodeLit t)
     let patd = PatternData (g :| PatPrmF (inj $ Literal t)) mempty
     return $ StageConstraint patd
-      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 -- | handle Literal integer
@@ -423,7 +423,7 @@ type instance ConstrainGraphic LiteralInteger (PatternData lits injs ns label na
   = ( ns ~ nodes
     , LiteralInteger :<: lits
     , T (NodeLit Integer) :<: nodes, G :<: nodes
-    , T (Bind name) :<: edges, T Sub :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
@@ -433,7 +433,7 @@ instance ConstraintGen LiteralInteger (PatternData lits injs nodes label name ex
     n :: Hole nodes Int <- node' (T $ NodeLit t)
     let patd = PatternData (g :| PatPrmF (inj . LiteralInteger $ Literal t)) mempty
     return $ StageConstraint patd
-      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 -- | handle Literal number
@@ -441,7 +441,7 @@ type instance ConstrainGraphic LiteralNumber (PatternData lits injs ns label nam
   = ( ns ~ nodes
     , LiteralNumber :<: lits
     , T (NodeLit Double) :<: nodes, G :<: nodes
-    , T (Bind name) :<: edges, T Sub :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
     , HasState "node" Int m
     )
@@ -451,7 +451,7 @@ instance ConstraintGen LiteralNumber (PatternData lits injs nodes label name exp
     n :: Hole nodes Int <- node' (T $ NodeLit t)
     let patd = PatternData (g :| PatPrmF (inj . LiteralNumber $ Literal t)) mempty
     return $ StageConstraint patd
-      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Bind Flexible 1 $ Nothing @name) >>- g])
+      g (overlays [g -<< T (Sub 1) >>- n, n -<< T (Binding Flexible 1 $ Nothing @name) >>- g])
       mempty
 
 

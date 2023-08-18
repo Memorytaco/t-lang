@@ -57,7 +57,7 @@ module Graph.Extension.GraphicType
   , type (+.)
   , Sub (..)
   , O (..)
-  , Bind (..)
+  , Binding (..)
   , Instance (..)
   , Unify (..)
 
@@ -190,7 +190,7 @@ deriving instance (Ord (E a), Ord (E b)) => Ord (E (a +. b))
 newtype Sub = Sub Integer deriving (Show, Eq, Ord)
 
 -- | binding edge, with number attached and also the origin name. orders and names matter.
-data Bind name = Bind Flag Integer (Maybe name) deriving (Show, Eq, Ord)
+data Binding name = Binding Flag Integer (Maybe name) deriving (Show, Eq, Ord)
 
 -- | Used both for instance relation and permission
 -- if `Lock` is taken as relation, then it is treated the same as `Rigid`

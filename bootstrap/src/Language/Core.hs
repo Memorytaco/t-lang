@@ -50,6 +50,7 @@ module Language.Core
   , module Attribute
   , module Class
   , module Constraint
+  , module Utility
 
   )
 where
@@ -65,6 +66,7 @@ import Language.Core.Name as Name
 import Language.Core.Attribute as Attribute
 import Language.Core.Constraint as Constraint
 import Language.Core.Class as Class
+import Language.Core.Utility as Utility
 
 -- ** required imports
 import Language.Core.Extension as Ext

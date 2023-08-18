@@ -6,9 +6,6 @@ module Language.Core.Type
   , Kind (..)
   , KindF (..)
 
-  , Closed
-  , (:==) (..)
-  , type (>|) (..)
 
   , Variance (..)
   )
@@ -18,6 +15,7 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 import Tlang.TH (fixQ)
+import Language.Core.Utility
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
@@ -30,37 +28,12 @@ data Type bind rep name a where
   TypCon :: Type bind rep name a -> [Type bind rep name a] -> Type bind rep name a
   -- | a uniform way to represent arbitrary binding logic
   TypBnd :: bind (Type bind rep name a)
-         -> Type bind rep name (name >| Type bind rep name a)
+         -> Type bind rep name (name +> Type bind rep name a)
          -> Type bind rep name a
   -- | Allow artibrary injection, to provide further information of syntax tree. e.g. literal, kind annotation
   Type :: rep (Type bind rep name a) -> Type bind rep name a
   deriving (Functor, Foldable, Traversable)
-
--- | closed term
-data Closed
-instance Show Closed where
-  show = error "Impossible for Closed"
-instance Eq Closed where
-  (==) = error "Impossible for Closed"
-instance Ord Closed where
-  compare = error "Impossible for Closed"
-
-infixr 3 >|
-data bind >| free
-  = New bind -- ^ introduce new bound variable
-  | Inc free -- ^ increase variable index, from (bind2 >| a) to (bind1 >| (bind2 >| a))
-  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
-$(deriveBifunctor ''(>|))
 $(deriveBifunctor ''Type)
-
-instance Applicative ((>|) bind) where
-  pure = Inc
-  New x <*> _ = New x
-  Inc f <*> a = f <$> a
-
-instance Monad ((>|) bind) where
-  New x >>= _ = New x
-  Inc a >>= f = f a
 
 instance (Functor bind, Functor rep) => Applicative (Type bind rep name) where
   pure = TypVar
@@ -88,7 +61,7 @@ deriving instance ( Ord a, Ord name
                   => Ord (Type bind rep name a)
 
 instance
-  ( Show a, Show name, Show (a >| name)
+  ( Show a, Show name, Show (a +> name)
   , forall x. Show x => Show (rep x)
   , forall x. Show x => Show (bind x)
   , Show (bind (Type bind rep name a))
@@ -102,16 +75,6 @@ instance
 -- | type variance
 data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)
 
--- | named type. assign name to type and allow
--- recursive type and type level lambda also.
--- no type level literal is supported now.
-data name :== typ = name :== typ  -- ^ pick a name to encapsulate a type, and turn a unnamed type to named type.
-                                  --   other information including variable and kind is in `Type` itself.
-                                  --   definition for type level operator, which should be prefixed with ":"
-  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
-
-$(deriveBifunctor ''(:==))
-
 infixr 3 :->
 
 -- | type kind representation, any kind, normal kind (*) and higher kind
@@ -121,10 +84,10 @@ data Kind f name a where
   -- | type kinds other than KindRef and KindType, and represent any type level thing.
   -- e.g. literal, value, lifted constructor, etc.
   KindVar :: a -> Kind f name a
-  -- | something like "* -> *", means this is a type prmtructor or something else.
+  -- | something like "* -> *", means this is a type constructor or type abstraction.
   (:->) :: Kind f name a -> Kind f name a -> Kind f name a
   -- | quantified kind variable, well, this is...
-  KindBnd :: name -> Kind f name (name >| Kind f name a) -> Kind f name a
+  KindBnd :: name -> Kind f name (name +> Kind f name a) -> Kind f name a
   -- | extend functionality
   Kind :: (f (Kind f name a)) -> Kind f name a
   deriving (Functor, Foldable, Traversable)

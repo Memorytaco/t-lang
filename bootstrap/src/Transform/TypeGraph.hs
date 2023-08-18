@@ -34,7 +34,7 @@ import Data.Text (Text)
 
 -- ** for type
 import qualified Language.Core as Type
-import Language.Core (type (>|) (..), Prefix (..))
+import Language.Core (type (+>) (..), Prefix (..))
 
 -- ** for signature
 import Data.Kind (Constraint, Type)
@@ -85,13 +85,13 @@ node = modify @"node" (+1) >> get @"node"
 --           1 2 3 4 5 6
 shiftBindingEdge
   :: forall name nodes edges info
-   . ( T (Bind name) :<: edges, Ord info, Ord (edges (Link edges))
+   . ( T (Binding name) :<: edges, Ord info, Ord (edges (Link edges))
      , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
      )
   => Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Bind name)) (== root) g
-  where shiftup gr (e@(T (Bind flag i name)), n) = overlays
-          [ n -<< T (Bind flag (i+1) name) >>- root
+shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Binding name)) (== root) g
+  where shiftup gr (e@(T (Binding flag i name)), n) = overlays
+          [ n -<< T (Binding flag (i+1) name) >>- root
           , filterLink (/= link' e) n root gr
           ]
 {-# INLINE shiftBindingEdge #-}
@@ -99,13 +99,13 @@ shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Bind name)) (== root) g
 -- | move bound site from `from` to `to`
 moveBindingEdge
   :: forall name nodes edges info
-   . ( T (Bind name) :<: edges, Ord info, Ord (edges (Link edges))
+   . ( T (Binding name) :<: edges, Ord info, Ord (edges (Link edges))
      , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
      )
   => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-moveBindingEdge from to g = foldl move g $ lTo @(T (Bind name)) (== from) g
-  where move gr (e@(T (Bind flag i name)), n) = overlays
-          [ n -<< T (Bind flag i name) >>- to
+moveBindingEdge from to g = foldl move g $ lTo @(T (Binding name)) (== from) g
+  where move gr (e@(T (Binding flag i name)), n) = overlays
+          [ n -<< T (Binding flag i name) >>- to
           , filterLink (/= link' e) n from gr
           ]
 {-# INLINE moveBindingEdge #-}
@@ -134,10 +134,10 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
         gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . T $ Sub i) (Vertex top) (Vertex sub) <> subg
         return (top, overlays gs)
       go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv <&> \case
-        New name -> asks @"local" (lookup name) >>= \case
+        Bind name -> asks @"local" (lookup name) >>= \case
           Just v -> return v
           Nothing -> fail $ "Unable to find local binding of " <> show name
-        Inc m -> m
+        Free m -> m
       go (Type.TypeF v) = foldTypeGraph v
 
 
@@ -167,7 +167,7 @@ toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
 type instance ConstrainGraph (Prefix name) nodes edges info m
   = ( Eq (edges (Link edges))
     , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
-    , T (Bind name) :<: edges, T Sub :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
     , NodePht :<: nodes
     , HasState "node" Int m
     , HasReader "local" [(name, (Hole nodes info, CoreG nodes edges info))] m
@@ -190,9 +190,9 @@ instance FoldBinderTypeGraph (Prefix name) Int where
       pht <- hole' NodePht <$> node
       -- TODO: explain why we need to move all binding edges from old root to the phantom node
       return (pht, overlays [ moveBindingEdge @name root pht $ shiftBindingEdge @name root body
-                            , bbody, var -<< T (Bind flag 1 (Just name)) >>- pht
+                            , bbody, var -<< T (Binding flag 1 (Just name)) >>- pht
                             , pht -<< T (Sub 1) >>- root])
-    else return (root, overlays [shiftBindingEdge @name root body, bbody, var -<< T (Bind flag 1 (Just name)) >>- root])
+    else return (root, overlays [shiftBindingEdge @name root body, bbody, var -<< T (Binding flag 1 (Just name)) >>- root])
 
 type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
 -- | handle `Forall` binder

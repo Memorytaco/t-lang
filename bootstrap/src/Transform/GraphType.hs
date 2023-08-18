@@ -81,7 +81,7 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , HasReader "graph" (CoreG nodes edges info) m
   , HasReader "local" [(Hole nodes info, a)] m
   , HasReader "scheme" (Maybe a -> m a) m
-  , T (Bind a) :<: edges
+  , T (Binding a) :<: edges
   , Ord (edges (Link edges)), Ord a
   , Eq (Hole nodes info), Eq a, Eq info
   , Forall (Prefix a) :<: bind
@@ -94,9 +94,9 @@ withBinding
   :: forall m nodes edges info bind rep name a. WithBindingEnv m nodes edges info bind rep name a
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- asks @"graph" $ lTo @(T (Bind a)) (== root)
+  preBinds <- asks @"graph" $ lTo @(T (Binding a)) (== root)
   scheme <- ask @"scheme"
-  localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Bind flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
+  localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Binding flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
   body <- local @"local" ((snd <$> localBinds) <>) m
   bindings <- forM localBinds \(flag, (node, name)) -> do
     typ <- restore node
@@ -107,8 +107,8 @@ withBinding restore root m = do
   let shift val term = do
         var <- term
         if var == val
-           then return (New var)
-           else return . Inc $ return var
+           then return (Bind var)
+           else return . Free $ return var
   -- return the final type
   return $ foldr (\(name, bnd) bod -> TypBnd (inj $ Forall bnd) $ shift name bod) body bindings
 {-# INLINE withBinding #-}

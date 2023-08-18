@@ -27,7 +27,7 @@ type PlayG
           :+: T NodeApp :+: T (NodeHas Label)
           :+: NodePht
           )
-          (T Sub :+: T (Bind Name)) Int
+          (T Sub :+: T (Binding Name)) Int
 
 type UnifyG
   = CoreG (   T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
@@ -35,5 +35,5 @@ type UnifyG
           :+: T NodeApp :+: T (NodeHas Label)
           :+: NodePht :+: Histo :+: G
           )
-          (T Sub :+: T (Bind Name) :+: Pht O) Int
+          (T Sub :+: T (Binding Name) :+: Pht O) Int
 

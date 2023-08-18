@@ -138,14 +138,14 @@ hook1 (Unifier (Recursion2 f)) = Unifier . Recursion2 $ \r a b -> do
 ------------------------------------------
 
 -- | unification: NodeBot left
-case1 :: (UnifyConstraint m ns es info, T (Bind Name) :<: es)
+case1 :: (UnifyConstraint m ns es info, T (Binding Name) :<: es)
       => Unifier m ns info
 case1 = Unifier $ Recursion2 \_unify -> match unmatch \(a, T NodeBot, _) b ->
   -- merge node, keep `b`
   a ==> b >> rebind @Name b $> b
 
 -- | unification: NodeBot right
-case2 :: (UnifyConstraint m ns es info, T (Bind Name) :<: es)
+case2 :: (UnifyConstraint m ns es info, T (Binding Name) :<: es)
       => Unifier m ns info
 case2 = Unifier $ Recursion2 \_unify a -> match (unmatch a) \(b, T NodeBot, _) ->
   -- merge node, keep `a`
@@ -154,7 +154,7 @@ case2 = Unifier $ Recursion2 \_unify a -> match (unmatch a) \(b, T NodeBot, _) -
 
 -- | unification: NodeTup
 case10
-  :: (UnifyConstraint m ns es info, T NodeTup :<: ns, T (Bind Name) :<: es)
+  :: (UnifyConstraint m ns es info, T NodeTup :<: ns, T (Binding Name) :<: es)
   => Unifier m ns info
 case10 = Unifier $ Recursion2 \unify ->
   match unmatch \(a, T (NodeTup s), _ia) ->
@@ -180,7 +180,7 @@ case10 = Unifier $ Recursion2 \unify ->
 
 -- | unification: NodeRec
 case20
-  :: (UnifyConstraint m ns es info, T NodeRec :<: ns, T (Bind Name) :<: es)
+  :: (UnifyConstraint m ns es info, T NodeRec :<: ns, T (Binding Name) :<: es)
   => Unifier m ns info
 case20 = Unifier $ Recursion2 \unify ->
   match unmatch \(a, T (NodeRec an), _ia) ->
@@ -202,7 +202,7 @@ case20 = Unifier $ Recursion2 \unify ->
 case21
   :: ( UnifyConstraint m ns es info
      , T NodeSum :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      )
   => Unifier m ns info
 case21 = Unifier $ Recursion2 \unify ->
@@ -226,7 +226,7 @@ case25
   :: forall label m ns es info.
      ( UnifyConstraint m ns es info
      , T (NodeHas label) :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      , Eq label
      )
   => Unifier m ns info
@@ -248,7 +248,7 @@ case25 = Unifier $ Recursion2 \unify ->
 case30
   :: ( UnifyConstraint m ns es info
      , T NodeApp :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      )
   => Unifier m ns info
 case30 = Unifier $ Recursion2 \unify ->
@@ -276,7 +276,7 @@ case40
   :: forall lit ns es info m.
      ( UnifyConstraint m ns es info
      , T (NodeLit lit) :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      , Eq lit
      )
   => Unifier m ns info
@@ -293,7 +293,7 @@ case41
   :: forall rep ns es info m.
      ( UnifyConstraint m ns es info
      , T (NodeRep rep) :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      , Eq rep
      )
   => Unifier m ns info
@@ -320,7 +320,7 @@ case60
   :: forall name ns es info m.
      ( UnifyConstraint m ns es info
      , T (NodeRef name) :<: ns
-     , T (Bind Name) :<: es
+     , T (Binding Name) :<: es
      , Eq name
      )
   => Unifier m ns info
@@ -415,9 +415,9 @@ sequel unify ((a,b): xs) = do
   return $ val : vals
 
 -- | get node's binder and flag
-binderInfo :: (Ord (es (Link es)), T (Bind name) :<: es, Ord info, Ord (ns (Hole ns info)))
+binderInfo :: (Ord (es (Link es)), T (Binding name) :<: es, Ord info, Ord (ns (Hole ns info)))
            => Hole ns info -> CoreG ns es info -> [(Flag, Integer, Maybe name, Hole ns info)]
-binderInfo node g = lFrom (== node) g >>= \(T (Bind flag i name), binder) -> return (flag, i, name, binder)
+binderInfo node g = lFrom (== node) g >>= \(T (Binding flag i name), binder) -> return (flag, i, name, binder)
 
 -- | rebind binding edge for node n, this should happen after `==>`.
 rebind :: forall name ns es info m
@@ -425,7 +425,7 @@ rebind :: forall name ns es info m
           , HasThrow "failure" (GraphUnifyError (Hole ns info)) m
           , Show info, Show (ns (Hole ns info)), Eq name
           , Ord info, Ord (ns (Hole ns info)), Ord (es (Link es))
-          , T (Bind name) :<: es, T NodeBot :<: ns, T Sub :<: es
+          , T (Binding name) :<: es, T NodeBot :<: ns, T Sub :<: es
           , Histo :<: ns, Pht O :<: es
           )
        => Hole ns info -> m ()
@@ -440,8 +440,8 @@ rebind n = do
                {- Important!!! for every node, there should exist a binder. -}
   bn <- foldM lcb b bs
   i <- maximum <$> forM binders \(f, i, name, v) ->
-    modifyGraph (filterLink (`isLink` \(T (Bind f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
-  modifyGraph $ overlay (n -<< T (Bind flag i (Nothing :: Maybe name)) >>- bn)
+    modifyGraph (filterLink (`isLink` \(T (Binding f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
+  modifyGraph $ overlay (n -<< T (Binding flag i (Nothing :: Maybe name)) >>- bn)
   where
     -- | return direct ancestors of node n, if it is partially grafted node.
     -- if this is used during unification, '==>' should be used first.
@@ -465,8 +465,8 @@ rebind n = do
          else return []
     -- | least common binder of two nodes
     lcb n1 n2 = do
-      ns1 <- getsGraph \g -> dfs (`isLink` (\(T (Bind _ _ (_ :: Maybe name))) -> True)) g n1
-      ns2 <- getsGraph \g -> dfs (`isLink` (\(T (Bind _ _ (_ :: Maybe name))) -> True)) g n2
+      ns1 <- getsGraph \g -> dfs (`isLink` (\(T (Binding _ _ (_ :: Maybe name))) -> True)) g n1
+      ns2 <- getsGraph \g -> dfs (`isLink` (\(T (Binding _ _ (_ :: Maybe name))) -> True)) g n2
       case zip ns1 ns2 >>= \(a, b) -> if a == b then pure a else [] of
         [] -> failMsg $ "No least common binder for " <> show n1 <> ", " <> show n2
         ls -> return $ last ls
