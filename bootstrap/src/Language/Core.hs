@@ -11,7 +11,7 @@
 module Language.Core
   (
 
-  -- * useful alias
+  -- * useful alias for surface language
 
   -- ** surface lang for type
     TypSurface
@@ -38,6 +38,27 @@ module Language.Core
   -- ** parsed module
   , ModuleSurface
   , ModuleSurfaceExt
+
+  -- * useful alias for internal language
+
+  -- ** internal pattern
+  , PatInternal
+  , PatInternalLitExt
+
+  -- ** internal expersion
+  , ExprInternal
+  , ExprInternalExt
+
+  -- * useful alias for sugar definition
+  --
+  -- we place handful type alias here to help
+  -- writing transformation on expression.
+
+  , SugarLambdaType
+  , SugarLambdaTerm
+
+  , SugarLetRecur
+  , SugarLetTerm
 
   -- ** re-export of structure
   , module Expr
@@ -105,13 +126,16 @@ type GPatSurfaceLitExt = PatSurfaceLitExt
 -- | Surface Expr
 type ExprSurface typ = Expr (ExprSurfaceExt typ) Name
 type ExprSurfaceExt typ =
-  (   Let (PatSurface typ)
-  :+: Equation (GPatSurface typ) (Prefixes Name typ)
-  :+: Equation (Grp (PatSurface typ)) (Prefixes Name typ)
-  :+: Apply :+: Tuple :+: Record Label
+  (   LetGrp (PatSurface typ)           -- plain pattern match via "let" binding
+  :+: Let (Binder (Name @: Maybe typ))  -- desugared non-recursive "let" binding
+  :+: Letrec (Binder (Name @: Maybe typ)) -- desugared possible-recrusive "let" binding group
+  :+: Equation (GPatSurface typ) (Prefixes Name typ)  -- heavy lambda
+  :+: Equation (Grp (PatSurface typ)) (Prefixes Name typ) -- light lambda
+  :+: Apply -- application, term beta-reduction or type application
+  :+: Value typ -- unlifted type value
+  :+: (@:) typ  -- type annotation
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
-  :+: Value typ :+: Selector Label :+: Constructor Label
-  :+: (@:) typ
+  :+: Tuple :+: Record Label :+: Selector Label :+: Constructor Label
   )
 
 ----------------------------------
@@ -138,3 +162,49 @@ type DeclSurfaceExt typ expr =
 type ModuleSurface = Module (ModuleSurfaceExt TypSurface (ExprSurface TypSurface)) Name
 type ModuleSurfaceExt typ expr = DeclSurfaceExt typ expr
 
+------------------------------------------
+------------------------------------------
+-- * Internal definition of core structure
+------------------------------------------
+------------------------------------------
+
+
+----------------------------------
+-- ** Internal expression
+----------------------------------
+
+type PatInternal typ = Pattern PatInternalLitExt (Cast typ :+: PatGroup) Label Name
+type PatInternalLitExt = LiteralText :+: LiteralInteger :+: LiteralNumber
+
+type ExprInternal typ = Expr (ExprInternalExt typ)
+type ExprInternalExt typ =
+  (   Let (Binder (Name @: typ))        -- non-recursive local binding
+  :+: Letrec (Binder (Name @: typ))     -- recursive local binding group
+  :+: Lambda (Binder (Prefix Name typ)) -- type lambda
+  :+: Lambda (Binder (Name @: typ))     -- term lambda
+  :+: Apply
+  :+: Match (PatInternal typ) -- pattern match
+  :+: Value (Coerce Name typ) -- evidence of type inference
+  :+: Cast typ                -- type coercion
+  :+: LiteralText :+: LiteralInteger :+: LiteralNumber
+  :+: Tuple :+: Record Label :+: Selector Label :+: Constructor Label
+  )
+
+
+------------------------------------------
+------------------------------------------
+-- * Sugar definition of core structure
+------------------------------------------
+------------------------------------------
+
+-- ** Sugar /\ lambda extension
+type SugarLambdaType typ = Lambda (Binder (Prefix Name typ))
+
+-- ** Sugar term lambda, which may or may not include type annotation
+type SugarLambdaTerm typ = Lambda (Binder (Name @: Maybe typ))
+
+-- Sugar recursive "Let" binding group, all allow optional type annotation
+type SugarLetRecur typ = Letrec (Binder (Name @: Maybe typ))
+
+-- Sugar normal "Let" binding group
+type SugarLetTerm typ = Let (Binder (Name @: Maybe typ))

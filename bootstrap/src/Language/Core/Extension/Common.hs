@@ -4,6 +4,7 @@ module Language.Core.Extension.Common
     Tuple (..)
   , Record (..)
   , Value (..)
+  , Binder (..)
   , Cast (..)
   , Literal (..)
   )
@@ -31,6 +32,10 @@ instance (Show label, Show a) => Show (Record label a) where
 newtype Value val a = Value val
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via val
+
+-- | a common extension to represent binder position
+newtype Binder val a = Binder val
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | Type or Kind casting
 data Cast t a = Cast t a

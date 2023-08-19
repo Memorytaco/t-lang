@@ -1,29 +1,21 @@
 module Example
   ( Exp (..)
-  , type ($-) (..)
   )
 where
 
-import Data.Bifunctor.TH (deriveBifunctor)
-
-data b $- a
-  = Bind b
-  | Free a
-  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
-
-$(deriveBifunctor ''($-))
+import Language.Core.Utility ( type (+>)(..) )
 
 data Exp name a
   = Var a
   | App (Exp name a) (Exp name a)
-  | Lam (Exp name (name $- Exp name a))
+  | Lam (Exp name (name +> Exp name a))
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 instance Applicative (Exp name) where
   pure = Var
   Var f <*> a = f <$> a
   App f1 f2 <*> a = App (f1 <*> a) (f2 <*> a)
-  Lam f <*> a = Lam $ pure lift <*> f
+  Lam f <*> a = Lam (lift <$> f)
     where
       lift (Bind x) = Bind x
       lift (Free g) = Free (g <*> a)

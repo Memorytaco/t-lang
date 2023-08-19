@@ -3,6 +3,7 @@ module Language.Core.Extension.Expr
   (
     -- ** expresion structure
     Let (..)
+  , LetGrp (..)
   , Letrec (..)
   , Equation (..)
   , Apply (..)
@@ -23,9 +24,15 @@ data Let binder expr
   = Let (binder expr) expr expr
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
--- | a helper to distinguish recursive and non-recursive binding
+-- | group of local name binding. it serves mainly surface language.
+data LetGrp binder expr
+  = LetGrp [(binder expr, expr)] expr
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+-- | local name binding, recursive
 data Letrec binder expr
   = Letrec [(binder expr, expr)] expr
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | equation group, syntax of lambda for surface language.
 -- it supports both light and heavy notation.
@@ -75,7 +82,7 @@ data Coerce name typ
   | CoerceTrans (Coerce name typ) (Coerce name typ) -- ^ sequel application of type computation
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
--- | function block, basic computation block, support both type abstraction and value abstraction
+-- | abstraction block, support both type abstraction and value abstraction.
 data Lambda bind e = Lambda (bind e) e deriving (Show, Eq, Ord, Functor)
 
 -- | function block, which supports nested data type as deBruijn index.

@@ -138,7 +138,8 @@ repl'loop = do
                 RLoadObject _ -> undefined
                 RLoadShared _ -> undefined
                 RDumpBitcode e -> do
-                  m <- runWithDefaultMain "repl" (genExpr e <&> snd)
+                  -- TODO: fix genExpr
+                  m <- runWithDefaultMain "repl" undefined -- (genExpr e <&> snd)
                   liftIO $ withContext \ctx -> withModuleFromAST ctx m (ByteString.putStr <=< moduleLLVMAssembly)
             ReadExpr e -> liftInput $ outputStrLn $ show e
             ReadNothing -> return ()

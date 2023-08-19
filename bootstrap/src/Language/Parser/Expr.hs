@@ -165,14 +165,19 @@ instance (ExprC e m, (@:) typ :<: f, PrattToken proxy typ m)
         return . Expr . inj $ left :@ typ
 
 -- | let expression
-instance (ExprC e m, Apply :<: f, Let pat :<: f, PrattToken proxy (pat (Expr f name)) m)
+instance (ExprC e m, Apply :<: f, LetGrp pat :<: f, PrattToken proxy (pat (Expr f name)) m)
   => PrattToken (WithExpr e m (Layer "let" proxy (Hint pat))) (Expr f name) m where
   tokenize _ parser end = do
-    pat :: pat (Expr f name) <-
-      reserved "let" >> pratt @proxy (lookAhead (reservedOp "=") $> ()) Go <* reservedOp "=" <?> "Let Expression Head"
-    value <- parser (lookAhead (reserved "in") $> ()) Go <* reserved "in"
-    ret <- parser end Go
-    return . literal . Expr . inj $ Let pat value ret
+    reserved "let" $> ()
+    let parseHead = pratt @proxy (lookAhead (reservedOp "=") $> ()) Go <?> "Let Expression Head"
+        parseBody = parser (lookAhead (reserved "in" <|> reservedOp ";;") $> ()) Go
+        parseBind = do
+          pat :: pat (Expr f name) <- parseHead  <* reservedOp "="
+          value <- parseBody
+          return (pat, value)
+    binds <- parseBind `sepBy1` reservedOp ";;"
+    ret <- reserved "in" >> parser end Go
+    return . literal . Expr . inj $ LetGrp binds ret
 
 -- | block lambda for expression
 instance ( ExprC e m, Apply :<: f
