@@ -35,7 +35,7 @@ This is something still under consideration, But here are some topics you may pi
    
    This language combines two systems:
    
-   - `SystemFC` for a running system (it lacks constraint support)
+   - `SystemFC` for a running system (it lacks constraint support for now)
    
    - `MLF` as core type language
    
@@ -67,7 +67,7 @@ This is something still under consideration, But here are some topics you may pi
    
    This is something still under investigation. It relates to code generation and runtime model of this language. It now has nearly no progress but some open problems need to be solved:
    
-   1. What runtime representation of function closure should be
+   1. How to design type directed closure conversion pass in ANF?
       
       > potential solution: trampoline as saver
    
@@ -75,19 +75,29 @@ This is something still under consideration, But here are some topics you may pi
       
       > potential solution: introduce linear type to do count and use boxed value
    
-   3. How to utilize type information to guide code optimization and generation
+   3. How to design type directed optimization procedure in ANF?
    
-   4. What is the representation of a compiled module
+   4. What is intermediate representation of a module?
       
       > potential solution: mangled name for module definition for representing namespace and intermediate representation for analysed module with ability to be converted into object file
+   
+   5. Is region inference a saver to generate cost free code?
 
 ## Code structure
 
-TODO
+Please read README in `bootstrap/src/Compiler` for a general introduction of compiler pipeline and relative code layout.
 
 ## Roadmap
 
-TODO
+- [ ] [2023.09.10] First release of a very basic prototype compiler.
+  
+  - With JIT available for very limited functionality.
+  
+  - Allow type inference for expression in REPL but with no compilation.
+  
+  - Only MLF type system is provided, and it has no kinds.
+
+- [ ] [2023.12.10] Lift MLF to MLFω and add kind support.
 
 # Principles
 
