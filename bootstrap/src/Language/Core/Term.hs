@@ -13,7 +13,9 @@
 module Language.Core.Term
   (
     Term (..)
-  , Plain (..)
+  , Expr1 (..)
+
+  , Identity1 (..)
   , (:++:) (..)
   , App1 (..)
   , Cons1 (..)
@@ -49,12 +51,11 @@ instance Functor f => Monad (Term f) where
 -- data Base f e = App (f e) (f e) | Lam (Bound () f e)
 --   deriving (Functor, Foldable, Traversable)
 
-
 -- | one possible definition for expression
-newtype Expr1 x f a = Expr1 (Term (x (f (Expr1 x f))) a)
-deriving instance (forall g. Functor (x g)) => Functor (Expr1 x f)
+newtype Expr1 x eff a = Expr1 (Term (x (eff (Expr1 x eff))) a)
+deriving instance (forall g. Functor (x g)) => Functor (Expr1 x eff)
 
-newtype Plain f e = Plain (f e)
+newtype Identity1 f e = Identity1 (f e)
 
 data (f :++: g) h a
   = Inl1 (f h a)
@@ -70,7 +71,7 @@ data Cons1 f e = Cons1 (f e) [f e]
   deriving (Functor, Foldable, Traversable)
 
 -- | a different constant.
-data Const1 c f e = Const1 c
+newtype Const1 c f e = Const1 c
   deriving (Functor, Foldable, Traversable)
 
 -- | a utility to express bounded variables.
@@ -78,4 +79,3 @@ data Const1 c f e = Const1 c
 -- see Scope in https://hackage.haskell.org/package/bound
 newtype Bound name f a = Bound (f (Either name (f a)))
   deriving (Functor, Foldable, Traversable)
-

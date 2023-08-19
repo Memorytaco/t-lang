@@ -34,8 +34,8 @@ buildAssertion ia ib = do
   let root = hole (j + 1) (G 1)
       gr = overlays
            [ g1, g2
-           , r1 -<< T (Bind Flexible 1 (Nothing @Name)) >>- root
-           , r2 -<< T (Bind Flexible 2 (Nothing @Name)) >>- root
+           , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
+           , r2 -<< T (Binding Flexible 2 (Nothing @Name)) >>- root
            ]
   res <- runDefaultUnify (gr :: UnifyG) r1 r2
   case res of

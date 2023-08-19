@@ -6,8 +6,6 @@ module Language.Core.Type
   , Kind (..)
   , KindF (..)
 
-
-  , Variance (..)
   )
 where
 
@@ -71,9 +69,6 @@ instance
   show (TypVar name) = show name
   show (TypBnd binder body) = "Bind { " <> show binder <> " = " <> show body <> " }"
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
-
--- | type variance
-data Variance = InVar | CoVar | ContraVar deriving (Show, Eq, Ord)
 
 infixr 3 :->
 
