@@ -1,4 +1,4 @@
-module Tlang.Inference.Expr
+module Language.Constraint.Graphic
   (
 
   -- ** all in one constraint generation class
@@ -15,6 +15,7 @@ module Tlang.Inference.Expr
 
   -- ** pattern constraint source
   , PatternInfo (..)
+  , bindings, pattern
 
   -- ** environment
   --
@@ -47,6 +48,12 @@ import Data.Functor ((<&>))
 import Data.Kind (Constraint, Type)
 import Data.Text (Text)
 
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+-- ** Data structures used to serve graphic constraint generation and constraint solving
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+
 data ConstraintGenErr
    = FailGenMsg String
    | FailUnexpect
@@ -64,7 +71,7 @@ data StageConstraint nodes edges info a = StageConstraint
    }
 makeLenses ''StageConstraint
 
--- | companion type family
+-- | companion type family for `ConstraintGen`
 type ConstrainGraphic :: (Type -> Type) -> Type -> (Type -> Type) -> (Type -> Type) -> (Type -> Type) -> Type -> Constraint
 type family ConstrainGraphic f source m nodes edges info
 
@@ -74,7 +81,11 @@ class ConstraintGen f a info | f a -> info where
                   => f (m (StageConstraint nodes edges info a))
                   -> m (StageConstraint nodes edges info a)
 
--- ** Helper functions
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+-- ** Helper functions and Definition of Environments
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
 
 node :: HasState "node" Int m => m Int
 node = modify @"node" (+1) >> get @"node"
@@ -104,8 +115,13 @@ getInstance ix n@(Hole v _) gr =
                              else failCGenMsg "Internal Error, G node doesn't have that instance"
     Nothing -> failCGenMsg "Internal Error, Expect G node, but it is not"
 
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
+-- ** Implementation of actual constraint generation logic
+------------------------------------------------------------------------------------------------
+------------------------------------------------------------------------------------------------
 
--- ** runner for constraint generator
+-- | toplevel generator for expression
 genConstraint
    :: ( target ~ (ExprF f name |: Hole nodes Int) -- ^ annotate each expression with type node
       , ConstraintGen f target Int, ConstrainGraphic f target m nodes edges Int
@@ -149,7 +165,9 @@ genConstraint = cata go
         Nothing -> failCGenMsg $ "name not in scope: " <> show name
     go (ExprF v) = stageConstraint v
 
--- ** instances
+------------------------------------------------------------------------------------------------
+-- ** instances definition for constraint generation of expression
+------------------------------------------------------------------------------------------------
 
 -- | Constraint for `Apply`
 type instance ConstrainGraphic Apply (ExprF f name |: Hole ns Int) m nodes edges info
@@ -272,7 +290,10 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
       , depR -++ Pht NDOrderLink ++- g
       ]
 
--- *** Generate Pattern Constraint
+
+------------------------------------------------------------------------------------------------
+-- ** graphic constraint generation for simple pattern
+------------------------------------------------------------------------------------------------
 
 -- | with `pattern` as annotated syntax tree and with `bindings` as exported binding
 --
@@ -452,6 +473,10 @@ genPatternConstraint = cata go
                   )
       return $ patInfo g dep gr
     go (PatExtF injm) = stageConstraint injm
+
+------------------------------------------------------------------------------------------------
+-- ** instances definition for constraint generation of simple pattern
+------------------------------------------------------------------------------------------------
 
 -- | handle Literal text
 type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name expr) m nodes edges info
