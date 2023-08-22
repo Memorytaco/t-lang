@@ -24,6 +24,7 @@ module Graph.Core
   , matchHole
   , (-<), (>-), edge, edges
   , (-<<), (>>-)
+  , (-++), (++-)
   , connect, overlay, overlays, vertex, vertices
   , hasVertex
 
@@ -71,7 +72,7 @@ hole' :: sub :<: sup => sub (Hole sup info) -> info -> Hole sup info
 hole' v info = hole info v
 {-# INLINE hole' #-}
 
-infixl 5 -<, >-, -<<, >>-
+infixl 5 -<, >-, -<<, >>-, -++, ++-
 
 -- | helpers for constructing arbitrary edges and nodes
 (-<) :: (node :<: nodes, edge :<: edges)
@@ -87,6 +88,11 @@ infixl 5 -<, >-, -<<, >>-
 (-<<) a e = (a, link e)
 (>>-) :: (Hole nodes info, Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
 (>>-) (a, e) = Algebra.edge e a
+
+(-++) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Set (Link edges))
+(-++) a e = (a, link e)
+(++-) :: (Ord (edges (Link edges))) => (Hole nodes info, Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
+(++-) (a, e) b = overlay (Algebra.edge e a b) (Algebra.edge e b a)
 
 -- | reexport of algebra edge
 edge :: forall edge a b edges nodes info. (a :<: nodes, b :<: nodes, edge :<: edges)

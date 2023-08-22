@@ -49,7 +49,9 @@ module Graph.Extension.GraphicType
   , T (..)
   , Pht (..)
   , C (..)
-  , NDDelegate
+  , NDInfo
+  , NDOrder (..)
+  , NDOrderLink (..)
 
   -- ** Edge
   , E (..)
@@ -102,7 +104,7 @@ newtype NodeTup = NodeTup Integer deriving (Show, Eq, Ord)
 -- | bottom node, anonymous local type variable
 data NodeBot = NodeBot deriving (Show, Eq, Ord)
 
--- | arrow node, for ->
+-- | arrow node, for ->, has arity of 2
 data NodeArr = NodeArr deriving (Show, Eq, Ord)
 
 -- | a redundant annotation node, it means nothing
@@ -111,12 +113,21 @@ data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable
 
 -- | TODO: to replace `Histo` nodes
 -- This node family is meant to define a family of functional nodes.
-data family NDDelegate
+data family NDInfo x
 
 -- | a `Histo` is meant to remember every merged node
 newtype Histo a = Histo [a]
   deriving (Functor, Foldable, Traversable)
   deriving (Show, Eq, Ord) via [a]
+
+-- | a special node used to track constraint dependency
+data NDOrder a = NDOrder
+  deriving (Functor, Foldable, Traversable)
+  deriving (Show, Eq, Ord)
+
+-- | a special node used to track constraint dependency
+data NDOrderLink = NDOrderLink
+  deriving (Show, Eq, Ord)
 
 -- *** Graph decorator
 --
@@ -137,7 +148,7 @@ newtype C c a = C c
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via c
 
--- | `C` phantom node, it attach additional information to nodes.
+-- | `Pht` phantom node, it attach additional information to nodes.
 --
 -- Any nodes wrapped by this should not interfere operation on "normal"
 -- nodes, like constraint nodes or type nodes.

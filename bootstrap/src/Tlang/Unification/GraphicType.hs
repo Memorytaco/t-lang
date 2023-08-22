@@ -175,7 +175,7 @@ case10 = Unifier $ Recursion2 \unify ->
     children <- getsGraph $ lFrom @(T Sub) (== a)
     pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
       [snd -> x, snd -> y] -> return (x, y)
-      _ -> failMsg $ "Tuple nodes don't have same number of children"
+      _ -> failMsg "Tuple nodes don't have same number of children"
     sequel unify pairs $> a
 
 -- | unification: NodeRec
