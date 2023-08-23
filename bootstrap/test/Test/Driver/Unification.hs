@@ -31,7 +31,7 @@ buildAssertion ia ib = do
   tb <- assertType ib
   ((r1, g1 :: UnifyG), i) <- runToGraph mempty 1 ta
   ((r2, g2 :: UnifyG), j) <- runToGraph mempty i tb
-  let root = hole (j + 1) (G 1)
+  let root = hole (G 1) (j + 1)
       gr = overlays
            [ g1, g2
            , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
