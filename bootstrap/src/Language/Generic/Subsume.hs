@@ -11,6 +11,7 @@ module Language.Generic.Subsume
 
   -- ** type constraint
   , (:<:), (:~:)
+  , (:>+:)
 
   )
 where
@@ -18,7 +19,7 @@ where
 import Language.Generic.Data ( type (:+:)(..) )
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 
-import Data.Kind (Type)
+import Data.Kind (Type, Constraint)
 import Data.Proxy (Proxy (..))
 import Control.Applicative ((<|>))
 
@@ -106,6 +107,12 @@ instance NoDup f 'False
 
 -- | Generic definition to save typing, a type indexed method
 type f :<: g = (Subsume (Elem f g) f g, NoDup f (Dup f '[]), NoDup g (Dup g '[]))
+
+-- | Helpful type family to save typing
+type family (:>+:) (sup :: Type -> Type) (subs :: [Type -> Type]) :: Constraint where
+  sup :>+: (a ': as) = (a :<: sup, sup :>+: as)
+  sup :>+: '[] = ()
+
 -- This `Check` code may be redundant, it is too strict to be useful
 -- type f :<: g = (Subsume (Elem f g) f g, Check (PotentialParameter f g) (Elem f g), NoDup f (Dup f '[]), NoDup g (Dup g '[]))
 type f :~: g = (f :<: g, g :<: f)

@@ -15,6 +15,7 @@ module Language.Constraint.Graphic
   -- ** error handler
   , ConstraintGenErr (..)
   , failCGenMsg
+  , HasConstraintGenErr
 
   -- ** pattern constraint source
   , PatternInfo (..)
@@ -25,8 +26,11 @@ module Language.Constraint.Graphic
   -- this is crucial and used to regulate definition of driver
   , HasBinding
   , BindingTable
+  , BindingType
 
-  , HasNodeCreater
+  , HasNodeCreator
+
+  , HasSolvErr
 
   -- ** driver code
   , genConstraint
@@ -40,7 +44,7 @@ import Language.Core.Extension
 
 import Graph.Core
 import Graph.Extension.GraphicType
-import Language.Generic ((:<:), inj, prj, (:+:) (..), type (|:) (..), Base)
+import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), Base)
 
 import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, asks)
@@ -66,8 +70,10 @@ data ConstraintGenErr
    | FailUnexpect
    deriving (Show, Eq, Ord)
 
-failCGenMsg :: HasThrow "fail" ConstraintGenErr m => String -> m a
-failCGenMsg = throw @"fail" . FailGenMsg
+type HasConstraintGenErr m = HasThrow ConstraintGenErr ConstraintGenErr m
+
+failCGenMsg :: HasConstraintGenErr m => String -> m a
+failCGenMsg = throw @ConstraintGenErr . FailGenMsg
 
 -- | one intermediate structure for constraint generation algorithm
 data StageConstraint nodes edges info a = StageConstraint
@@ -94,26 +100,26 @@ class ConstraintGen f a info | f a -> info where
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 
-type HasNodeCreater m = HasState "node" Int m
-newNodeInfo :: HasNodeCreater m => m Int
-newNodeInfo = modify @"node" (+1) >> get @"node"
-node :: forall node nodes m. (HasNodeCreater m, node :<: nodes)
+type HasNodeCreator m = HasState "NodeCreator" Int m
+newNodeInfo :: HasNodeCreator m => m Int
+newNodeInfo = modify @"NodeCreator" (+1) >> get @"NodeCreator"
+node :: forall node nodes m. (HasNodeCreator m, node :<: nodes)
      => node (Hole nodes Int) -> m (Hole nodes Int)
 node v = newNodeInfo <&> hole  @node v
 
 -- | environment for local binding
 type HasBinding name nodes m = HasReader "binding" (BindingTable name nodes) m
 -- | formats for local binding environment
-type BindingTable name nodes = [(name, (T Unify :+: T Instance) |: Hole nodes Int)]
+type BindingTable name nodes = [(name, BindingType nodes)]
+type BindingType nodes = (T Unify :+: T Instance) |: Hole nodes Int
 
 -- | query local binding
 lookupBinding
-  :: (HasBinding name nodes m, Eq name)
-  => name -> m (Maybe ((T Unify :+: T Instance) |: Hole nodes Int))
+  :: (HasBinding name nodes m, Eq name) => name -> m (Maybe (BindingType nodes))
 lookupBinding name = asks @"binding" (lookup name)
 
 -- | get instance of a graphic type scheme
-getInstance :: (G :<: ns, T Sub :<: es, Ord (es (Link es)), HasThrow "fail" ConstraintGenErr m, Ord info, Ord (ns (Hole ns info)))
+getInstance :: (G :<: ns, T Sub :<: es, HasConstraintGenErr m, HasOrderGraph ns es info)
             => Integer -> Hole ns info -> CoreG ns es info -> m (Hole ns info)
 getInstance ix n@(Hole v _) gr =
   case prj @G v of
@@ -134,13 +140,14 @@ getInstance ix n@(Hole v _) gr =
 genConstraint
    :: ( target ~ (ExprF f name |: Hole nodes Int) -- ^ annotate each expression with type node
       , ConstraintGen f target Int, ConstrainGraphic f target m nodes edges Int
-      , T Sub :<: edges, T (Binding name) :<: edges, T Instance :<: edges, T Unify :<: edges
-      , T NodeBot :<: nodes, G :<: nodes
-      , Pht NDOrderLink :<: edges, NDOrder :<: nodes, Pht Sub :<: edges
-      , Ord (edges (Link edges)), Traversable f
+      , edges :>+:
+         '[ T Sub, T (Binding name), T Unify
+          , T Instance, Pht NDOrderLink, Pht Sub]
+      , nodes :>+: '[T NodeBot, G, NDOrder]
+      , Traversable f, HasOrderEdge edges
       , Show name, Eq name
-      , HasThrow "fail" ConstraintGenErr m
-      , HasNodeCreater m
+      , HasConstraintGenErr m
+      , HasNodeCreator m
       , HasBinding name nodes m
       )
    => Expr f name -> m (StageConstraint nodes edges Int target)
@@ -182,14 +189,10 @@ genConstraint = cata go
 type instance ConstrainGraphic Apply (ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
     , Apply :<: f
-    , T (Binding name) :<: edges, T Sub :<: edges, T Instance :<: edges, T Unify :<: edges
-    , G :<: nodes, T NodeBot :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
-    , HasThrow "fail" ConstraintGenErr m
-    , HasNodeCreater m
-    , Ord (edges (Link edges))
-    , Eq (nodes (Hole nodes Int))
-    , Ord info, Ord (ns (Hole nodes info))
-    , NDOrder :<: nodes, Pht Sub :<: edges, Pht NDOrderLink :<: edges
+    , HasNodeCreator m
+    , HasOrderGraph nodes edges info
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T Instance, T Sub, T (Binding name)]
+    , nodes :>+: '[T NodeApp, T NodeArr, T NodeBot, NDOrder, G]
     )
 -- | Constraint for `Apply`
 instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
@@ -236,8 +239,7 @@ type instance ConstrainGraphic
     (Let (Pattern plit pinj label name))
     (ExprF f name |: Hole ns Int)
     m nodes edges info
-  = ( ns ~ nodes
-    )
+  = ( ns ~ nodes)
 instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint = undefined
 
@@ -245,11 +247,10 @@ instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF f name |: Hol
 type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
     , Literal t :<: f
-    , G :<: nodes, T (NodeLit t) :<: nodes
-    , T Sub :<: edges, T (Binding name) :<: edges
-    , Ord (edges (Link edges))
-    , HasState "node" Int m
-    , NDOrder :<: nodes, Pht Sub :<: edges, Pht NDOrderLink :<: edges
+    , HasOrderEdge edges
+    , HasNodeCreator m
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Sub]
+    , nodes :>+: '[T (NodeLit t), NDOrder, G]
     )
 -- | expression literal
 instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
@@ -267,13 +268,10 @@ instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
 type instance ConstrainGraphic Tuple (ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
     , Tuple :<: f
-    , G :<: nodes, T NodeTup :<: nodes, T NodeBot :<: nodes
-    , T Sub :<: edges, T (Binding name) :<: edges
-    , Ord (edges (Link edges)), Eq (nodes (Hole nodes Int))
-    , HasState "node" Int m
-    , HasThrow "fail" ConstraintGenErr m
-    , Ord info, Ord (nodes (Hole nodes info))
-    , NDOrder :<: nodes, Pht Sub :<: edges, Pht NDOrderLink :<: edges
+    , HasNodeCreator m
+    , HasOrderGraph nodes edges info
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Sub]
+    , nodes :>+: '[NDOrder, G, T NodeBot, T NodeTup]
     )
 -- | expression Tuple literal
 instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
@@ -318,7 +316,7 @@ makeLenses ''PatternInfo
 -- | constraint generation for a single pattern
 genPatternConstraint
   :: forall lits injs label name a a' target m nodes edges f
-  .  ( -- for pattern
+   . ( -- for pattern
        target ~ PatternInfo lits injs nodes label name a
      , ConstraintGen lits target Int, ConstrainGraphic lits target m nodes edges Int
      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
@@ -327,17 +325,14 @@ genPatternConstraint
      , a ~ Expr f name, a' ~ (Base a |: Hole nodes Int)
      , ConstraintGen f a' Int, ConstrainGraphic f a' m nodes edges Int
 
-     , T Sub :<: edges, T (Binding name) :<: edges, T Instance :<: edges, T Unify :<: edges
-     , T NodeBot :<: nodes, G :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
-     , T NodeTup :<: nodes, T NodeRec :<: nodes, T (NodeHas label) :<: nodes
-     , Ord (edges (Link edges))
+     , edges :>+: '[T Sub, T (Binding name), T Instance, T Unify]
+     , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas label)]
      , Show name, Eq name
-     , Traversable lits, Traversable injs
-     , Traversable f
-     , HasState "node" Int m
-     , HasThrow "fail" ConstraintGenErr m
+     , Traversable lits, Traversable injs, Traversable f
+     , HasNodeCreator m
+     , HasConstraintGenErr m
+     , HasOrderGraph nodes edges Int
      , HasBinding name nodes m
-     , Ord (nodes (Hole nodes Int))
      , Pht NDOrderLink :<: edges, NDOrder :<: nodes, Pht Sub :<: edges
      )
   => Pattern lits injs label name a -> m (StageConstraint nodes edges Int target)
@@ -491,11 +486,10 @@ genPatternConstraint = cata go
 type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
     , LiteralText :<: lits
-    , T (NodeLit Text) :<: nodes, G :<: nodes
-    , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord (edges (Link edges))
-    , HasState "node" Int m
-    , Pht NDOrderLink :<: edges, NDOrder :<: nodes
+    , HasOrderEdge edges
+    , HasNodeCreator m
+    , edges :>+: '[T (Binding name), T Sub, Pht NDOrderLink]
+    , nodes :>+: '[T (NodeLit Text), G, NDOrder]
     )
 instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralText (Literal t)) = do
@@ -513,11 +507,10 @@ instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr)
 type instance ConstrainGraphic (Literal t) (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
     , Literal t :<: lits
-    , T (NodeLit t) :<: nodes, G :<: nodes
-    , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord (edges (Link edges))
-    , HasState "node" Int m
-    , Pht NDOrderLink :<: edges, NDOrder :<: nodes
+    , HasOrderEdge edges
+    , HasNodeCreator m
+    , edges :>+: '[T (Binding name), T Sub, Pht NDOrderLink]
+    , nodes :>+: '[T (NodeLit t), G, NDOrder]
     )
 instance ConstraintGen (Literal t) (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (Literal t) = do
@@ -535,11 +528,11 @@ instance ConstraintGen (Literal t) (PatternInfo lits injs nodes label name expr)
 type instance ConstrainGraphic LiteralInteger (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
     , LiteralInteger :<: lits
-    , T (NodeLit Integer) :<: nodes, G :<: nodes
-    , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord (edges (Link edges))
-    , HasState "node" Int m
+    , HasOrderEdge edges
+    , HasNodeCreator m
     , Pht NDOrderLink :<: edges, NDOrder :<: nodes
+    , edges :>+: '[T (Binding name), T Sub, Pht NDOrderLink]
+    , nodes :>+: '[T (NodeLit Integer), G, NDOrder]
     )
 instance ConstraintGen LiteralInteger (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralInteger (Literal t)) = do
@@ -560,7 +553,7 @@ type instance ConstrainGraphic LiteralNumber (PatternInfo lits injs ns label nam
     , T (NodeLit Double) :<: nodes, G :<: nodes
     , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
-    , HasState "node" Int m
+    , HasNodeCreator m
     , Pht NDOrderLink :<: edges, NDOrder :<: nodes
     )
 instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name expr) Int where
@@ -620,9 +613,9 @@ copy
   :: forall name edges nodes m
   . ( T Unify :<: edges, T Instance :<: edges
     , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord (edges (Link edges)), Ord (nodes (Hole nodes Int))
+    , HasOrderGraph nodes edges Int
     , T NodeBot :<: nodes, G :<: nodes
-    , HasNodeCreater m, HasThrow "fail" ConstraintGenErr m, HasSolvErr m)
+    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr m)
   => (Hole nodes Int, Instance) -> CoreG nodes edges Int
   -- ^ (root, (oldFrontiers, newFrontiers), graphic type)
   -> m (Hole nodes Int, [(Hole nodes Int, Hole nodes Int)], CoreG nodes edges Int)
@@ -667,11 +660,10 @@ copy (scheme, Instance i) gr = do
 
 -- | expand a type scheme at another `G` node and return root of new gType copied
 expand :: forall name edges nodes m
-  . ( T Unify :<: edges, T Instance :<: edges
-    , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord (edges (Link edges)), Ord (nodes (Hole nodes Int))
+  . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
     , T NodeBot :<: nodes, G :<: nodes
-    , HasNodeCreater m, HasThrow "fail" ConstraintGenErr m, HasSolvErr m)
+    , HasOrderGraph nodes edges Int
+    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr m)
   => (Hole nodes Int, Instance) -> Hole nodes Int -> CoreG nodes edges Int
   -- ^ (root of expanded gType, unification nodes, modified new graphic constraint)
   -> m (Hole nodes Int, [Hole nodes Int], CoreG nodes edges Int)
