@@ -21,7 +21,7 @@ module Language.Constraint.Graphic
   , PatternInfo (..)
   , bindings, pattern
 
-  -- ** environment
+  -- ** common environment
   --
   -- this is crucial and used to regulate definition of driver
   , HasBinding
@@ -30,6 +30,8 @@ module Language.Constraint.Graphic
 
   , HasNodeCreator
 
+  -- ** solver types
+  , ConstraintSolvErr (..)
   , HasSolvErr
 
   -- ** driver code
@@ -184,6 +186,17 @@ genConstraint = cata go
 ------------------------------------------------------------------------------------------------
 -- ** instances definition for constraint generation of expression
 ------------------------------------------------------------------------------------------------
+
+-- | Constraint for Chain
+type instance ConstrainGraphic (x :+: y) (ExprF f name |: Hole ns Int) m nodes edges info
+  = ( ConstrainGraphic x (ExprF f name |: Hole ns Int) m nodes edges info
+    , ConstrainGraphic y (ExprF f name |: Hole ns Int) m nodes edges info)
+instance
+  ( ConstraintGen x (ExprF f name |: Hole nodes Int) Int
+  , ConstraintGen y (ExprF f name |: Hole nodes Int) Int
+  ) => ConstraintGen (x :+: y) (ExprF f name |: Hole nodes Int) Int where
+    stageConstraint (Inl m) = stageConstraint m
+    stageConstraint (Inr m) = stageConstraint m
 
 -- | Constraint for `Apply`
 type instance ConstrainGraphic Apply (ExprF f name |: Hole ns Int) m nodes edges info
@@ -482,6 +495,16 @@ genPatternConstraint = cata go
 -- ** instances definition for constraint generation of simple pattern
 ------------------------------------------------------------------------------------------------
 
+type instance ConstrainGraphic (x :+: y) (PatternInfo lits injs ns label name expr) m nodes edges info
+  = ( ConstrainGraphic x (PatternInfo lits injs ns label name expr) m nodes edges info
+    , ConstrainGraphic y (PatternInfo lits injs ns label name expr) m nodes edges info)
+instance
+  ( ConstraintGen x (PatternInfo lits injs ns label name expr) Int
+  , ConstraintGen y (PatternInfo lits injs ns label name expr) Int
+  ) => ConstraintGen (x :+: y) (PatternInfo lits injs ns label name expr) Int where
+    stageConstraint (Inl m) = stageConstraint m
+    stageConstraint (Inr m) = stageConstraint m
+
 -- | handle Literal text
 type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
@@ -588,22 +611,22 @@ failSolvMsg :: HasSolvErr m => String -> m a
 failSolvMsg = throw @ConstraintSolvErr . FailSolvMsg
 
 -- | get constraint interior nodes, no duplication
-interiorC :: forall name ns es info. (T (Binding name) :<: es, Ord info, Ord (ns (Hole ns info))) =>
+interiorC :: forall name ns es info. (T (Binding name) :<: es, HasOrderNode ns info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorC gr = nub . dfs (isLinkOf @(T (Binding name))) (transpose gr)
 
 -- | get structure interior nodes, no duplication
-interiorS :: (T Sub :<: es, Ord info, Ord (ns (Hole ns info))) =>
+interiorS :: (T Sub :<: es, HasOrderNode ns info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorS = fmap nub . dfs (isLinkOf @(T Sub))
 
 -- | get interior nodes, no duplication
-interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, Ord info, Ord (ns (Hole ns info))) =>
+interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, HasOrderNode ns info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorI gr root = interiorC @name gr root `intersect` interiorS gr root
 
 -- | frontier nodes, no duplication
-frontierS :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, Ord info, Ord (ns (Hole ns info)), Ord (es (Link es))) =>
+frontierS :: forall name ns es info. (es :>+: '[T (Binding name), T Sub], HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 frontierS gr root = nub . filter (`notElem` interiors) $ lFrom @(T Sub) (`elem` interiors) gr ^.. traverse . _2
   where interiors = interiorI @name gr root
@@ -611,10 +634,9 @@ frontierS gr root = nub . filter (`notElem` interiors) $ lFrom @(T Sub) (`elem` 
 -- | copy instance of a type scheme, return the copied graphic type
 copy
   :: forall name edges nodes m
-  . ( T Unify :<: edges, T Instance :<: edges
-    , T (Binding name) :<: edges, T Sub :<: edges
+  . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Instance, T Sub]
+    , nodes :>+: '[T NodeBot, G]
     , HasOrderGraph nodes edges Int
-    , T NodeBot :<: nodes, G :<: nodes
     , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr m)
   => (Hole nodes Int, Instance) -> CoreG nodes edges Int
   -- ^ (root, (oldFrontiers, newFrontiers), graphic type)
@@ -632,7 +654,7 @@ copy (scheme, Instance i) gr = do
   sc <- case lookup s freshInteriors of
     Just sc -> return sc
     Nothing -> failSolvMsg "Implementation Error: The root of type scheme is not included"
-  let gType =
+  let graphicType =
         let -- assign new node number to existed nodes to keep their structure
             -- but make them different from old ones.
             replaceNodes table n = fromMaybe n (lookup n table)
@@ -652,7 +674,7 @@ copy (scheme, Instance i) gr = do
           $ foldr (.) id (resetInterior <$> freshInteriors)
           $ replaceNodes (freshInteriors `union`  freshFrontiers)
         <$> induce (`elem` union interiors frontiers) gr
-  return (sc, freshFrontiers, gType)
+  return (sc, freshFrontiers, graphicType)
   where -- a `G` node may have multiple instances, so what we get here are
         -- nodes among all of its instances
         allInteriors = interiorI @name gr scheme

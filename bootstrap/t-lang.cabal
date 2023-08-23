@@ -39,6 +39,7 @@ library
       Driver
       Driver.Compiler.CodeGen.LLVM
       Driver.Graph
+      Driver.GraphicConstraint
       Driver.Inference
       Driver.Parser
       Driver.Transform
