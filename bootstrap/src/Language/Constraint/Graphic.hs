@@ -1,3 +1,6 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Use $" #-}
 module Language.Constraint.Graphic
   (
 
@@ -23,6 +26,8 @@ module Language.Constraint.Graphic
   , HasBinding
   , BindingTable
 
+  , HasNodeCreater
+
   -- ** driver code
   , genConstraint
   , genPatternConstraint
@@ -47,6 +52,8 @@ import Data.Functor ((<&>))
 
 import Data.Kind (Constraint, Type)
 import Data.Text (Text)
+import Data.List (intersect, union, nub)
+import Data.Maybe (fromMaybe)
 
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
@@ -87,10 +94,12 @@ class ConstraintGen f a info | f a -> info where
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 
-node :: HasState "node" Int m => m Int
-node = modify @"node" (+1) >> get @"node"
-node' :: forall nodes sub m. (HasState "node" Int m, sub :<: nodes) => sub (Hole nodes Int) -> m (Hole nodes Int)
-node' v = node <&> hole' v
+type HasNodeCreater m = HasState "node" Int m
+newNodeInfo :: HasNodeCreater m => m Int
+newNodeInfo = modify @"node" (+1) >> get @"node"
+node :: forall node nodes m. (HasNodeCreater m, node :<: nodes)
+     => node (Hole nodes Int) -> m (Hole nodes Int)
+node v = newNodeInfo <&> hole  @node v
 
 -- | environment for local binding
 type HasBinding name nodes m = HasReader "binding" (BindingTable name nodes) m
@@ -130,8 +139,8 @@ genConstraint
       , Pht NDOrderLink :<: edges, NDOrder :<: nodes, Pht Sub :<: edges
       , Ord (edges (Link edges)), Traversable f
       , Show name, Eq name
-      , HasState "node" Int m
       , HasThrow "fail" ConstraintGenErr m
+      , HasNodeCreater m
       , HasBinding name nodes m
       )
    => Expr f name -> m (StageConstraint nodes edges Int target)
@@ -139,9 +148,9 @@ genConstraint = cata go
   where
     go (ValF name) = do
       val'maybe <- lookupBinding name
-      g <- node' (G 1)
-      o1 <- node' NDOrder -- root of order tree
-      var <- node' (T NodeBot)
+      g <- node (G 1)
+      o1 <- node NDOrder -- root of order tree
+      var <- node (T NodeBot)
       let gr = overlays
              [ g -<< T (Sub 1) >>- var
              , var -<< T (Binding Flexible 1 $ Just name) >>- g
@@ -149,14 +158,14 @@ genConstraint = cata go
              ]
       case val'maybe of
         Just (n :| Inl (T Unify)) -> do
-          o2 <- node' NDOrder
+          o2 <- node NDOrder
           return $ StageConstraint (g :| ValF name) g ([n, var], o1) $ overlays
             [ gr, n -++ T Unify ++- var
             , o2 -++ Pht NDOrderLink ++- n
             , o1 -<< Pht (Sub 1) >>- o2
             ]
         Just (n :| Inr (T (Instance i))) -> do
-          o2 <- node' NDOrder
+          o2 <- node NDOrder
           return $ StageConstraint (g :| ValF name) g ([], o1) $ overlays
             [ gr, n -<< T (Instance i) >>- var
             , o2 -++ Pht NDOrderLink ++- n
@@ -176,7 +185,7 @@ type instance ConstrainGraphic Apply (ExprF f name |: Hole ns Int) m nodes edges
     , T (Binding name) :<: edges, T Sub :<: edges, T Instance :<: edges, T Unify :<: edges
     , G :<: nodes, T NodeBot :<: nodes, T NodeArr :<: nodes, T NodeApp :<: nodes
     , HasThrow "fail" ConstraintGenErr m
-    , HasState "node" Int m
+    , HasNodeCreater m
     , Ord (edges (Link edges))
     , Eq (nodes (Hole nodes Int))
     , Ord info, Ord (ns (Hole nodes info))
@@ -200,13 +209,13 @@ instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
 
       -- collect graph and generate constraint
       genApp (r'a, (dep'as, dep'a), gr'a) (r'b, (dep'bs, dep'b), gr'b) = do
-        g <- node' (G 1)
-        depR <- node' NDOrder
+        g <- node (G 1)
+        depR <- node NDOrder
         (app, arr, domain, codomain) <-
-           (,,,) <$> node' (T $ NodeApp 3)
-                 <*> node' (T NodeArr)
-                 <*> node' (T NodeBot)
-                 <*> node' (T NodeBot)
+           (,,,) <$> node (T $ NodeApp 3)
+                 <*> node (T NodeArr)
+                 <*> node (T NodeBot)
+                 <*> node (T NodeBot)
         -- gen part of graph, including subnode graph
         gr1 <- genInstance r'a gr'a app
         gr2 <- genInstance r'b gr'b domain
@@ -245,9 +254,9 @@ type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes
 -- | expression literal
 instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (Literal t) = do
-    g <- node' (G 1)
-    depR <- node' NDOrder
-    n <- node' (T $ NodeLit t)
+    g <- node (G 1)
+    depR <- node NDOrder
+    n <- node (T $ NodeLit t)
     return $ StageConstraint (g :| ExprF (inj $ Literal t)) g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
       , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
@@ -270,12 +279,12 @@ type instance ConstrainGraphic Tuple (ExprF f name |: Hole ns Int) m nodes edges
 instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (Tuple sma) = do
     let len = toInteger $ length sma
-    g <- node' (G 1)
-    tup <- node' (T $ NodeTup len)
-    depR <- node' NDOrder
+    g <- node (G 1)
+    tup <- node (T $ NodeTup len)
+    depR <- node NDOrder
     sia <- zip [1..len] <$> sequence sma
     gr <- overlays <$> forM sia \(ix, StageConstraint _ g' (_, gdep) gr') -> do
-      var <- node' (T NodeBot)
+      var <- node (T NodeBot)
       return $ overlays
         [ tup -<< T (Sub ix) >>- var
         , var -<< T (Binding Flexible 1 $ Nothing @name) >>- tup
@@ -337,10 +346,10 @@ genPatternConstraint = cata go
   where
     getInstance1 = getInstance 1
     arrowGM = do
-      app <- node' (T $ NodeApp 3)
-      arr <- node' (T NodeArr)
-      domain <- node' (T NodeBot)
-      codomain <- node' (T NodeBot)
+      app <- node (T $ NodeApp 3)
+      arr <- node (T NodeArr)
+      domain <- node (T NodeBot)
+      codomain <- node (T NodeBot)
       let gr = overlays
              [ app -<< T (Sub 1) >>- arr
              , app -<< T (Sub 2) >>- domain
@@ -353,18 +362,18 @@ genPatternConstraint = cata go
 
     -- runner
     go PatWildF = do
-      g <- node' (G 1)
-      depR <- node' NDOrder
-      var <- node' (T NodeBot)
+      g <- node (G 1)
+      depR <- node NDOrder
+      var <- node (T NodeBot)
       return $ StageConstraint (PatternData (g :| PatWildF) []) g ([], depR)
         (overlays [ g -<< T (Sub 1) >>- var
                   , var -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
                   , depR -++ Pht NDOrderLink ++- g
                   ])
     go PatUnitF = do
-      g <- node' (G 1)
-      depR <- node' NDOrder
-      n <- node' (T $ NodeTup 0)
+      g <- node (G 1)
+      depR <- node NDOrder
+      n <- node (T $ NodeTup 0)
       let patd = PatternData (g :| PatUnitF) []
           gr = overlays
                [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
@@ -373,9 +382,9 @@ genPatternConstraint = cata go
                ]
       return $ StageConstraint patd g ([], depR) gr
     go (PatVarF name) = do
-      g <- node' (G 1)
-      depR <- node' NDOrder
-      var <- node' (T NodeBot)
+      g <- node (G 1)
+      depR <- node NDOrder
+      var <- node (T NodeBot)
       let gr = overlays
                [ g -<< T (Sub 1) >>- var
                , var -<< (T . Binding Flexible 1 $ Just name) >>- g
@@ -385,12 +394,12 @@ genPatternConstraint = cata go
     go (PatPrmF litm) = stageConstraint litm
     go (PatTupF sma) = do
       let len = toInteger $ length sma
-      g <- node' (G 1)
-      tup <- node' (T $ NodeTup len)
-      depR <- node' NDOrder
+      g <- node (G 1)
+      tup <- node (T $ NodeTup len)
+      depR <- node NDOrder
       sia <- (`zip` [1..len]) <$> sequence sma
       (overlays -> gr, join -> gdeps) <- unzip <$> forM sia \(StageConstraint _ n (gdeps, gdep) gr, i) -> do
-        var <- node' (T NodeBot)
+        var <- node (T NodeBot)
         n' <- getInstance1 n gr
         return (overlays
           [ gr
@@ -409,14 +418,14 @@ genPatternConstraint = cata go
                   ])
     go (PatRecF sma) = do
       let len = toInteger $ length sma
-      g <- node' (G 1)
-      recn <- node' (T $ NodeRec len)
-      depR <- node' NDOrder
+      g <- node (G 1)
+      recn <- node (T $ NodeRec len)
+      depR <- node NDOrder
       sia <- (`zip` [1..len]) <$> mapM sequence sma
       (overlays -> gr, join -> gdeps) <- unzip <$> forM sia \((label, StageConstraint _ n (gdeps, gdep) gr), i) -> do
         n' <- getInstance1 n gr
-        has <- node' (T $ NodeHas True label)
-        var <- node' (T NodeBot)
+        has <- node (T $ NodeHas True label)
+        var <- node (T NodeBot)
         return (overlays
           [ gr
           , has -<< (T . Binding Flexible 1 $ Nothing @name) >>- recn
@@ -436,7 +445,7 @@ genPatternConstraint = cata go
         ]
     go (PatSymF _ _) = error "wait for whole pass being completed"
     go (PatViewF e ma) = do
-      g <- node' (G 1)
+      g <- node (G 1)
       -- common pattern for arrow, with domain and codomain binds to root of type
       ((app, domain, codomain), arr'gr) <- arrowGM
       -- pattern constraint
@@ -446,7 +455,7 @@ genPatternConstraint = cata go
       -- get instance of pattern G node, what we will use to unify with codomain
       pat' <- getInstance1 pat'root pat'gr
       -- generate NDOrder tracker node
-      depR <- node' NDOrder
+      depR <- node NDOrder
       let patd = PatternData (g :| PatViewF e' pat'a) pat'bindings
           gr = overlays
               [ arr'gr, pat'gr, e'gr
@@ -490,9 +499,9 @@ type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name 
     )
 instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralText (Literal t)) = do
-    g <- node' (G 1)
-    n <- node' (T $ NodeLit t)
-    depR <- node' NDOrder
+    g <- node (G 1)
+    n <- node (T $ NodeLit t)
+    depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralText $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
@@ -512,9 +521,9 @@ type instance ConstrainGraphic (Literal t) (PatternInfo lits injs ns label name 
     )
 instance ConstraintGen (Literal t) (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (Literal t) = do
-    g <- node' (G 1)
-    n <- node' (T $ NodeLit t)
-    depR <- node' NDOrder
+    g <- node (G 1)
+    n <- node (T $ NodeLit t)
+    depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
@@ -534,9 +543,9 @@ type instance ConstrainGraphic LiteralInteger (PatternInfo lits injs ns label na
     )
 instance ConstraintGen LiteralInteger (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralInteger (Literal t)) = do
-    g <- node' (G 1)
-    n <- node' (T $ NodeLit t)
-    depR <- node' NDOrder
+    g <- node (G 1)
+    n <- node (T $ NodeLit t)
+    depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralInteger $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
@@ -556,9 +565,9 @@ type instance ConstrainGraphic LiteralNumber (PatternInfo lits injs ns label nam
     )
 instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralNumber (Literal t)) = do
-    g <- node' (G 1)
-    n <- node' (T $ NodeLit t)
-    depR <- node' NDOrder
+    g <- node (G 1)
+    n <- node (T $ NodeLit t)
+    depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj $ LiteralNumber $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
@@ -568,10 +577,123 @@ instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name exp
 
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
--- ** Solver
+-- ** Constraint Solver
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 
+------------------------------------------------------------------------------------------------
+-- *** Helper functions for constraint solver
+------------------------------------------------------------------------------------------------
+
+newtype ConstraintSolvErr
+  = FailSolvMsg String
+   deriving (Show, Eq, Ord)
+
+type HasSolvErr m = HasThrow ConstraintSolvErr ConstraintSolvErr m
+
+failSolvMsg :: HasSolvErr m => String -> m a
+failSolvMsg = throw @ConstraintSolvErr . FailSolvMsg
+
+-- | get constraint interior nodes, no duplication
+interiorC :: forall name ns es info. (T (Binding name) :<: es, Ord info, Ord (ns (Hole ns info))) =>
+  CoreG ns es info -> Hole ns info -> [Hole ns info]
+interiorC gr = nub . dfs (isLinkOf @(T (Binding name))) (transpose gr)
+
+-- | get structure interior nodes, no duplication
+interiorS :: (T Sub :<: es, Ord info, Ord (ns (Hole ns info))) =>
+  CoreG ns es info -> Hole ns info -> [Hole ns info]
+interiorS = fmap nub . dfs (isLinkOf @(T Sub))
+
+-- | get interior nodes, no duplication
+interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, Ord info, Ord (ns (Hole ns info))) =>
+  CoreG ns es info -> Hole ns info -> [Hole ns info]
+interiorI gr root = interiorC @name gr root `intersect` interiorS gr root
+
+-- | frontier nodes, no duplication
+frontierS :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, Ord info, Ord (ns (Hole ns info)), Ord (es (Link es))) =>
+  CoreG ns es info -> Hole ns info -> [Hole ns info]
+frontierS gr root = nub . filter (`notElem` interiors) $ lFrom @(T Sub) (`elem` interiors) gr ^.. traverse . _2
+  where interiors = interiorI @name gr root
+
+-- | copy instance of a type scheme, return the copied graphic type
+copy
+  :: forall name edges nodes m
+  . ( T Unify :<: edges, T Instance :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
+    , Ord (edges (Link edges)), Ord (nodes (Hole nodes Int))
+    , T NodeBot :<: nodes, G :<: nodes
+    , HasNodeCreater m, HasThrow "fail" ConstraintGenErr m, HasSolvErr m)
+  => (Hole nodes Int, Instance) -> CoreG nodes edges Int
+  -- ^ (root, (oldFrontiers, newFrontiers), graphic type)
+  -> m (Hole nodes Int, [(Hole nodes Int, Hole nodes Int)], CoreG nodes edges Int)
+copy (scheme, Instance i) gr = do
+  s <- getInstance i scheme gr
+  let structureI = interiorS gr s
+      interiors = allInteriors `intersect` structureI
+      frontiers = allFrontiers `intersect` structureI
+      -- all interiorCs bound to scheme
+      interiorCBinds = lTo @(T (Binding name)) (== scheme) gr & traverse %~ \(a, b) -> (b, a)
+  -- we generate copies of nodes
+  freshInteriors <- forM interiors \n@(Hole tag _) -> newNodeInfo <&> (n,) . Hole tag
+  freshFrontiers <- forM frontiers \n -> node (T NodeBot) <&> (n,)
+  sc <- case lookup s freshInteriors of
+    Just sc -> return sc
+    Nothing -> failSolvMsg "Implementation Error: The root of type scheme is not included"
+  let gType =
+        let -- assign new node number to existed nodes to keep their structure
+            -- but make them different from old ones.
+            replaceNodes table n = fromMaybe n (lookup n table)
+            -- remove instantiation link and unification link. this is intended to be
+            --  used with `induceLink`.
+            filterOutConstraint e = not $ isLinkOf @(T Unify) e || isLinkOf @(T Instance) e
+            -- rebind all interiors to root of gType, excluding root node of gType.
+            -- and we don't need to reset binding edge of frontier nodes since
+            -- those edges are not included in the copied gType.
+            resetInterior (old, new) gType =
+              if null (lFrom @(T (Binding name)) (== new) gType) && new /= sc
+              then case lookup old interiorCBinds of
+                     Just e -> overlays [gType, new -<< e >>- sc]
+                     Nothing -> gType
+              else gType
+        in induceLink filterOutConstraint
+          $ foldr (.) id (resetInterior <$> freshInteriors)
+          $ replaceNodes (freshInteriors `union`  freshFrontiers)
+        <$> induce (`elem` union interiors frontiers) gr
+  return (sc, freshFrontiers, gType)
+  where -- a `G` node may have multiple instances, so what we get here are
+        -- nodes among all of its instances
+        allInteriors = interiorI @name gr scheme
+        allFrontiers = frontierS @name gr scheme
+
+-- | expand a type scheme at another `G` node and return root of new gType copied
+expand :: forall name edges nodes m
+  . ( T Unify :<: edges, T Instance :<: edges
+    , T (Binding name) :<: edges, T Sub :<: edges
+    , Ord (edges (Link edges)), Ord (nodes (Hole nodes Int))
+    , T NodeBot :<: nodes, G :<: nodes
+    , HasNodeCreater m, HasThrow "fail" ConstraintGenErr m, HasSolvErr m)
+  => (Hole nodes Int, Instance) -> Hole nodes Int -> CoreG nodes edges Int
+  -- ^ (root of expanded gType, unification nodes, modified new graphic constraint)
+  -> m (Hole nodes Int, [Hole nodes Int], CoreG nodes edges Int)
+expand source g gr = do
+  (gRoot, gFrontiers, gType) <- copy @name source gr
+  return . (gRoot, gFrontiers >>= \(a,b) -> [a,b],) $ overlays
+    [ gRoot -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+    , overlays $ gFrontiers >>= \(old, new) ->
+        [ old -++ T Unify ++- new
+        , new -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        ]
+    , gr, gType
+    ]
+
+-- | solve a `Instance` edge
+solvInst :: a
+solvInst = undefined
+
+-- | solve all `Unify` edge
+solvUnify :: a
+solvUnify = undefined
+
 -- | it accepts a staged constraint and return a presolution
-solve :: StageConstraint nodes edges info a -> m (CoreG nodes edges info)
-solve = undefined
+solve :: StageConstraint nodes edges info a -> m (StageConstraint nodes edges info a)
+solve (StageConstraint info root scope gr) = undefined

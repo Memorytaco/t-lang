@@ -492,6 +492,6 @@ rebind n = do
   -- node and the Histo node.
   --
   -- "info" is randomly picked using resulting node's info.
-  let pht = hole info (Histo [from, to])
+  let pht = hole (Histo [from, to]) info
   modifyGraph $ overlay (to -<< Pht O >>- pht)
   return to

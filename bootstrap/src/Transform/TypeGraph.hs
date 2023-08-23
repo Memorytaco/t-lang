@@ -85,9 +85,7 @@ node = modify @"node" (+1) >> get @"node"
 --           1 2 3 4 5 6
 shiftBindingEdge
   :: forall name nodes edges info
-   . ( T (Binding name) :<: edges, Ord info, Ord (edges (Link edges))
-     , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
-     )
+   . (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
 shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Binding name)) (== root) g
   where shiftup gr (e@(T (Binding flag i name)), n) = overlays
@@ -99,9 +97,7 @@ shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Binding name)) (== root) g
 -- | move bound site from `from` to `to`
 moveBindingEdge
   :: forall name nodes edges info
-   . ( T (Binding name) :<: edges, Ord info, Ord (edges (Link edges))
-     , Eq (Hole nodes info), Ord (nodes (Hole nodes info))
-     )
+   . ( T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
 moveBindingEdge from to g = foldl move g $ lTo @(T (Binding name)) (== from) g
   where move gr (e@(T (Binding flag i name)), n) = overlays
@@ -125,12 +121,12 @@ type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
 instance FoldTypeGraph (Type.Type bind f name) Int where
   foldTypeGraph = cata go
     where
-      go Type.TypPhtF = node <&> hole' (T NodeBot) <&> \v -> (v, Vertex v)
+      go Type.TypPhtF = node <&> hole (T NodeBot) <&> \v -> (v, Vertex v)
       go (Type.TypVarF v) = v
       go (Type.TypConF m ms) = do
         ns <- sequence $ m: ms
         let len = toInteger $ length ns
-        top <- node <&> hole' (T $ NodeApp len)
+        top <- node <&> hole (T $ NodeApp len)
         gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . T $ Sub i) (Vertex top) (Vertex sub) <> subg
         return (top, overlays gs)
       go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv <&> \case
@@ -165,8 +161,7 @@ toGraph = foldTypeGraph . fmap \name -> asks @"global" (lookup name) >>= \case
 -- *** handle binders
 
 type instance ConstrainGraph (Prefix name) nodes edges info m
-  = ( Eq (edges (Link edges))
-    , Ord (nodes (Hole nodes info)), Ord (edges (Link edges))
+  = ( HasOrderGraph nodes edges info
     , T (Binding name) :<: edges, T Sub :<: edges
     , NodePht :<: nodes
     , HasState "node" Int m
@@ -187,7 +182,7 @@ instance FoldBinderTypeGraph (Prefix name) Int where
     -- may exist a loop via binding edge, and a phantom node needs to be put here
     -- to remove the self binding loop
     if root == var then do
-      pht <- hole' NodePht <$> node
+      pht <- hole NodePht <$> node
       -- TODO: explain why we need to move all binding edges from old root to the phantom node
       return (pht, overlays [ moveBindingEdge @name root pht $ shiftBindingEdge @name root body
                             , bbody, var -<< T (Binding flag 1 (Just name)) >>- pht
@@ -215,7 +210,7 @@ instance FoldTypeGraph Tuple Int where
   foldTypeGraph (Tuple ms) = do
     gs <- sequence ms
     let len = toInteger $ length gs
-    root <- node <&> hole' (T $ NodeTup len)
+    root <- node <&> hole (T $ NodeTup len)
     g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< T (Sub i) >>- a) Empty $ zip [1..len] gs
     return (root, g)
 
@@ -230,9 +225,9 @@ instance FoldTypeGraph (Record label) Int where
   foldTypeGraph (Record ms) = do
     gs <- forM ms sequence
     let len = toInteger $ length gs
-    root <- node <&> hole' (T $ NodeRec len)
+    root <- node <&> hole (T $ NodeRec len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, (a, g'))) -> do
-      label <- node <&> hole' (T $ NodeHas True l)
+      label <- node <&> hole (T $ NodeHas True l)
       return $ overlays [root -<< T (Sub i) >>- label, label -<< T (Sub 1) >>- a, g', g]
     return (root, g)
 
@@ -248,9 +243,9 @@ instance FoldTypeGraph (Variant label) Int where
   foldTypeGraph (Variant ms) = do
     gs <- mapM (mapM sequence) ms
     let len = toInteger $ length gs
-    root <- node <&> hole' (T $ NodeSum len)
+    root <- node <&> hole (T $ NodeSum len)
     g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, val)) -> do
-      label <- node <&> hole' (T $ NodeHas True l)
+      label <- node <&> hole (T $ NodeHas True l)
       return . overlays $
         [ overlays [root -<< T (Sub i) >>- label, g]
         , maybe Empty (\(a, g') -> overlays [label -<< T (Sub 1) >>- a, g']) val
@@ -261,13 +256,13 @@ instance FoldTypeGraph (Variant label) Int where
 type instance ConstrainGraph LiteralText nodes edges info m
   = ( T (NodeLit Text) :<: nodes, HasState "node" Int m)
 instance FoldTypeGraph LiteralText Int where
-  foldTypeGraph (LiteralText (getLiteral -> lit)) = node <&> hole' (T $ NodeLit lit) <&> \v -> (v, Vertex v)
+  foldTypeGraph (LiteralText (getLiteral -> lit)) = node <&> hole (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 -- | handle `LiteralNatural'
 type instance ConstrainGraph LiteralNatural nodes edges info m
   = ( T (NodeLit Integer) :<: nodes, HasState "node" Int m)
 instance FoldTypeGraph LiteralNatural Int where
-  foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole' (T $ NodeLit lit) <&> \v -> (v, Vertex v)
+  foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 
 -- *** handle Injectors

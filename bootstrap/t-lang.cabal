@@ -87,7 +87,6 @@ library
       Language.Parser.Type
       Tlang.Codegen
       Tlang.Inference
-      Tlang.Inference.Graph
       Tlang.Inference.Kind
       Tlang.Rep
       Tlang.Rep.Class
