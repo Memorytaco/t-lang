@@ -43,7 +43,7 @@ deriving instance
 
 -- | pattern group with logic combination
 data PatGroup a
-  = PatSeq [a] -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
+  = PatAlt [a] -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
   | PatGrp [a] -- ^ __pat1, pat2, pat3__, match with multiple patterns simutaneously, capture all
                -- ^ of them at a time. some special rules will be applied to it.
                -- ^ thus, called pattern group.

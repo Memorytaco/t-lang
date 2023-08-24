@@ -4,7 +4,7 @@
 -}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Tlang.Unification.GraphicType
+module Language.Constraint.Unification.GraphicType
   (
 
   -- ** Core environment

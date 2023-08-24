@@ -15,7 +15,7 @@ import Control.Monad.State (StateT (..))
 
 import Data.Text (Text)
 
-import Tlang.Unification.GraphicType
+import Language.Constraint.Unification.GraphicType
 import Graph.Core ( CoreG, Hole )
 import Language.Core (Label, Name)
 

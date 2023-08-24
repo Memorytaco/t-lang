@@ -2,7 +2,12 @@ module Driver.Transform
   (
 
   -- ** default definition for Graphic Type
-    PlayG
+    SurfaceG
+  , SurfaceGNodes
+  , SurfaceGEdges
+
+  , UnifyGNodes
+  , UnifyGEdges
   , UnifyG
 
   -- ** re-export subfunctionality
@@ -21,19 +26,24 @@ import Graph.Core
 
 import Data.Text (Text)
 
-type PlayG
-  = CoreG (   T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
-          :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
-          :+: T NodeApp :+: T (NodeHas Label)
-          :+: NodePht
-          )
-          (T Sub :+: T (Binding Name)) Int
 
-type UnifyG
-  = CoreG (   T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
-          :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
-          :+: T NodeApp :+: T (NodeHas Label)
-          :+: NodePht :+: Histo :+: G
-          )
-          (T Sub :+: T (Binding Name) :+: Pht O) Int
+type SurfaceGNodes
+  = T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
+    :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
+    :+: T NodeApp :+: T (NodeHas Label)
+    :+: NodePht
+type SurfaceGEdges = T Sub :+: T (Binding Name)
+
+type SurfaceG = CoreG SurfaceGNodes SurfaceGEdges Int
+
+type UnifyGNodes
+  = T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
+    :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
+    :+: T NodeApp :+: T (NodeHas Label)
+    :+: NodePht :+: Histo :+: G
+
+type UnifyGEdges
+  = T Sub :+: T (Binding Name) :+: Pht O
+
+type UnifyG = CoreG UnifyGNodes UnifyGEdges Int
 

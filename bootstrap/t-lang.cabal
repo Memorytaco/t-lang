@@ -40,7 +40,6 @@ library
       Driver.Compiler.CodeGen.LLVM
       Driver.Graph
       Driver.GraphicConstraint
-      Driver.Inference
       Driver.Parser
       Driver.Transform
       Driver.Transform.GraphType
@@ -56,6 +55,7 @@ library
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic
+      Language.Constraint.Unification.GraphicType
       Language.Core
       Language.Core.Attribute
       Language.Core.Class
@@ -95,7 +95,6 @@ library
       Tlang.Rep.Primitive
       Tlang.TH
       Tlang.Unification
-      Tlang.Unification.GraphicType
       Tlang.Unification.Kind
       Transform.GraphType
       Transform.LowerType

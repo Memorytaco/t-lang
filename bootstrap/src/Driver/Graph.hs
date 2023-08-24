@@ -27,12 +27,12 @@ import Driver.Transform
 --   void $ runGraphviz dot Png (name <> ".png")
 --   writeDotFile (name <> ".dot") dot
 
-parseTypeGrpah :: Text -> IO PlayG
+parseTypeGrpah :: Text -> IO SurfaceG
 parseTypeGrpah typ = do
    res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypSurface eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
-        ((_, g :: PlayG), _) <- runToGraph mempty 0 t
+        ((_, g :: SurfaceG), _) <- runToGraph mempty 0 t
         writeFile "graph.dot" $ exportViaShow g
         return g
      (Left (err :: ParseErrorBundle Text Void), _) -> putStrLn (errorBundlePretty err) >> error "see previous message"

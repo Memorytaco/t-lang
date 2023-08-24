@@ -26,7 +26,7 @@ buildAssertion text = do
     Right t -> return t
 
   -- convert type into graph
-  ((root, g :: PlayG), _) <- runToGraph mempty 1 typ
+  ((root, g :: SurfaceG), _) <- runToGraph mempty 1 typ
   (typ2, _) <- runGraphType g [] ("@test", 1) root
 
   -- these two types should be equal

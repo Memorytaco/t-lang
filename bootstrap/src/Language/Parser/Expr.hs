@@ -191,7 +191,7 @@ instance ( ExprC e m, Apply :<: f
     let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr f name))
                      (void . lookAhead . choice $ reservedOp <$> [",", "=", "|"]) Go
         gPat = iPat `sepBy1` reservedOp "," <&> PatExt . inj . PatGrp <?> "group pattern"
-        sPat = gPat `sepBy1` reservedOp "|" <&> PatExt . inj . PatSeq <?> "sequence pattern" <|> fail "expect a pattern definition"
+        sPat = gPat `sepBy1` reservedOp "|" <&> PatExt . inj . PatAlt <?> "sequence pattern" <|> fail "expect a pattern definition"
         branch = (,) <$> sPat <*> (reservedOp "=" *> parser (void . lookAhead $ reservedOp "]" <|> reservedOp "|") Go)
              <|> fail "expect equation"
         lambda = do
