@@ -33,11 +33,13 @@ module Language.Constraint.Graphic
   -- ** solver types
   , ConstraintSolvErr (..)
   , HasSolvErr
+  , HasUnifier
+  , Unifier
 
   -- ** driver code
   , genConstraint
   , genPatternConstraint
-  , solve
+  , solveConstraint
   )
 where
 
@@ -49,10 +51,10 @@ import Graph.Extension.GraphicType
 import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), Base)
 
 import Capability.State (HasState, get, modify)
-import Capability.Reader (HasReader, asks)
+import Capability.Reader (HasReader, asks, ask)
 import Capability.Error (HasThrow, throw)
-import Control.Monad (forM, foldM, join)
-import Control.Lens (makeLenses, (^..), _2, _1, (%~), (^.), (&))
+import Control.Monad (forM, foldM, join, (<=<))
+import Control.Lens (makeLenses, (^..), _2, _1, (%~), (^.), (&), (.~))
 import Data.Functor.Foldable (cata)
 import Data.Functor ((<&>))
 
@@ -601,14 +603,20 @@ instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name exp
 -- *** Helper functions for constraint solver
 ------------------------------------------------------------------------------------------------
 
-newtype ConstraintSolvErr
+-- TODO: add unit test for all functions below
+
+data ConstraintSolvErr err
   = FailSolvMsg String
+  | FailSolvUnify err
    deriving (Show, Eq, Ord)
 
-type HasSolvErr m = HasThrow ConstraintSolvErr ConstraintSolvErr m
+type HasSolvErr err m = HasThrow ConstraintSolvErr (ConstraintSolvErr err) m
 
-failSolvMsg :: HasSolvErr m => String -> m a
+failSolvMsg :: HasSolvErr err m => String -> m a
 failSolvMsg = throw @ConstraintSolvErr . FailSolvMsg
+
+failSolvUnify :: HasSolvErr err m => err -> m a
+failSolvUnify = throw @ConstraintSolvErr . FailSolvUnify
 
 -- | get constraint interior nodes, no duplication
 interiorC :: forall name ns es info. (T (Binding name) :<: es, HasOrderNode ns info) =>
@@ -633,11 +641,11 @@ frontierS gr root = nub . filter (`notElem` interiors) $ lFrom @(T Sub) (`elem` 
 
 -- | copy instance of a type scheme, return the copied graphic type
 copy
-  :: forall name edges nodes m
+  :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Instance, T Sub]
     , nodes :>+: '[T NodeBot, G]
     , HasOrderGraph nodes edges Int
-    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr m)
+    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
   => (Hole nodes Int, Instance) -> CoreG nodes edges Int
   -- ^ (root, (oldFrontiers, newFrontiers), graphic type)
   -> m (Hole nodes Int, [(Hole nodes Int, Hole nodes Int)], CoreG nodes edges Int)
@@ -680,34 +688,148 @@ copy (scheme, Instance i) gr = do
         allInteriors = interiorI @name gr scheme
         allFrontiers = frontierS @name gr scheme
 
--- | expand a type scheme at another `G` node and return root of new gType copied
-expand :: forall name edges nodes m
+-- | expand a type scheme at another node and return root of new gType copied
+expand :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
     , T NodeBot :<: nodes, G :<: nodes
     , HasOrderGraph nodes edges Int
-    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr m)
+    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
   => (Hole nodes Int, Instance) -> Hole nodes Int -> CoreG nodes edges Int
   -- ^ (root of expanded gType, unification nodes, modified new graphic constraint)
   -> m (Hole nodes Int, [Hole nodes Int], CoreG nodes edges Int)
-expand source g gr = do
+expand source target gr = do
   (gRoot, gFrontiers, gType) <- copy @name source gr
   return . (gRoot, gFrontiers >>= \(a,b) -> [a,b],) $ overlays
-    [ gRoot -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+    [ gRoot -<< T (Binding Flexible 1 $ Nothing @name) >>- target
     , overlays $ gFrontiers >>= \(old, new) ->
         [ old -++ T Unify ++- new
-        , new -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , new -<< T (Binding Flexible 1 $ Nothing @name) >>- target
         ]
     , gr, gType
     ]
 
--- | solve a `Instance` edge
-solvInst :: a
-solvInst = undefined
+-- | propagate a graphic constraint, return results constraint and new generated unifications
+propagate :: forall name edges nodes err m
+  . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
+    , T NodeBot :<: nodes, G :<: nodes
+    , HasOrderGraph nodes edges Int
+    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
+  => Hole nodes Int -> CoreG nodes edges Int
+  -> m ([Hole nodes Int], CoreG nodes edges Int)
+propagate scheme gr = do
+  instances <- forM constraints \(source, t) -> do
+    binder <- case lFrom @(T (Binding name)) (== t) gr of
+      [(_, binder)] -> return binder
+      _ -> failSolvMsg "A node has none or multiple binders during propagation"
+    return (source, t, binder)
+  let folder (ounifications, ogr) (source, t, binder) = do
+        (root, unifications, gType) <- expand @name source binder ogr
+        return . (root:t:unifications <> ounifications,) $ overlays
+          [ gType, ogr, root -++ T Unify ++- t ]
+  foldM folder ([], gr) instances
+  where
+    constraints = lFrom (== scheme) gr <&> \(T (Instance i), t) ->
+      ((scheme, Instance i), t)
 
--- | solve all `Unify` edge
-solvUnify :: a
-solvUnify = undefined
+type HasUnifier err nodes edges info m =
+  HasReader "Unifier" (Unifier err nodes edges info m) m
+type Unifier err nodes edges info m =
+  CoreG nodes edges info
+    -> Hole nodes info -> Hole nodes info
+    -> m (Either err (Hole nodes info, CoreG nodes edges info))
+
+-- | if we have a unification link represented in graph like
+--
+-- @@@
+-- a <--> b <--> c
+-- @@@
+--
+-- we can feed `recurUnify` with any of a, b or c and we get a single final node "x"
+-- with unification edge points to itself and "x" is among a, b or c.
+recurUnify
+  ::  ( HasUnifier err nodes edges info m, HasSolvErr err m
+      , HasOrderGraph nodes edges info, T Unify :<: edges)
+  => CoreG nodes edges info -> Hole nodes info -> m (Hole nodes info, CoreG nodes edges info)
+recurUnify graph start = do
+  unify <- ask @"Unifier"
+  let go (s, gr) [] = return (s, gr)
+      go (s, gr) (n:ns) = do
+        unify gr s n >>= \case
+          Left err -> failSolvUnify err
+          Right left@(s', gr') -> go left ns'
+            where
+              ns' = (filter (`notElem` [s,n,s']) $ (snd <$> lFrom @(T Unify) (== s') gr') <> ns)
+  go (start, graph)
+    $ filter (/= start)
+    $ nub $ snd <$> lFrom @(T Unify) (== start) graph
+
+-- | make sure every unified nodes has `Unify` edge point to itself and
+-- we clear those edges in graph.
+--
+-- Use this with `solvUnify`.
+verifyUnifier
+  :: (HasSolvErr err m, edges :>+: '[T Unify], HasOrderGraph nodes edges info)
+  => CoreG nodes edges info -> [Hole nodes info] -> m (CoreG nodes edges info)
+verifyUnifier graph [] = return graph
+verifyUnifier graph (n:ns) = do
+  let targets = snd <$> lFrom @(T Unify) (== n) graph
+  case filter (/= n) $ nub targets of
+    [] -> let graph' = replaceLink (\e -> if isLinkOf @(T Unify) e then Nothing else Just e) n n graph
+          in verifyUnifier graph' ns
+    _ -> failSolvMsg "Failure when unifying nodes"
+
+-- | solve all `Unify` edges in a stage constraint
+solvUnify
+  ::  ( HasUnifier err nodes edges info m, edges :>+: '[T Unify]
+      , HasOrderGraph nodes edges info, HasSolvErr err m)
+  => StageConstraint nodes edges info a -> m (StageConstraint nodes edges info a)
+solvUnify (StageConstraint info root (nub -> unifications, dep) graph) = do
+  gr <- go graph unifications
+  gr' <- verifyUnifier gr unifications
+  return (StageConstraint info root ([], dep) gr')
+  where
+    go gr [] = return gr
+    go gr (n:ns) = do
+      (n', gr') <- recurUnify gr n
+      go gr' $ filter (/= n') ns
+
+-- | solve a `Instance` edge
+solvInst
+  :: forall name nodes edges m err a
+  . ( HasUnifier err nodes edges Int m, HasSolvErr err m, HasConstraintGenErr m
+    , HasNodeCreator m
+    , nodes :>+: '[NDOrder, G, T NodeBot]
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
+    , HasOrderGraph nodes edges Int )
+  => StageConstraint nodes edges Int a
+  -> m (StageConstraint nodes edges Int a)
+solvInst sc@(StageConstraint _ _ (unifications, dep) graph) = do
+  if null unifications
+  then return ()
+  else failSolvMsg "Unexpected unification constraint when trying to solve instance edges"
+  let orders = dfs (isLinkOf @(Pht Sub)) (induce (\n -> isHole n (\NDOrder _ -> True)) graph) dep
+  -- TOOD: verify it is acyclic graphic constraint
+  go sc (reverse orders)
+  where
+    go c [] = return c
+    go c@(StageConstraint _ _ _ gr) (n:ns) = do
+      inst <- case lFrom @(Pht NDOrderLink) (== n) gr of
+        [] -> failSolvMsg "Internal error: misplaced tracker order node, no G node available"
+        [(_, n')] -> if isHole n' \(G _) _ -> True
+                then return n'
+                else failSolvMsg "Internal error: wrong node linked with tracker order node"
+        _ -> failSolvMsg "Internal error: multiple nodes linked with tracker order node"
+      (unifications', gr') <- propagate @name inst gr
+      c' <- solvUnify (c & atScope . _1 .~ unifications' & atGraph .~ gr')
+      go c' ns
 
 -- | it accepts a staged constraint and return a presolution
-solve :: StageConstraint nodes edges info a -> m (StageConstraint nodes edges info a)
-solve (StageConstraint info root scope gr) = undefined
+solveConstraint
+  :: forall name nodes edges m err a
+  . ( HasUnifier err nodes edges Int m
+    , HasNodeCreator m, HasConstraintGenErr m
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
+    , nodes :>+: '[NDOrder, G, T NodeBot]
+    , HasOrderGraph nodes edges Int, HasSolvErr err m )
+  => StageConstraint nodes edges Int a -> m (StageConstraint nodes edges Int a)
+solveConstraint = solvInst @name <=< solvUnify

@@ -147,10 +147,10 @@ linkFrom, linkTo :: (HasOrderGraph ns es info)
 linkFrom p g = sort [(e, b)|(es, a, b) <- Algebra.edgeList g, p a, e <- toList es]
 linkTo p g = sort [(e, a)|(es, a, b) <- Algebra.edgeList g, p b, e <- toList es]
 
-lFrom, lTo :: forall e es ns info. (e :<: es, HasOrderGraph ns es info)
+lFrom, lTo :: (e :<: es, HasOrderGraph ns es info)
            => (Hole ns info -> Bool) -> CoreG ns es info -> [(e (Link es), Hole ns info)]
-lFrom p g = [(v, n)| (Link e, n) <- linkFrom p g, Just v <- [prj @e e]]
-lTo p g = [(v, n)| (Link e, n) <- linkTo p g, Just v <- [prj @e e]]
+lFrom p g = [(v, n)| (Link e, n) <- linkFrom p g, Just v <- [prj e]]
+lTo p g = [(v, n)| (Link e, n) <- linkTo p g, Just v <- [prj e]]
 
 matchHole
   :: (node :<: nodes)
