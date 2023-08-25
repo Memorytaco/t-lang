@@ -110,17 +110,17 @@ instance TypeC e m
   tokenize _ parser _ = parens (parser (lookAhead (reservedOp ")") $> ()) Go) <&> literal
 
 -- | type level nat number
-instance (TypeC e m, LiteralNatural :<: rep)
+instance (TypeC e m, Literal Integer :<: rep)
   => PrattToken (WithType e m "nat") (Type bind rep name a) m where
   tokenize _ _ _ = do
-    nat <- Type . inj . LiteralNatural . Literal <$> integer <?> "Natural Number"
+    nat <- Type . inj . Literal @Integer <$> integer <?> "Natural Number"
     return $ literal nat
 
 -- | type level str number
-instance (TypeC e m, LiteralText :<: rep)
+instance (TypeC e m, Literal Text :<: rep)
   => PrattToken (WithType e m "text") (Type bind rep name a) m where
   tokenize _ _ _ = do
-    str <- Type . inj . LiteralText . Literal <$> stringLiteral <?> "Type Level String"
+    str <- Type . inj . Literal <$> stringLiteral <?> "Type Level String"
     return $ literal str
 
 -- -- | record literal for type
@@ -134,7 +134,7 @@ instance (TypeC e m, Variant Label :<: rep)
   tokenize _ parser _ = do
     let pair = do
           name <- identifier <|> operator <&> Label
-          typ <- optional $ reservedOp ":" *> (parser (lookAhead $ (reservedOp "," <|> reservedOp ">") $> ()) Go)
+          typ <- optional $ reservedOp ":" *> parser (lookAhead $ (reservedOp "," <|> reservedOp ">") $> ()) Go
           return (name, typ)
     variant <- angles $ sepBy pair (reservedOp ",")
             <&> Type . inj . Variant

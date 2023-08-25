@@ -1,15 +1,32 @@
 {- | * Convert graphic representation of type back to its syntactic representation
 -}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Transform.GraphType
   (
 
-  -- ** transform Graphic Type back to Syntactic Type
-    toSyntacticType
+  -- ** core builder
+    Conversion
+  , runConversion
+  , treeConversion
 
-  -- ** relevant definitions
-  , UnfoldGraphType (..)
-  , GraphTypeConstrain
+  -- ** error definition
+  , GraphToTypeErr (..)
+  , HasGraphToTypeErr
+
+  -- ** building blocks
+  , literal01
+  , literal02
+  , literal03
+  , literal04
+  , literal05
+  , literal06
+
+  , structure01
+
+  , special01
+  , special02
   )
 where
 
@@ -18,35 +35,60 @@ import Language.Core.Extension
 
 import Graph.Core
 import Graph.Extension.GraphicType
-import Language.Generic ((:<:), inj, prj, (:+:) (..))
+import Language.Generic ((:<:), inj, prj, Recursion (..))
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
 
-import Data.Text (Text)
+import Data.Function (fix)
 import Data.String (IsString (..))
 
-import qualified Data.Kind as Data (Type, Constraint)
+import Capability.Error
 
-type GraphTypeConstrain :: (Data.Type -> Data.Type) -> (Data.Type -> Data.Type)
-                        -> (Data.Type -> Data.Type) -> (Data.Type -> Data.Type) -> Data.Type
-                        -> (Data.Type -> Data.Type) -> (Data.Type -> Data.Type) -> Data.Type -> Data.Type
-                        -> Data.Constraint
-type family GraphTypeConstrain node m nodes edges info bind rep name a
+-- | Conversion error
+data GraphToTypeErr node
+  = GTypUnmatch node
+  deriving (Show, Eq)
 
-class UnfoldGraphType node info | node -> info where
-  unfoldGraphType :: (HasReader "graph" (CoreG nodes edges info) m, GraphTypeConstrain node m nodes edges info bind rep name a)
-                  => (Hole nodes info -> m (Type bind rep name a))
-                  -> node (Hole nodes info) -> info -> m (Type bind rep name a)
+type HasGraphToTypeErr node m
+  = ( HasThrow GraphToTypeErr (GraphToTypeErr node) m
+    , HasCatch GraphToTypeErr (GraphToTypeErr node) m
+    )
 
-toSyntacticType
-  :: ( GraphTypeConstrain nodes m nodes edges info bind rep name a
-     , UnfoldGraphType nodes info
-     , HasReader "graph" (CoreG nodes edges info) m
-     )
-  => Hole nodes info -> m (Type bind rep name a)
-toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
-{-# INLINE toSyntacticType #-}
+unmatch :: HasGraphToTypeErr node m => node -> m a
+unmatch = throw @GraphToTypeErr . GTypUnmatch
+
+data Conversion nodes edges info bind rep name m a
+  = HasReader "graph" (CoreG nodes edges info) m
+  => Conversion (Recursion m (Hole nodes info) (Type bind rep name a))
+
+-- | drive a conversion from graph to type
+runConversion
+  :: Conversion nodes edges info bind rep name m a
+  -> Hole nodes info -> m (Type bind rep name a)
+runConversion (Conversion (Recursion f)) = fix f
+
+-- | build a tree like conversion
+treeConversion
+  :: (HasGraphToTypeErr (Hole nodes info) m, HasEqNode nodes info, HasReader "graph" (CoreG nodes edges info) m)
+  => [Conversion nodes edges info bind rep name m a] -> Conversion nodes edges info bind rep name m a
+treeConversion = foldr foldT (Conversion $ Recursion \_ n -> unmatch n)
+  where
+    foldT (Conversion (Recursion f)) (Conversion (Recursion g)) = Conversion $ Recursion \restore n ->
+      catch @GraphToTypeErr (f restore n) $ \case
+        e@(GTypUnmatch n') ->
+          if n' == n
+            then g restore n
+            else throw @GraphToTypeErr e
+
+-- toSyntacticType
+--   :: ( GraphTypeConstrain nodes m nodes edges info bind rep name a
+--      , UnfoldGraphType nodes info
+--      , HasReader "graph" (CoreG nodes edges info) m
+--      )
+--   => Hole nodes info -> m (Type bind rep name a)
+-- toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
+-- {-# INLINE toSyntacticType #-}
 
 -- ** Utilities
 --
@@ -56,16 +98,11 @@ toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
 sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges, Ord info, Ord (nodes (Hole nodes info)))
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
 sFrom root = asks @"graph" $ lFrom @(T Sub) (== root)
-{-# INLINE sFrom #-}
 
 -- | query whether one node has been translated into syntactic form, if so return the name
 lookupName :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, name)] m)
            => Hole nodes info -> m (Maybe name)
 lookupName n = asks @"local" (lookup n)
-{-# INLINE lookupName #-}
-
-type WithLocalEnv m nodes edges info bind rep name a
-  = (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, a)] m)
 
 -- | if the node has already been translated, return `TypVar name`, and otherwise pass
 -- control to the following monad block
@@ -83,16 +120,15 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , HasReader "local" [(Hole nodes info, a)] m
   , HasReader "scheme" (Maybe a -> m a) m
   , T (Binding a) :<: edges
-  , Ord (edges (Link edges)), Ord a
-  , Eq (Hole nodes info), Eq a, Eq info
+  , Ord a , Eq a
   , Forall (Prefix a) :<: bind
   , Functor rep, Functor bind
-  , Ord info, Ord (nodes (Hole nodes info))
+  , HasOrderGraph nodes edges info
   )
 
 -- | automatically handling binding edge
 withBinding
-  :: forall m nodes edges info bind rep name a. WithBindingEnv m nodes edges info bind rep name a
+  :: forall m nodes edges info bind rep name a. (WithBindingEnv m nodes edges info bind rep name a)
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
   preBinds <- asks @"graph" $ lTo @(T (Binding a)) (== root)
@@ -112,201 +148,159 @@ withBinding restore root m = do
            else return . Free $ return var
   -- return the final type
   return $ foldr (\(name, bnd) bod -> TypBnd (inj $ Forall bnd) $ shift name bod) body bindings
-{-# INLINE withBinding #-}
 
--- ** Instance definition
---
--- define logic here
 
-type instance GraphTypeConstrain (x :+: y) m nodes edges info bind rep name a
-  = ( GraphTypeConstrain x m nodes edges info bind rep name a
-    , GraphTypeConstrain y m nodes edges info bind rep name a
-    )
-instance (UnfoldGraphType x info, UnfoldGraphType y info) => UnfoldGraphType (x :+: y) info where
-  unfoldGraphType restore (Inl v) info = unfoldGraphType restore v info
-  unfoldGraphType restore (Inr v) info = unfoldGraphType restore v info
-
-type instance GraphTypeConstrain (T NodeTup) m nodes edges info bind rep name a
-  = ( T Sub :<: edges
-    , T NodeTup :<: nodes
-    , Tuple :<: rep
-    , WithBindingEnv m nodes edges info bind rep name a
-    , Ord info, Ord (nodes (Hole nodes info))
-    )
-instance UnfoldGraphType (T NodeTup) Int where
-  unfoldGraphType restore s@(T (NodeTup _)) info =
-    let root = Hole (inj s) info in withLocal root $ withBinding restore root do
+-- | RULE: T NodeTup
+literal01
+  :: ( HasGraphToTypeErr (Hole nodes info) m, T NodeTup :<: nodes, Tuple :<: rep
+     , WithBindingEnv m nodes edges info bind rep name a
+     , T Sub :<: edges
+     )
+  => Conversion nodes edges info bind rep name m a
+literal01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeTup _)) _ ->
+  withLocal root $ withBinding restore root do
     subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
     Type . inj . Tuple <$> mapM restore (snd <$> subLinks)
 
-type instance GraphTypeConstrain NodePht m nodes edges info bind rep name a
-  = ( MonadFail m
+-- | RULE: T (NodeRef name)
+literal02
+  :: ( T (NodeRef name) :<: nodes
+     , HasGraphToTypeErr (Hole nodes info) m
+     , WithBindingEnv m nodes edges info bind rep name a
+     )
+  => Conversion nodes edges info bind rep name m a
+literal02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeRef _ (name :: name))) _ ->
+  withLocal root $ withBinding restore root do
+    return (TypVar name)
+
+-- | RULE: T NodeArr
+literal03
+  :: ( HasGraphToTypeErr (Hole nodes info) m
+     , T NodeArr :<: nodes
+     , WithBindingEnv m nodes edges info bind rep name a
+     , IsString a
+     )
+  => Conversion nodes edges info bind rep name m a
+literal03 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeArr) _ ->
+  withLocal root $ withBinding restore root do
+    return (TypVar $ fromString "->")
+
+-- | RULE: T (NodeLit @lit)
+literal04
+  :: forall lit nodes info rep m edges a bind name
+   . ( HasGraphToTypeErr (Hole nodes info) m
+     , T (NodeLit lit) :<: nodes
+     , Literal lit :<: rep
+     , WithBindingEnv m nodes edges info bind rep name a
+     )
+  => Conversion nodes edges info bind rep name m a
+literal04 = Conversion $ Recursion \restore -> maybeHole @(T (NodeLit lit)) unmatch \root (T (NodeLit lit)) _ ->
+  withLocal root $ withBinding restore root do
+    return (Type . inj $ Literal lit)
+
+-- | RULE: T NodeRec
+literal05
+  :: forall label nodes info rep m edges a bind name
+   . ( HasGraphToTypeErr (Hole nodes info) m
+     , T (NodeHas label) :<: nodes
+     , T NodeRec :<: nodes
+     , Record label :<: rep
+     , WithBindingEnv m nodes edges info bind rep name a
+     , T Sub :<: edges, MonadFail m
+     )
+  => Conversion nodes edges info bind rep name m a
+literal05 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeRec _)) _ ->
+  withLocal root $ withBinding restore root do
+    subLinks <- sFrom root
+    fields <- mapM (unfoldLabel @label restore) (snd <$> subLinks) >>= mapM \case
+      (label, Just typ) -> return (label, typ)
+      (_, Nothing) -> fail "Illegal Tag Node under NodeRec: it has no type nodes but it is expected to have one"
+    return . Type . inj $ Record fields
+
+-- | RULE: T NodeSum
+literal06
+  :: forall label nodes info rep m edges a bind name
+   . ( HasGraphToTypeErr (Hole nodes info) m
+     , T (NodeHas label) :<: nodes
+     , T NodeSum :<: nodes
+     , Variant label :<: rep
+     , WithBindingEnv m nodes edges info bind rep name a
+     , T Sub :<: edges, MonadFail m
+     )
+  => Conversion nodes edges info bind rep name m a
+literal06 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeSum _)) _ ->
+  withLocal root $ withBinding restore root do
+    subLinks <- sFrom root
+    fields <- mapM (unfoldLabel @label restore) (snd <$> subLinks)
+    return . Type . inj $ Variant fields
+
+-- | RULE: T NodeApp
+structure01
+  :: ( HasGraphToTypeErr (Hole nodes info) m
+     , T NodeApp :<: nodes
+     , WithBindingEnv m nodes edges info bind rep name a
+     , T Sub :<: edges, MonadFail m
+     )
+  => Conversion nodes edges info bind rep name m a
+structure01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeApp _)) _ ->
+  withLocal root $ withBinding restore root do
+    subLinks <- sFrom root
+    case snd <$> subLinks of
+      a:as -> TypCon <$> restore a <*> mapM restore as
+      [] -> fail "Illegal Application Node: it has no sub nodes"
+
+
+-- | RULE: NodePht
+special01
+ :: ( HasGraphToTypeErr (Hole nodes info) m, NodePht :<: nodes
     , WithBindingEnv m nodes edges info bind rep name a
-    , WithLocalEnv m nodes edges info bind rep name a
-    , NodePht :<: nodes
     , T Sub :<: edges
-    , Ord info, Ord (nodes (Hole nodes info))
+    , MonadFail m
     )
-instance UnfoldGraphType NodePht Int where
-  unfoldGraphType restore NodePht info =
-    let root = Hole (inj NodePht) info in withLocal root $ withBinding restore root do
+  => Conversion nodes edges info bind rep name m a
+special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _ ->
+  withLocal root $ withBinding restore root do
     subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
     typs <- mapM restore (snd <$> subLinks)
     case typs of
       [typ] -> return typ
       _ -> fail "Illegal Phantom Node: it has no sub node or it has multiple sub nodes"
 
-type instance GraphTypeConstrain (T (NodeRef name')) m nodes edges info bind rep name a
-  = ( T (NodeRef name') :<: nodes
-    , name' ~ a
-    , WithLocalEnv m nodes edges info bind rep name a
+-- | RULE: T NodeBot
+special02
+ :: ( HasGraphToTypeErr (Hole nodes info) m
+    , T NodeBot :<: nodes
     , WithBindingEnv m nodes edges info bind rep name a
     )
-instance UnfoldGraphType (T (NodeRef a)) Int where
-  unfoldGraphType restore s@(T (NodeRef _ name)) info =
-    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (TypVar name)
+  => Conversion nodes edges info bind rep name m a
+special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBot) _ ->
+  withLocal root $ withBinding restore root do
+    return TypPht
 
-type instance GraphTypeConstrain (T NodeBot) m nodes edges info bind rep name a
-  = ( T NodeBot :<: nodes
-    , WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    )
-instance UnfoldGraphType (T NodeBot) Int where
-  unfoldGraphType restore s@(T NodeBot) info =
-    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return TypPht
+-- type instance GraphTypeConstrain G m nodes edges info bind rep name a
+--   = MonadFail m
+-- instance UnfoldGraphType G Int where
+--   unfoldGraphType _ (G _) _ = fail "Illegal Gen Node"
 
-type instance GraphTypeConstrain (T NodeArr) m nodes edges info bind rep name a
-  = ( T NodeArr :<: nodes
-    , WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    , IsString a
-    )
-instance UnfoldGraphType (T NodeArr) Int where
-  unfoldGraphType restore s@(T NodeArr) info =
-    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (TypVar $ fromString "->")
-
-type instance GraphTypeConstrain (T (NodeLit Text)) m nodes edges info bind rep name a
-  = ( T (NodeLit Text) :<: nodes
-    , LiteralText :<: rep
-    , WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    )
-instance UnfoldGraphType (T (NodeLit Text)) Int where
-  unfoldGraphType restore s@(T (NodeLit val)) info =
-    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (Type . inj . LiteralText $ Literal val)
-
-
-type instance GraphTypeConstrain (T (NodeLit Integer)) m nodes edges info bind rep name a
-  = ( T (NodeLit Integer) :<: nodes
-    , LiteralNatural :<: rep
-    , WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    )
-instance UnfoldGraphType (T (NodeLit Integer)) Int where
-  unfoldGraphType restore s@(T (NodeLit val)) info =
-    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (Type . inj . LiteralNatural $ Literal val)
-
-type instance GraphTypeConstrain (T NodeApp) m nodes edges info bind rep name a
-  = ( T NodeApp :<: nodes
-    , WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    , MonadFail m
-    , T Sub :<: edges
-    )
-instance UnfoldGraphType (T NodeApp) Int where
-  unfoldGraphType restore s@(T (NodeApp _)) info =
-    let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- sFrom root
-    case snd <$> subLinks of
-      a:as -> TypCon <$> restore a <*> mapM restore as
-      [] -> fail "Illegal Application Node: it has no sub nodes"
-
--- Record nodes with `Name` as label
-type instance GraphTypeConstrain (T NodeRec) m nodes edges info bind rep name a
-  = ( WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    , T (NodeHas Label) :<: nodes, T NodeRec :<: nodes
-    , Record Label :<: rep
-    , T Sub :<: edges
-    , MonadFail m
-    , Ord info, Ord (nodes (Hole nodes info))
-    )
-instance UnfoldGraphType (T NodeRec) Int where
-  unfoldGraphType restore s@(T (NodeRec _)) info =
-    let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- sFrom root
-    fields <- mapM (unfoldRecordLabel @Label restore) (snd <$> subLinks)
-    return . Type . inj $ Record fields
-
-type instance GraphTypeConstrain G m nodes edges info bind rep name a
-  = MonadFail m
-instance UnfoldGraphType G Int where
-  unfoldGraphType _ (G _) _ = fail "Illegal Gen Node"
-
-type instance GraphTypeConstrain Histo m nodes edges info bind rep name a
-  = (MonadFail m)
-instance UnfoldGraphType Histo Int where
-  unfoldGraphType _ (Histo _) _ = fail "Illegal Histo Node"
-
-type instance GraphTypeConstrain (T NodeSum) m nodes edges info bind rep name a
-  = ( WithLocalEnv m nodes edges info bind rep name a
-    , WithBindingEnv m nodes edges info bind rep name a
-    , T Sub :<: edges
-    , T (NodeHas Label) :<: nodes, T NodeSum :<: nodes
-    , Variant Label :<: rep
-    , MonadFail m
-    , Ord info, Ord (nodes (Hole nodes info))
-    )
-instance UnfoldGraphType (T NodeSum) Int where
-  unfoldGraphType restore s@(T (NodeSum _)) info =
-    let root = Hole (inj s) info in withLocal root $ withBinding restore root do
-    subLinks <- sFrom root
-    fields <- mapM (unfoldVariantLabel @Label restore) (snd <$> subLinks)
-    return . Type . inj $ Variant fields
-
-type instance GraphTypeConstrain (T (NodeHas any)) m nodes edges info bind rep name a = (MonadFail m)
-instance UnfoldGraphType (T (NodeHas any)) Int where
-  unfoldGraphType _ (T (NodeHas _ _)) _ = fail "Illegal Label Node"
-
-unfoldRecordLabel
-  :: forall tag m nodes edges info bind rep name a
+-- | a helper function to unfold `NodeHas` node into pairs of label and type
+unfoldLabel
+  :: forall label m nodes edges info bind rep name a
   . ( HasReader "graph" (CoreG nodes edges info) m
     , MonadFail m, Eq (Hole nodes info)
-    , T Sub :<: edges, T (NodeHas tag) :<: nodes
-    , Ord (edges (Link edges)), Ord info, Ord (nodes (Hole nodes info))
+    , T Sub :<: edges
+    , T (NodeHas label) :<: nodes
+    , HasOrderGraph nodes edges info
     )
-  => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (tag, Type bind rep name a)
-unfoldRecordLabel restore root@(Hole n _) = do
-  -- a label node can not be bound on, so no checking bindings here
-  -- extract label
-  tag <- case prj @(T (NodeHas tag)) n of
-    Just (T (NodeHas _ tag)) -> return tag
+  => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info
+  -> m (label, Maybe (Type bind rep name a))
+unfoldLabel restore root@(Hole tag _) = do
+  -- a label node can not be bound on, so no not checking binding edges here
+  label <- case prj @(T (NodeHas label)) tag of
+    Just (T (NodeHas _ label)) -> return label
     Nothing -> fail "Expect Tag Node but it is not"
-  -- extract type node, a record label expect exact one type field
+  -- extract type node, a label may or may not have a type field
   fields <- asks @"graph" $ lFrom @(T Sub) (== root)
   case fields of
-    [a] -> (tag,) <$> restore (snd a)
-    _ -> fail "Illegal Tag Node: it has no type nodes but it is expected to have one"
-{-# INLINE unfoldRecordLabel #-}
-
-unfoldVariantLabel
-  :: forall tag m nodes edges info bind rep name a
-  . ( HasReader "graph" (CoreG nodes edges info) m
-    , MonadFail m, Eq (Hole nodes info)
-    , T Sub :<: edges, T (NodeHas tag) :<: nodes
-    , Ord (edges (Link edges)), Ord info, Ord (nodes (Hole nodes info))
-    )
-  => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (tag, Maybe (Type bind rep name a))
-unfoldVariantLabel restore root@(Hole n _) = do
-  -- a label node can not be bound on, so no checking bindings here
-  -- extract label
-  tag <- case prj @(T (NodeHas tag)) n of
-    Just (T (NodeHas _ tag)) -> return tag
-    Nothing -> fail "Expect Tag Node but it is not"
-  -- extract type node, a record label expect exact one type field
-  fields <- asks @"graph" $ lFrom @(T Sub) (== root)
-  case fields of
-    [a] -> (tag,) . Just <$> restore (snd a)
-    [] -> return (tag, Nothing)
-    _ -> fail "Illegal Tag Node: it has more than one type nodes but it is expected to have exactly one or have none"
-{-# INLINE unfoldVariantLabel #-}
+    [snd -> n] -> (label,) . Just <$> restore n
+    [] -> return (label, Nothing)
+    _ -> fail "Illegal Tag Node: it has more than one type nodes but it is expected to have exactly one or none"

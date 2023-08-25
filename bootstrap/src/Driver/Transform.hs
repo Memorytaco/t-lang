@@ -30,7 +30,7 @@ import Data.Text (Text)
 type SurfaceGNodes
   = T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
     :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
-    :+: T NodeApp :+: T (NodeHas Label)
+    :+: T NodeApp :+: T (NodeHas Label) :+: T NodeArr
     :+: NodePht
 type SurfaceGEdges = T Sub :+: T (Binding Name)
 

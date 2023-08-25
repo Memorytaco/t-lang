@@ -27,7 +27,9 @@ buildAssertion text = do
 
   -- convert type into graph
   ((root, g :: SurfaceG), _) <- runToGraph mempty 1 typ
-  (typ2, _) <- runGraphType g [] ("@test", 1) root
+  typ2 <- runGraphType g [] ("@test", 1) syntacticType root >>= \case
+    Left err -> fail $ show err
+    Right (typ2, _) -> return typ2
 
   -- these two types should be equal
   typ @=? typ2

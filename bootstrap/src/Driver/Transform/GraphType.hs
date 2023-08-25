@@ -7,22 +7,31 @@ module Driver.Transform.GraphType
 
   -- ** actual runner
   , runGraphType
+  , syntacticType
   )
 where
 
 import Transform.GraphType
-import Language.Core (Type)
+import Language.Core (Type, Label)
+import Language.Core.Extension
+import Language.Generic ((:>+:))
+import Language.Core.Constraint
+import Graph.Extension.GraphicType
 import Graph.Core
 
 import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (StateT (..))
+import Control.Monad.Except (ExceptT (..), runExceptT)
+
 import Capability.Reader (HasReader, MonadReader (..), Field (..))
 import Capability.State (HasState, modify, gets, MonadState (..))
 import Capability.Source (HasSource)
 import Capability.Sink (HasSink)
+import Capability.Error (HasThrow, HasCatch, MonadError (..))
 
 import GHC.Generics (Generic)
 import Data.String (IsString (..))
+import Data.Text (Text)
 
 data GraphTypeConf m nodes edges name = GraphTypeConf
   { graph :: CoreG nodes edges Int  -- ^ a graph to follow paths
@@ -31,31 +40,59 @@ data GraphTypeConf m nodes edges name = GraphTypeConf
   } deriving Generic
 
 -- | shofthand for monad
-type M self nodes edges name m
-  = ReaderT (GraphTypeConf self nodes edges name)
-      (StateT (String, Int) m)
+type GraphToType' nodes edges name m
+  = ReaderT (GraphTypeConf (GraphToType nodes edges name m) nodes edges name)
+      (StateT (String, Int) (ExceptT (GraphToTypeErr (Hole nodes Int)) m))
 
-newtype GraphToTypeM nodes edges name m a = GraphToTypeM
-  { runGraphToTypeM :: M (GraphToTypeM nodes edges name m) nodes edges name m a
+newtype GraphToType nodes edges name m a = GraphToType
+  { runGraphToType :: GraphToType' nodes edges name m a
   } deriving newtype (Functor, Applicative, Monad, MonadFail)
     deriving ( HasSource "local" [(Hole nodes Int, name)], HasReader "local" [(Hole nodes Int, name)])
-      via Field "local" () (MonadReader (M (GraphToTypeM nodes edges name m) nodes edges name m))
-    deriving ( HasSource "scheme" (Maybe name -> GraphToTypeM nodes edges name m name)
-             , HasReader "scheme" (Maybe name -> GraphToTypeM nodes edges name m name)
-             ) via Field "scheme" () (MonadReader (M (GraphToTypeM nodes edges name m) nodes edges name m))
+      via Field "local" () (MonadReader (GraphToType' nodes edges name m))
+    deriving ( HasSource "scheme" (Maybe name -> GraphToType nodes edges name m name)
+             , HasReader "scheme" (Maybe name -> GraphToType nodes edges name m name)
+             ) via Field "scheme" () (MonadReader (GraphToType'  nodes edges name m))
     deriving ( HasSource "graph" (CoreG nodes edges Int), HasReader "graph" (CoreG nodes edges Int))
-      via Field "graph" () (MonadReader (M (GraphToTypeM nodes edges name m) nodes edges name m))
+      via Field "graph" () (MonadReader (GraphToType' nodes edges name m))
     deriving (HasSource "name info" (String, Int), HasSink "name info" (String, Int), HasState "name info" (String, Int))
-      via MonadState (M (GraphToTypeM nodes edges name m) nodes edges name m)
+      via MonadState (GraphToType' nodes edges name m)
+    deriving (HasThrow GraphToTypeErr (GraphToTypeErr (Hole nodes Int)), HasCatch GraphToTypeErr (GraphToTypeErr (Hole nodes Int)))
+      via MonadError (GraphToType' nodes edges name m)
 
 -- | actual runner to transform a graphic type into its syntatic form
-runGraphType :: ( GraphTypeConstrain nodes (GraphToTypeM nodes edges name m) nodes edges Int bind rep name name
-                , UnfoldGraphType nodes Int, Monad m, IsString name, Show name)
+runGraphType :: (Monad m, IsString name, Show name)
              => CoreG nodes edges Int -> [(Hole nodes Int, name)] -> (String, Int)
-             -> Hole nodes Int -> m (Type bind rep name name, (String, Int))
-runGraphType g bindings stat root =
-  let reader = runReaderT (runGraphToTypeM $ toSyntacticType root) (GraphTypeConf g defaultScheme bindings)
-   in runStateT reader stat
+             -> Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
+             -> Hole nodes Int
+             -> m (Either (GraphToTypeErr (Hole nodes Int)) (Type bind rep name name, (String, Int)))
+runGraphType g bindings stat c root =
+  let reader = runReaderT (runGraphToType $ runConversion c root) (GraphTypeConf g defaultScheme bindings)
+   in runExceptT $ runStateT reader stat
+
+syntacticType
+  :: ( HasEqNode nodes Int
+     , nodes :>+: '[T (NodeRef name), T NodeTup, T NodeArr, T (NodeLit Integer), T (NodeLit Text)]
+     , nodes :>+: '[T (NodeHas Label), T NodeRec, T NodeSum, T NodeApp, NodePht, T NodeBot]
+     , edges :>+: '[T Sub, T (Binding name)]
+     , rep :>+: '[Tuple, Literal Integer, Literal Text, Record Label, Variant Label]
+     , bind :>+: '[Forall (Prefix name)]
+     , Functor rep, Functor bind
+     , HasOrderGraph nodes edges Int, Ord name, IsString name
+     , MonadFail m
+     )
+  =>Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
+syntacticType = treeConversion
+  [ special02 -- handle bottom
+  , literal01
+  , literal02
+  , literal03
+  , literal04 @Integer
+  , literal04 @Text
+  , literal05 @Label
+  , literal06 @Label
+  , structure01
+  , special01
+  ]
 
 -- | If the original name is provided, we return it unmodified and remember this name for future use
 -- , otherwise we generate a new name from integer and hint

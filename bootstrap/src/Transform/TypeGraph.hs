@@ -264,6 +264,11 @@ type instance ConstrainGraph LiteralNatural nodes edges info m
 instance FoldTypeGraph LiteralNatural Int where
   foldTypeGraph (LiteralNatural (getLiteral -> lit)) = node <&> hole (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
+-- | handle `Literal`
+type instance ConstrainGraph (Literal lit) nodes edges info m
+  = ( T (NodeLit lit) :<: nodes, HasState "node" Int m)
+instance FoldTypeGraph (Literal lit) Int where
+  foldTypeGraph (Literal lit) = node <&> hole (T $ NodeLit lit) <&> \v -> (v, Vertex v)
 
 -- *** handle Injectors
 

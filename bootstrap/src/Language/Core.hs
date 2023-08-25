@@ -106,7 +106,9 @@ import Data.Text (Text)
 ------------------
 
 type TypSurface = Type TypSurfaceBExt TypSurfaceExt Name Name
-type TypSurfaceExt = Tuple :+: Record Label :+: Variant Label :+: Ext.LiteralNatural :+: Ext.LiteralText :+: Rep
+type TypSurfaceExt
+  = Tuple :+: Record Label :+: Variant Label
+  :+: Ext.Literal Integer :+: Ext.Literal Text :+: Rep
 type TypSurfaceBExt = Forall (Prefix Name) :+: Scope (Prefix Name)
 
 ---------------------

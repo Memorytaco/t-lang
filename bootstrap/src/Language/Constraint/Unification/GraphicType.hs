@@ -458,8 +458,8 @@ rebind n = do
       bools <- forM candidates \node -> do
         merged <- getsGraph (lFrom @(Pht O) (== node))
           <&> fmap snd -- get nodes
-          <&> (>>= matchHole (const []) (\(Histo as) _ -> as)) -- unroll Histo nodes
-        return . or $ matchHole @(T NodeBot) (const False) (\_ _ -> True) <$> merged
+          <&> (>>= maybeHole (const []) (\_ (Histo as) _ -> as)) -- unroll Histo nodes
+        return . or $ maybeHole @(T NodeBot) (const False) (\_ _ _ -> True) <$> merged
       if or bools
          then getsGraph $ nub . fmap snd . lTo @(T Sub) (== n)
          else return []

@@ -44,7 +44,9 @@ buildAssertion ia ib = do
   case res of
     Left err -> fail $ show err
     Right (r, g) -> do
-      (_ :: TypSurface, _) <- runGraphType g [] ("@test", 1) r
+      runGraphType g [] ("@test", 1) syntacticType r >>= \case
+        Left err -> fail $ show err
+        Right (_ :: TypSurface, _) -> return ()
       return ()
   return ()
 

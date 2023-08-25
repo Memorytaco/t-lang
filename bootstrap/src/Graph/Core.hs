@@ -28,7 +28,7 @@ module Graph.Core
   -- ** helpers
   , hole, link, link', lFrom, lTo, linkFrom, linkTo
   , isHole, isLink, isLinkOf, getLink, filterLink
-  , matchHole
+  , maybeHole
   , edge, edges
   , (-<<), (>>-)
   , (-++), (++-)
@@ -152,20 +152,21 @@ lFrom, lTo :: (e :<: es, HasOrderGraph ns es info)
 lFrom p g = [(v, n)| (Link e, n) <- linkFrom p g, Just v <- [prj e]]
 lTo p g = [(v, n)| (Link e, n) <- linkTo p g, Just v <- [prj e]]
 
-matchHole
+-- | act like `maybe` function but test against `Hole`
+maybeHole
   :: (node :<: nodes)
   => (Hole nodes info -> a)
-  -> (node (Hole nodes info) -> info -> a)
+  -> (Hole nodes info -> node (Hole nodes info) -> info -> a)
   -> Hole nodes info
   -> a
-matchHole f g node@(Hole (prj -> node'maybe) info) =
+maybeHole f g node@(Hole (prj -> node'maybe) info) =
   case node'maybe of
-    Just tag -> g tag info
+    Just tag -> g node tag info
     Nothing -> f node
 
 -- | general predicate
 isHole :: (node :<: nodes) => Hole nodes info -> (node (Hole nodes info) -> info -> Bool) -> Bool
-isHole node p = matchHole (const False) p node
+isHole node p = maybeHole (const False) (const p) node
 {-# INLINE isHole #-}
 
 isLink :: (edge :<: edges) => Link edges -> (edge (Link edges) -> Bool) -> Bool

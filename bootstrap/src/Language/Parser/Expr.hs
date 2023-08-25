@@ -224,7 +224,7 @@ instance ( ExprC e m
          , PrattToken proxy (Type tbind trep tname a) m
          , Value (Type tbind trep tname a) :<: f
          , Apply :<: f
-         , a ~ Name, Tuple :<: trep, LiteralText :<: trep, LiteralNatural :<: trep
+         , a ~ Name, Tuple :<: trep, Literal Text :<: trep, Literal Integer :<: trep
          , Record Label :<: trep
          )
   => PrattToken (WithExpr e m (Layer "@type" proxy (Type tbind trep tname a)))
@@ -234,8 +234,8 @@ instance ( ExprC e m
       <|> TypVar . Name <$> identifier
       <|> Type . inj . Tuple <$> parens
             (pratt @proxy (lookAhead (reservedOp "," <|> reservedOp ")") $> ()) Go `sepBy` reservedOp ",")   -- tuple
-      <|> Type . inj . LiteralNatural . Literal <$> integer -- integer
-      <|> Type . inj . LiteralText . Literal <$> stringLiteral -- text
+      <|> Type . inj . Literal @Integer <$> integer -- integer
+      <|> Type . inj . Literal <$> stringLiteral -- text
       <|> Type . inj <$> record (pratt @proxy)
     let nud' _ = fail "Type application requires one argument"
         led' _ left = return . Expr . inj $ Apply left (Expr . inj $ Value typ) []
