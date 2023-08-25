@@ -62,22 +62,13 @@ import Data.Kind (Constraint, Type)
 import Data.Text (Text)
 import Data.List (intersect, union, nub)
 import Data.Maybe (fromMaybe)
+import Data.String (IsString (fromString))
 
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
 -- ** Data structures used to serve graphic constraint generation and constraint solving
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
-
-data ConstraintGenErr
-   = FailGenMsg String
-   | FailUnexpect
-   deriving (Show, Eq, Ord)
-
-type HasConstraintGenErr m = HasThrow ConstraintGenErr ConstraintGenErr m
-
-failCGenMsg :: HasConstraintGenErr m => String -> m a
-failCGenMsg = throw @ConstraintGenErr . FailGenMsg
 
 -- | one intermediate structure for constraint generation algorithm
 data StageConstraint nodes edges info a = StageConstraint
@@ -122,8 +113,23 @@ lookupBinding
   :: (HasBinding name nodes m, Eq name) => name -> m (Maybe (BindingType nodes))
 lookupBinding name = asks @"binding" (lookup name)
 
+
+-- | error data type for constraint generation, use it with `genConstraint`
+data ConstraintGenErr name
+   = FailGenMsg String
+   | FailGenMissingVar name
+   deriving (Show, Eq, Ord)
+
+type HasConstraintGenErr name m = HasThrow ConstraintGenErr (ConstraintGenErr name) m
+
+failCGen :: HasConstraintGenErr name m => ConstraintGenErr name -> m a
+failCGen = throw @ConstraintGenErr
+
+failCGenMsg :: HasConstraintGenErr name m => String -> m a
+failCGenMsg = failCGen . FailGenMsg
+
 -- | get instance of a graphic type scheme
-getInstance :: (G :<: ns, T Sub :<: es, HasConstraintGenErr m, HasOrderGraph ns es info)
+getInstance :: (G :<: ns, T Sub :<: es, HasConstraintGenErr name m, HasOrderGraph ns es info)
             => Integer -> Hole ns info -> CoreG ns es info -> m (Hole ns info)
 getInstance ix n@(Hole v _) gr =
   case prj @G v of
@@ -149,8 +155,8 @@ genConstraint
           , T Instance, Pht NDOrderLink, Pht Sub]
       , nodes :>+: '[T NodeBot, G, NDOrder]
       , Traversable f, HasOrderEdge edges
-      , Show name, Eq name
-      , HasConstraintGenErr m
+      , Eq name
+      , HasConstraintGenErr name m
       , HasNodeCreator m
       , HasBinding name nodes m
       )
@@ -160,7 +166,8 @@ genConstraint = cata go
     go (ValF name) = do
       val'maybe <- lookupBinding name
       g <- node (G 1)
-      o1 <- node NDOrder -- root of order tree
+      -- root of tracker tree
+      o1 <- node NDOrder
       var <- node (T NodeBot)
       let gr = overlays
              [ g -<< T (Sub 1) >>- var
@@ -182,7 +189,7 @@ genConstraint = cata go
             , o2 -++ Pht NDOrderLink ++- n
             , o1 -<< Pht (Sub 1) >>- o2
             ]
-        Nothing -> failCGenMsg $ "name not in scope: " <> show name
+        Nothing -> failCGen $ FailGenMissingVar name
     go (ExprF v) = stageConstraint v
 
 ------------------------------------------------------------------------------------------------
@@ -257,6 +264,97 @@ type instance ConstrainGraphic
   = ( ns ~ nodes)
 instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint = undefined
+
+-- TODO: complete following constraint generation
+type instance ConstrainGraphic (Equation (GPatSurface t) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Equation (GPatSurface t) (Prefixes name t)) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Value TypSurface) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Value TypSurface) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Selector Label) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Selector Label) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (LetGrp (PatSurface t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Letrec (Binder (name @: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Letrec (Binder (name @: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic ((@:) t) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen ((@:) t) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic LiteralText (ExprF f name |: Hole ns Int) m nodes edges info
+  = ( ns ~ nodes
+    , nodes :>+: '[NDOrder, G, T (NodeRef name)]
+    , edges :>+: '[T Sub, T (Binding name), Pht NDOrderLink]
+    , HasNodeCreator m
+    , IsString name
+    , LiteralText :<: f
+    , HasOrderEdge edges
+    )
+instance ConstraintGen LiteralText (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (LiteralText (Literal t)) = do
+    g <- node (G 1)
+    depR <- node NDOrder
+    n <- node (T $ NodeRef False (fromString @name "text"))
+    return $ StageConstraint (g :| ExprF (inj $ LiteralText $ Literal t)) g ([], depR) $ overlays
+      [ g -<< T (Sub 1) >>- n
+      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , depR -++ Pht NDOrderLink ++- g
+      ]
+type instance ConstrainGraphic LiteralInteger (ExprF f name |: Hole ns Int) m nodes edges info
+  = ( ns ~ nodes
+    , nodes :>+: '[NDOrder, G, T (NodeRef name)]
+    , edges :>+: '[T Sub, T (Binding name), Pht NDOrderLink]
+    , HasNodeCreator m
+    , IsString name
+    , LiteralInteger :<: f
+    , HasOrderEdge edges
+    )
+instance ConstraintGen LiteralInteger (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (LiteralInteger (Literal t)) = do
+    g <- node (G 1)
+    depR <- node NDOrder
+    n <- node (T $ NodeRef False (fromString @name "int"))
+    return $ StageConstraint (g :| ExprF (inj $ LiteralInteger $ Literal t)) g ([], depR) $ overlays
+      [ g -<< T (Sub 1) >>- n
+      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , depR -++ Pht NDOrderLink ++- g
+      ]
+type instance ConstrainGraphic LiteralNumber (ExprF f name |: Hole ns Int) m nodes edges info
+  = ( ns ~ nodes
+    , nodes :>+: '[NDOrder, G, T (NodeRef name)]
+    , edges :>+: '[T Sub, T (Binding name), Pht NDOrderLink]
+    , HasNodeCreator m
+    , IsString name
+    , LiteralNumber :<: f
+    , HasOrderEdge edges
+    )
+instance ConstraintGen LiteralNumber (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (LiteralNumber (Literal t)) = do
+    g <- node (G 1)
+    depR <- node NDOrder
+    n <- node (T $ NodeRef False (fromString @name "double"))
+    return $ StageConstraint (g :| ExprF (inj $ LiteralNumber $ Literal t)) g ([], depR) $ overlays
+      [ g -<< T (Sub 1) >>- n
+      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , depR -++ Pht NDOrderLink ++- g
+      ]
+
+type instance ConstrainGraphic (Record Label) (ExprF f name |: Hole ns Int) m nodes edges info
+  = ()
+instance ConstraintGen (Record Label) (ExprF f name |: Hole nodes Int) Int where
+
+type instance ConstrainGraphic (Constructor Label) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Constructor Label) (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (Constructor _ _) = error "Polymorphic Variant is not supported"
 
 -- | expression literal
 type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes edges info
@@ -342,10 +440,10 @@ genPatternConstraint
 
      , edges :>+: '[T Sub, T (Binding name), T Instance, T Unify]
      , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas label)]
-     , Show name, Eq name
+     , Eq name
      , Traversable lits, Traversable injs, Traversable f
      , HasNodeCreator m
-     , HasConstraintGenErr m
+     , HasConstraintGenErr name m
      , HasOrderGraph nodes edges Int
      , HasBinding name nodes m
      , Pht NDOrderLink :<: edges, NDOrder :<: nodes, Pht Sub :<: edges
@@ -645,7 +743,7 @@ copy
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Instance, T Sub]
     , nodes :>+: '[T NodeBot, G]
     , HasOrderGraph nodes edges Int
-    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
+    , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr err m)
   => (Hole nodes Int, Instance) -> CoreG nodes edges Int
   -- ^ (root, (oldFrontiers, newFrontiers), graphic type)
   -> m (Hole nodes Int, [(Hole nodes Int, Hole nodes Int)], CoreG nodes edges Int)
@@ -693,7 +791,7 @@ expand :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
     , T NodeBot :<: nodes, G :<: nodes
     , HasOrderGraph nodes edges Int
-    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
+    , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr err m)
   => (Hole nodes Int, Instance) -> Hole nodes Int -> CoreG nodes edges Int
   -- ^ (root of expanded gType, unification nodes, modified new graphic constraint)
   -> m (Hole nodes Int, [Hole nodes Int], CoreG nodes edges Int)
@@ -713,7 +811,7 @@ propagate :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
     , T NodeBot :<: nodes, G :<: nodes
     , HasOrderGraph nodes edges Int
-    , HasNodeCreator m, HasConstraintGenErr m, HasSolvErr err m)
+    , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr err m)
   => Hole nodes Int -> CoreG nodes edges Int
   -> m ([Hole nodes Int], CoreG nodes edges Int)
 propagate scheme gr = do
@@ -796,7 +894,7 @@ solvUnify (StageConstraint info root (nub -> unifications, dep) graph) = do
 -- | solve a `Instance` edge
 solvInst
   :: forall name nodes edges m err a
-  . ( HasUnifier err nodes edges Int m, HasSolvErr err m, HasConstraintGenErr m
+  . ( HasUnifier err nodes edges Int m, HasSolvErr err m, HasConstraintGenErr name m
     , HasNodeCreator m
     , nodes :>+: '[NDOrder, G, T NodeBot]
     , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
@@ -827,7 +925,7 @@ solvInst sc@(StageConstraint _ _ (unifications, dep) graph) = do
 solveConstraint
   :: forall name nodes edges m err a
   . ( HasUnifier err nodes edges Int m
-    , HasNodeCreator m, HasConstraintGenErr m
+    , HasNodeCreator m, HasConstraintGenErr name m
     , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
     , nodes :>+: '[NDOrder, G, T NodeBot]
     , HasOrderGraph nodes edges Int, HasSolvErr err m )

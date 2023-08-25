@@ -37,13 +37,13 @@ type SurfaceGEdges = T Sub :+: T (Binding Name)
 type SurfaceG = CoreG SurfaceGNodes SurfaceGEdges Int
 
 type UnifyGNodes
-  = T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
-    :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
-    :+: T NodeApp :+: T (NodeHas Label)
-    :+: NodePht :+: Histo :+: G
+  = SurfaceGNodes
+    :+: T NodeArr :+: NDOrder
+    :+: Histo :+: G
 
 type UnifyGEdges
-  = T Sub :+: T (Binding Name) :+: Pht O
+  = SurfaceGEdges
+    :+: Pht O :+: Pht Sub :+: Pht NDOrderLink
+    :+: T Unify :+: T Instance
 
 type UnifyG = CoreG UnifyGNodes UnifyGEdges Int
-

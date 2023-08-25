@@ -1,3 +1,4 @@
+{-# LANGUAGE QuantifiedConstraints #-}
 module Language.Core.Expr
   ( Expr (..)
   , ExprF (..)
@@ -39,3 +40,4 @@ instance Functor f => Monad (Expr f) where
 makeBaseFunctor $ fixQ [d|
   instance (Functor f) => Recursive (Expr f a)
   |]
+deriving instance (Show a, Show r, forall x. Show x => Show (f x)) => Show (ExprF f a r)

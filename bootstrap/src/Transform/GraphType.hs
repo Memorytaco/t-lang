@@ -24,6 +24,7 @@ import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
 
 import Data.Text (Text)
+import Data.String (IsString (..))
 
 import qualified Data.Kind as Data (Type, Constraint)
 
@@ -174,6 +175,15 @@ instance UnfoldGraphType (T NodeBot) Int where
   unfoldGraphType restore s@(T NodeBot) info =
     let root = Hole (inj s) info in withLocal root . withBinding restore root $ return TypPht
 
+type instance GraphTypeConstrain (T NodeArr) m nodes edges info bind rep name a
+  = ( T NodeArr :<: nodes
+    , WithLocalEnv m nodes edges info bind rep name a
+    , WithBindingEnv m nodes edges info bind rep name a
+    , IsString a
+    )
+instance UnfoldGraphType (T NodeArr) Int where
+  unfoldGraphType restore s@(T NodeArr) info =
+    let root = Hole (inj s) info in withLocal root . withBinding restore root $ return (TypVar $ fromString "->")
 
 type instance GraphTypeConstrain (T (NodeLit Text)) m nodes edges info bind rep name a
   = ( T (NodeLit Text) :<: nodes

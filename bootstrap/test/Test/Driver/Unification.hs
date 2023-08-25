@@ -12,11 +12,14 @@ import Driver.Unification
 import Language.Core (builtinStore, Name, TypSurface)
 import Graph.Core
 import Graph.Extension.GraphicType
+import Language.Generic ((:+:))
 
 import Data.Text (Text, pack)
 import Text.Megaparsec
 
 import Compiler.SourceParsing
+
+type CustomG = CoreG (G :+: Histo :+: SurfaceGNodes) (Pht O :+: SurfaceGEdges) Int
 
 assertType :: MonadFail m => Text -> m TypSurface
 assertType text = do
@@ -29,18 +32,18 @@ buildAssertion :: Text -> Text -> Assertion
 buildAssertion ia ib = do
   ta <- assertType ia
   tb <- assertType ib
-  ((r1, g1 :: UnifyG), i) <- runToGraph mempty 1 ta
-  ((r2, g2 :: UnifyG), j) <- runToGraph mempty i tb
+  ((r1, g1 :: CustomG), i) <- runToGraph mempty 1 ta
+  ((r2, g2), j) <- runToGraph mempty i tb
   let root = hole (G 1) (j + 1)
       gr = overlays
            [ g1, g2
            , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
            , r2 -<< T (Binding Flexible 2 (Nothing @Name)) >>- root
            ]
-  res <- runDefaultUnify (gr :: UnifyG) r1 r2
+  res <- runDefaultUnify (gr) r1 r2
   case res of
     Left err -> fail $ show err
-    Right (r, g :: UnifyG) -> do
+    Right (r, g) -> do
       (_ :: TypSurface, _) <- runGraphType g [] ("@test", 1) r
       return ()
   return ()
