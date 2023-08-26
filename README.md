@@ -19,9 +19,10 @@ Then you are free to try `stack run repl` command, which brings up an interprete
 4. `:list` : list definitions available for current repl session after `:def` command.
 5. `:list module` : to show modules available in scope. The names can be used for command `:showm`.
 6. `:list source` : to print original source file names for modules.
-7. `:source` : to print original source file content for a module.
-8. `:showm` : to show contents of a module.
-9. it defaults to print out parsed AST of your typing.
+7. `:type` : to query a type of an expression
+8. `:source` : to print original source file content for a module.
+9. `:showm` : to show contents of a module.
+10. it defaults to print out parsed AST of your typing.
 
 > You are guaranteed to get a successful running on the `main` branch.
 
