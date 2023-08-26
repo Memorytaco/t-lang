@@ -65,8 +65,8 @@ runGraphType :: (Monad m, IsString name, Show name)
              -> Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
              -> Hole nodes Int
              -> m (Either (GraphToTypeErr (Hole nodes Int)) (Type bind rep name name, (String, Int)))
-runGraphType g bindings stat c root =
-  let reader = runReaderT (runGraphToType $ runConversion c root) (GraphTypeConf g defaultScheme bindings)
+runGraphType gr bindings stat c root =
+  let reader = runReaderT (runGraphToType $ runConversion c root) (GraphTypeConf gr defaultScheme bindings)
    in runExceptT $ runStateT reader stat
 
 syntacticType
@@ -80,7 +80,7 @@ syntacticType
      , HasOrderGraph nodes edges Int, Ord name, IsString name
      , MonadFail m
      )
-  =>Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
+  => Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
 syntacticType = treeConversion
   [ special02 -- handle bottom
   , literal01

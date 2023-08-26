@@ -24,7 +24,7 @@ import Text.Megaparsec hiding (Label)
 import Language.Generic ((:<:), inj)
 import Language.Core.Extension
   ( Tuple (..), Forall (..), Variant (..), Record (..)
-  , Scope (..), Literal (..), LiteralNatural (..), LiteralText (..)
+  , Scope (..), Literal (..)
   )
 import Control.Monad (when)
 

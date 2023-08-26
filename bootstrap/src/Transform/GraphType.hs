@@ -277,11 +277,6 @@ special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBo
   withLocal root $ withBinding restore root do
     return TypPht
 
--- type instance GraphTypeConstrain G m nodes edges info bind rep name a
---   = MonadFail m
--- instance UnfoldGraphType G Int where
---   unfoldGraphType _ (G _) _ = fail "Illegal Gen Node"
-
 -- | a helper function to unfold `NodeHas` node into pairs of label and type
 unfoldLabel
   :: forall label m nodes edges info bind rep name a

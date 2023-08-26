@@ -40,6 +40,8 @@ module Language.Constraint.Graphic
   , genConstraint
   , genPatternConstraint
   , solveConstraint
+  , getSolutionFromConstraint
+  , getSolution
   )
 where
 
@@ -383,7 +385,7 @@ type instance ConstrainGraphic Tuple (ExprF f name |: Hole ns Int) m nodes edges
     , Tuple :<: f
     , HasNodeCreator m
     , HasOrderGraph nodes edges info
-    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Sub]
+    , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Sub, T Instance]
     , nodes :>+: '[NDOrder, G, T NodeBot, T NodeTup]
     )
 -- | expression Tuple literal
@@ -398,9 +400,10 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
       var <- node (T NodeBot)
       return $ overlays
         [ tup -<< T (Sub ix) >>- var
-        , var -<< T (Binding Flexible 1 $ Nothing @name) >>- tup
+        , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
         , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
         , depR -<< T (Sub ix) >>- gdep
+        , g' -<< T (Instance 1) >>- var
         , gr'
         ]
     let gdeps = join $ sia ^.. traverse . _2 . atScope . _1
@@ -931,3 +934,39 @@ solveConstraint
     , HasOrderGraph nodes edges Int, HasSolvErr err m )
   => StageConstraint nodes edges Int a -> m (StageConstraint nodes edges Int a)
 solveConstraint = solvInst @name <=< solvUnify
+
+-- | get a graphic type from a `G` node of a presolution.
+getSolution
+  :: ( HasNodeCreator m
+     , HasConstraintGenErr name m, HasUnifier err nodes edges Int m
+     , HasSolvErr err m
+     , nodes :>+: '[NodePht, T NodeBot, G]
+     , edges :>+: '[T (Binding name), T Unify, T Instance, T Sub]
+     , HasOrderGraph nodes edges Int
+     )
+  => (Hole nodes Int, Instance) -> CoreG nodes edges Int
+  -> m (Hole nodes Int, CoreG nodes edges Int)
+getSolution source graph = do
+  root <- node NodePht
+  (gRoot, unifications, gr) <- expand source root graph
+  gr' <- go (overlays [gr, root -<< T (Sub 1) >>- gRoot]) unifications
+  (root,) <$> verifyUnifier gr' unifications
+  where
+    go gr [] = return gr
+    go gr (n:ns) = do
+      (n', gr') <- recurUnify gr n
+      go gr' $ filter (/= n') ns
+
+-- | get a solution from a constraint presolution
+getSolutionFromConstraint
+  :: ( HasNodeCreator m
+     , HasConstraintGenErr name m, HasUnifier err nodes edges Int m
+     , HasSolvErr err m
+     , nodes :>+: '[NodePht, T NodeBot, G]
+     , edges :>+: '[T (Binding name), T Unify, T Instance, T Sub]
+     , HasOrderGraph nodes edges Int
+     )
+  => StageConstraint nodes edges Int a
+  -> m (Hole nodes Int, CoreG nodes edges Int)
+getSolutionFromConstraint (StageConstraint _ g _ graph)
+  = getSolution (g, Instance 1) graph

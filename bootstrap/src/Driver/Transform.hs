@@ -38,7 +38,7 @@ type SurfaceG = CoreG SurfaceGNodes SurfaceGEdges Int
 
 type UnifyGNodes
   = SurfaceGNodes
-    :+: T NodeArr :+: NDOrder
+    :+: NDOrder
     :+: Histo :+: G
 
 type UnifyGEdges

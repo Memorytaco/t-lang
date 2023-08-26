@@ -6,7 +6,8 @@ module Driver.Unification
   (
     -- ** unify with exception
     runUnify
-  , runDefaultUnify
+  , unify
+  , GraphUnifyError (..)
   )
 where
 
@@ -39,7 +40,7 @@ runUnify
   -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
 runUnify u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
 
-runDefaultUnify = runUnify . hook1 . joinCaseT $ CaseT
+unify = runUnify . hook1 . joinCaseT $ CaseT
   [ case1, case2
   , case10
   , case20, case21, case25 @Label

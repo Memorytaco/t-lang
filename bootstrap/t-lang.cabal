@@ -36,6 +36,7 @@ library
       Compiler.NameChecking
       Compiler.SourceParsing
       Compiler.Store
+      Compiler.TypeChecking
       Driver
       Driver.Compiler.CodeGen.LLVM
       Driver.Graph

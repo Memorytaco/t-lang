@@ -6,6 +6,7 @@ module Driver.GraphicConstraint
 
   -- ** monad for graphic constraint solver
   , GCSolver
+  , SolverErr (..)
 
   -- ** common driver
   , driveGCGen
@@ -17,8 +18,9 @@ module Driver.GraphicConstraint
   -- ** actual runner for solving graphic constraint
   , solve
 
-  -- ** infer
+  -- ** inference
   , preInfer
+  , infer
   )
 where
 
@@ -26,7 +28,7 @@ import Language.Constraint.Graphic
 import Language.Generic ((:>+:), type (|:) (..))
 import Language.Core (ExprF (..), Expr (..))
 
-import Graph.Core (Hole (..), HasOrderEdge, HasOrderGraph)
+import Graph.Core (Hole (..), CoreG, HasOrderEdge, HasOrderGraph)
 import Graph.Extension.GraphicType
 
 
@@ -137,7 +139,7 @@ solve c = driveGCSolver (solveConstraint @name c)
 
 -- | directly generate presolution from expression
 preInfer
-  :: forall nodes edges err name f m target
+  :: forall name nodes edges err f m target
   .  ( target ~ (ExprF f name |: Hole nodes Int)
      , ConstraintGen f target Int
      , ConstrainGraphic f target (GCGen name nodes m) nodes edges Int
@@ -152,5 +154,26 @@ preInfer
 preInfer e env i unify = do
   genGC e env i >>= \case
     Right (constraint, i') ->
-      solve constraint unify i'
+      solve @name constraint unify i'
+    Left err -> return (Left $ ConstraintGenErr err)
+
+-- | directly generate solution type from expression
+infer
+  :: forall name nodes edges err f m target
+  .  ( target ~ (ExprF f name |: Hole nodes Int)
+     , ConstraintGen f target Int
+     , ConstrainGraphic f target (GCGen name nodes m) nodes edges Int
+     , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
+     , nodes :>+: '[NDOrder, G, T NodeBot, NodePht]
+     , HasOrderGraph nodes edges Int, Monad m
+     , Traversable f, Eq name
+     )
+  => BindingTable name nodes -> Int
+  -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
+  -> Expr f name
+  -> m (Either (SolverErr name err) ((Hole nodes Int, CoreG nodes edges Int), Int))
+infer env i unify e =
+  genGC e env i >>= \case
+    Right (constraint, i') ->
+      driveGCSolver (solveConstraint @name constraint >>= getSolutionFromConstraint) unify i'
     Left err -> return (Left $ ConstraintGenErr err)

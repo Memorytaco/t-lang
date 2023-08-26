@@ -40,7 +40,7 @@ buildAssertion ia ib = do
            , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
            , r2 -<< T (Binding Flexible 2 (Nothing @Name)) >>- root
            ]
-  res <- runDefaultUnify (gr) r1 r2
+  res <- unify gr r1 r2
   case res of
     Left err -> fail $ show err
     Right (r, g) -> do
