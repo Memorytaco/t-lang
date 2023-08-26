@@ -54,6 +54,8 @@ data ReadCommand
   | RShowModule Name
     -- | declare something in repl
   | RDefineGlobal DeclSurface
+    -- | query type of an expression
+  | RQueryTypeOf (ExprSurface TypSurface)
     -- | load a object file from a path, which will be used in jit compilation
   | RLoadObject FilePath
     -- | load a dynamic object file from a path
@@ -76,6 +78,7 @@ interface :: forall m. MonadIO m => InterfaceT m ReadResult
 interface = do
   command'maybe <- optional $ char ':' *> some letterChar <* many spaceChar
   ops <- asks (^. (evalStore . operators))
+  let nextExpr cc = getInput >>= getSurfaceExpr ops "stdin" >>= cc
   case command'maybe of
     Just "def" ->
       getInput >>= getSurfaceDeclEof ops "stdin" >>= \case
@@ -94,6 +97,11 @@ interface = do
       name -> return . ReadCommand $ RListSource (Just name)
     Just "showm" -> getInput <&> ReadCommand . RShowModule . Name . stripSpace
     Just "run" -> do undefined
+    Just "type" -> nextExpr \case
+      Left err -> do
+        liftIO . putStrLn $ errorBundlePretty err
+        customFailure SubParseError
+      Right e -> return . ReadCommand $ RQueryTypeOf e
     Just "dump" ->
       getInput >>= getSurfaceExpr ops "stdin" >>= \case
         Left err -> do

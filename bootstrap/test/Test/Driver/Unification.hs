@@ -60,6 +60,7 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   buildCase <$>
   [ ("forall a. (a, a)", "forall a b. (a, b)")
   , ("forall f a. f a", "forall f a. a f")
+  , ("forall a. a", "forall b. b")
   , ("12", "12")
   , ("forall a b c. (a, b, c)", "forall x y. (x, y, x)")
   , ("forall a b c. (a, b, c)", "forall x y z. (x, y, z)")

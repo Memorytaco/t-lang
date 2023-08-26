@@ -17,13 +17,15 @@ import Control.Monad.State (StateT (..))
 import Data.Text (Text)
 
 import Language.Constraint.Unification.GraphicType
-import Graph.Core ( CoreG, Hole )
+import Graph.Core ( CoreG, Hole, HasOrderGraph )
 import Language.Core (Label, Name)
+import Language.Generic ((:>+:))
 
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)
 import Capability.State (HasState, MonadState (..))
 import Capability.Error (HasThrow, HasCatch, MonadError (..))
+import Graph.Extension.GraphicType
 
 -- | unification monad
 newtype GraphUnify ns es m a = GraphUnify
@@ -40,14 +42,24 @@ runUnify
   -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
 runUnify u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
 
-unify = runUnify . hook1 . joinCaseT $ CaseT
+unify
+  :: ( Monad m, HasOrderGraph ns es Int
+     , ns :>+: '[T NodeTup, T NodeSum, T NodeRec, T (NodeHas Label), T (NodeRef Name), NodePht]
+     , ns :>+: '[T (NodeLit Integer), T (NodeLit Text), T NodeApp, T NodeBot, Histo, G]
+     , es :>+: '[T (Binding Name), T Sub, Pht O]
+     )
+  => CoreG ns es Int
+  -> Hole ns Int -> Hole ns Int
+  -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
+unify = runUnify . hook1 . foldCase $ Case
   [ case1, case2
   , case10
   , case20, case21, case25 @Label
   , case30
   , case40 @Integer
   , case40 @Text
-  , case50
+  -- phantom node
+  , case50, case51, case52
   , case60 @Name
   ]
 

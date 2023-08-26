@@ -14,6 +14,7 @@ module Transform.GraphType
   -- ** error definition
   , GraphToTypeErr (..)
   , HasGraphToTypeErr
+  , GraphTypeProperty (..)
 
   -- ** building blocks
   , literal01
@@ -47,7 +48,13 @@ import Capability.Error
 
 -- | Conversion error
 data GraphToTypeErr node
-  = GTypUnmatch node
+  = GTFailUnmatch node
+  | GTFailUnexpect String
+  | GTFailProperty (GraphTypeProperty node)
+  deriving (Show, Eq)
+
+data GraphTypeProperty node
+  = PropFailSatisfy node String
   deriving (Show, Eq)
 
 type HasGraphToTypeErr node m
@@ -56,7 +63,13 @@ type HasGraphToTypeErr node m
     )
 
 unmatch :: HasGraphToTypeErr node m => node -> m a
-unmatch = throw @GraphToTypeErr . GTypUnmatch
+unmatch = throw @GraphToTypeErr . GTFailUnmatch
+
+unexpect :: HasGraphToTypeErr node m => String -> m a
+unexpect = throw @GraphToTypeErr . GTFailUnexpect
+
+failProp :: HasGraphToTypeErr node m => GraphTypeProperty node -> m a
+failProp = throw @GraphToTypeErr . GTFailProperty
 
 data Conversion nodes edges info bind rep name m a
   = HasReader "graph" (CoreG nodes edges info) m
@@ -76,19 +89,12 @@ treeConversion = foldr foldT (Conversion $ Recursion \_ n -> unmatch n)
   where
     foldT (Conversion (Recursion f)) (Conversion (Recursion g)) = Conversion $ Recursion \restore n ->
       catch @GraphToTypeErr (f restore n) $ \case
-        e@(GTypUnmatch n') ->
+        e@(GTFailUnmatch n') ->
           if n' == n
             then g restore n
             else throw @GraphToTypeErr e
+        e -> throw @GraphToTypeErr e
 
--- toSyntacticType
---   :: ( GraphTypeConstrain nodes m nodes edges info bind rep name a
---      , UnfoldGraphType nodes info
---      , HasReader "graph" (CoreG nodes edges info) m
---      )
---   => Hole nodes info -> m (Type bind rep name a)
--- toSyntacticType (Hole n info) = unfoldGraphType toSyntacticType n info
--- {-# INLINE toSyntacticType #-}
 
 -- ** Utilities
 --
@@ -206,7 +212,7 @@ literal05
      , T NodeRec :<: nodes
      , Record label :<: rep
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges, MonadFail m
+     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
 literal05 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeRec _)) _ ->
@@ -214,7 +220,8 @@ literal05 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (Node
     subLinks <- sFrom root
     fields <- mapM (unfoldLabel @label restore) (snd <$> subLinks) >>= mapM \case
       (label, Just typ) -> return (label, typ)
-      (_, Nothing) -> fail "Illegal Tag Node under NodeRec: it has no type nodes but it is expected to have one"
+      (_, Nothing) -> failProp $ PropFailSatisfy root
+        "Illegal Tag Node under NodeRec: it has no type nodes but it is expected to have one"
     return . Type . inj $ Record fields
 
 -- | RULE: T NodeSum
@@ -225,7 +232,7 @@ literal06
      , T NodeSum :<: nodes
      , Variant label :<: rep
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges, MonadFail m
+     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
 literal06 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeSum _)) _ ->
@@ -239,7 +246,7 @@ structure01
   :: ( HasGraphToTypeErr (Hole nodes info) m
      , T NodeApp :<: nodes
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges, MonadFail m
+     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
 structure01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeApp _)) _ ->
@@ -247,7 +254,7 @@ structure01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (Nod
     subLinks <- sFrom root
     case snd <$> subLinks of
       a:as -> TypCon <$> restore a <*> mapM restore as
-      [] -> fail "Illegal Application Node: it has no sub nodes"
+      [] -> failProp $ PropFailSatisfy root "Illegal Application Node: it has no sub nodes"
 
 
 -- | RULE: NodePht
@@ -255,7 +262,6 @@ special01
  :: ( HasGraphToTypeErr (Hole nodes info) m, NodePht :<: nodes
     , WithBindingEnv m nodes edges info bind rep name a
     , T Sub :<: edges
-    , MonadFail m
     )
   => Conversion nodes edges info bind rep name m a
 special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _ ->
@@ -264,7 +270,7 @@ special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _
     typs <- mapM restore (snd <$> subLinks)
     case typs of
       [typ] -> return typ
-      _ -> fail "Illegal Phantom Node: it has no sub node or it has multiple sub nodes"
+      _ -> failProp $ PropFailSatisfy root "Illegal Phantom Node: it has no sub node or it has multiple sub nodes"
 
 -- | RULE: T NodeBot
 special02
@@ -281,10 +287,11 @@ special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBo
 unfoldLabel
   :: forall label m nodes edges info bind rep name a
   . ( HasReader "graph" (CoreG nodes edges info) m
-    , MonadFail m, Eq (Hole nodes info)
+    , Eq (Hole nodes info)
     , T Sub :<: edges
     , T (NodeHas label) :<: nodes
     , HasOrderGraph nodes edges info
+    , HasGraphToTypeErr (Hole nodes info) m
     )
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info
   -> m (label, Maybe (Type bind rep name a))
@@ -292,10 +299,10 @@ unfoldLabel restore root@(Hole tag _) = do
   -- a label node can not be bound on, so no not checking binding edges here
   label <- case prj @(T (NodeHas label)) tag of
     Just (T (NodeHas _ label)) -> return label
-    Nothing -> fail "Expect Tag Node but it is not"
+    Nothing -> unexpect "Expect Tag Node but it is not"
   -- extract type node, a label may or may not have a type field
   fields <- asks @"graph" $ lFrom @(T Sub) (== root)
   case fields of
     [snd -> n] -> (label,) . Just <$> restore n
     [] -> return (label, Nothing)
-    _ -> fail "Illegal Tag Node: it has more than one type nodes but it is expected to have exactly one or none"
+    _ -> failProp $ PropFailSatisfy root "Illegal Tag Node: it has more than one type nodes but it is expected to have exactly one or none"

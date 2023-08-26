@@ -78,7 +78,7 @@ syntacticType
      , bind :>+: '[Forall (Prefix name)]
      , Functor rep, Functor bind
      , HasOrderGraph nodes edges Int, Ord name, IsString name
-     , MonadFail m
+     , Monad m
      )
   => Conversion nodes edges Int bind rep name (GraphToType nodes edges name m) name
 syntacticType = treeConversion
