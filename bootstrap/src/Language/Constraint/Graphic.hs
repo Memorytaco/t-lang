@@ -42,6 +42,12 @@ module Language.Constraint.Graphic
   , solveConstraint
   , getSolutionFromConstraint
   , getSolution
+
+  -- ** utility tools
+  , interiorC
+  , interiorS
+  , interiorI
+  , frontierS
   )
 where
 
@@ -356,7 +362,6 @@ instance ConstraintGen (Record Label) (ExprF f name |: Hole nodes Int) Int where
 
 type instance ConstrainGraphic (Constructor Label) (ExprF f name |: Hole ns Int) m nodes edges info = ()
 instance ConstraintGen (Constructor Label) (ExprF f name |: Hole nodes Int) Int where
-  stageConstraint (Constructor _ _) = error "Polymorphic Variant is not supported"
 
 -- | expression literal
 type instance ConstrainGraphic (Literal t) (ExprF f name |: Hole ns Int) m nodes edges info
@@ -402,7 +407,7 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
         [ tup -<< T (Sub ix) >>- var
         , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
         , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
-        , depR -<< T (Sub ix) >>- gdep
+        , depR -<< Pht (Sub ix) >>- gdep
         , g' -<< T (Instance 1) >>- var
         , gr'
         ]
@@ -720,17 +725,17 @@ failSolvUnify :: HasSolvErr err m => err -> m a
 failSolvUnify = throw @ConstraintSolvErr . FailSolvUnify
 
 -- | get constraint interior nodes, no duplication
-interiorC :: forall name ns es info. (T (Binding name) :<: es, HasOrderNode ns info) =>
+interiorC :: forall name ns es info. (T (Binding name) :<: es, HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorC gr = nub . dfs (isLinkOf @(T (Binding name))) (transpose gr)
 
 -- | get structure interior nodes, no duplication
-interiorS :: (T Sub :<: es, HasOrderNode ns info) =>
+interiorS :: (T Sub :<: es, HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorS = fmap nub . dfs (isLinkOf @(T Sub))
 
 -- | get interior nodes, no duplication
-interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, HasOrderNode ns info) =>
+interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
 interiorI gr root = interiorC @name gr root `intersect` interiorS gr root
 
@@ -877,7 +882,7 @@ verifyUnifier graph (n:ns) = do
   case filter (/= n) $ nub targets of
     [] -> let graph' = replaceLink (\e -> if isLinkOf @(T Unify) e then Nothing else Just e) n n graph
           in verifyUnifier graph' ns
-    _ -> failSolvMsg "Failure when unifying nodes"
+    _ -> failSolvMsg "Failure when verifying unified nodes"
 
 -- | solve all `Unify` edges in a stage constraint
 solvUnify
@@ -908,7 +913,7 @@ solvInst sc@(StageConstraint _ _ (unifications, dep) graph) = do
   if null unifications
   then return ()
   else failSolvMsg "Unexpected unification constraint when trying to solve instance edges"
-  let orders = dfs (isLinkOf @(Pht Sub)) (induce (\n -> isHole n (\NDOrder _ -> True)) graph) dep
+  let orders = dfs (isLinkOf @(Pht Sub)) graph dep
   -- TOOD: verify it is acyclic graphic constraint
   go sc (reverse orders)
   where

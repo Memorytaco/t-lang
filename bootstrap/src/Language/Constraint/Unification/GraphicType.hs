@@ -467,13 +467,13 @@ rebind n = do
                {- Important!!! for every node, there should exist a binder. -}
   bn <- foldM lcb b bs
   i <- maximum <$> forM binders \(f, i, name, v) ->
-    modifyGraph (filterLink (`isLink` \(T (Binding f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
+    modifyGraph (filterLink (isLink \(T (Binding f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
   modifyGraph $ overlay (n -<< T (Binding flag i (Nothing :: Maybe name)) >>- bn)
   where
     -- | return direct ancestors of node n, if it is partially grafted node.
     -- if this is used during unification, '==>' should be used first.
     partial = do
-      candidates <- get @"graph" <&> transpose <&> \g -> toList $ reachable (`isLink` \(T (Sub _)) -> True) g n
+      candidates <- get @"graph" <&> transpose <&> \g -> toList $ reachable (isLinkOf @(T Sub)) g n
       -- a partially grafted node only requires that a bottom node exists among
       -- its merged ancestors.
       --
@@ -492,9 +492,9 @@ rebind n = do
          else return []
     -- | least common binder of two nodes
     lcb n1 n2 = do
-      ns1 <- getsGraph \g -> dfs (`isLink` (\(T (Binding _ _ (_ :: Maybe name))) -> True)) g n1
-      ns2 <- getsGraph \g -> dfs (`isLink` (\(T (Binding _ _ (_ :: Maybe name))) -> True)) g n2
-      case zip ns1 ns2 >>= \(a, b) -> if a == b then pure a else [] of
+      ns1 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n1
+      ns2 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n2
+      case zip (reverse ns1) (reverse ns2) >>= \(a, b) -> if a == b then pure a else [] of
         [] -> failProp $ NodeNoLeastCommonBinder n1 n2
         ls -> return $ last ls
 

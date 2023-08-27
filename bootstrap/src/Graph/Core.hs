@@ -28,7 +28,7 @@ module Graph.Core
   -- ** helpers
   , hole, link, link', lFrom, lTo, linkFrom, linkTo
   , isHole, isLink, isLinkOf, getLink, filterLink
-  , maybeHole
+  , maybeHole, maybeLink
   , edge, edges
   , (-<<), (>>-)
   , (-++), (++-)
@@ -42,8 +42,6 @@ module Graph.Core
   )
 where
 
-import qualified Algebra.Graph.AdjacencyMap as AdjacencyMap
-import qualified Algebra.Graph.AdjacencyMap.Algorithm as AdjacencyMap
 import qualified Algebra.Graph.Labelled as Algebra
 import Data.Set (Set, singleton, toList, fromList)
 import qualified Data.Set as Set (filter, member)
@@ -159,22 +157,26 @@ maybeHole
   -> (Hole nodes info -> node (Hole nodes info) -> info -> a)
   -> Hole nodes info
   -> a
-maybeHole f g node@(Hole (prj -> node'maybe) info) =
-  case node'maybe of
-    Just tag -> g node tag info
-    Nothing -> f node
+maybeHole f g node@(Hole (prj -> node'maybe) info)
+  = maybe (f node) (`g'` info) node'maybe
+  where g' = g node
 
--- | general predicate
+-- | general predicate for Hole
 isHole :: (node :<: nodes) => Hole nodes info -> (node (Hole nodes info) -> info -> Bool) -> Bool
 isHole node p = maybeHole (const False) (const p) node
 {-# INLINE isHole #-}
 
-isLink :: (edge :<: edges) => Link edges -> (edge (Link edges) -> Bool) -> Bool
-isLink (Link (prj -> e)) predicate = maybe False predicate e
+-- | act like `maybe` function but test against `Link`
+maybeLink :: edge :<: edges => (Link edges -> a) -> (edge (Link edges) -> a) -> Link edges -> a
+maybeLink f g l@(Link (prj -> e'Maybe)) = maybe (f l) g e'Maybe
+
+-- | general predicate for Link
+isLink :: (edge :<: edges) => (edge (Link edges) -> Bool) -> Link edges -> Bool
+isLink predicate (Link (prj -> e)) = maybe False predicate e
 
 -- | use type level marker to check edge kind
 isLinkOf :: forall edge edges. (edge :<: edges) => Link edges -> Bool
-isLinkOf e = isLink @edge e (const True)
+isLinkOf = isLink @edge (const True)
 {-# INLINE isLinkOf #-}
 
 -- | get links between two nodes, there may not exist links
@@ -218,15 +220,21 @@ hasVertex p = Algebra.foldg False p (const (||))
 -- ** algorithms
 
 -- | get a collection of reachable nodes, with a predicate to select valid edge
-reachable :: HasOrderNode ns info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Set (Hole ns info)
+reachable :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Set (Hole ns info)
 reachable p g n = fromList $ dfs p g n
 {-# INLINE reachable #-}
 
--- | get a collection of reachable nodes, with a predicate to select valid edge
-dfs :: HasOrderNode ns info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> [Hole ns info]
-dfs p g n = flip AdjacencyMap.dfs [n] . Algebra.foldg AdjacencyMap.empty AdjacencyMap.vertex (const AdjacencyMap.connect)
-          $ Algebra.emap (Set.filter p) g
+-- | get a collection of reachable nodes, with a predicate to select valid routing edge
+dfs :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> [Hole ns info]
+dfs p gr start = reverse $ go [n | (e, n) <- linkFrom (== start) gr, p e] [start]
+  where
+    go [] visited = visited
+    go (n:ns) visited =
+      if n `elem` visited
+      then go ns visited
+      else go (ns <> [node | (e, node) <- linkFrom (== n) gr, p e])
+              (n:visited)
 
 -- | test whether one node is reachable via specified edges
-linkable :: HasOrderNode ns info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Hole ns info -> Bool
+linkable :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Hole ns info -> Bool
 linkable p g from to = Set.member to $ reachable p g from

@@ -12,7 +12,7 @@ import Language.Parser.Type (record)
 
 import Text.Megaparsec hiding (Label)
 import Text.Megaparsec.Debug
-import Text.Megaparsec.Char (char)
+import Text.Megaparsec.Char (char, space)
 import Control.Monad (void)
 import Data.Functor (($>), (<&>))
 import Data.Text (Text)
@@ -125,8 +125,8 @@ instance (ExprC e m, Apply :<: f)
 instance (ExprC e m, Apply :<: f, Tuple :<: f)
   => PrattToken (WithExpr e m "tuple") (Expr f name) m where
   tokenize _ parser _ = do
-    fields <- parens $ parser (void . lookAhead $ reservedOp "," <|> reservedOp ")") Go `sepBy` reservedOp ","
-    return $ literal (Expr . inj $ Tuple fields)
+    let fields = parens $ parser (void . lookAhead $ reservedOp "," <|> reservedOp ")") Go `sepBy` reservedOp ","
+    try (parens space) $> [] <|> fields <&> literal . Expr . inj . Tuple
 
 -- | record expression
 instance (ExprC e m, Apply :<: f, Record Label :<: f)
