@@ -87,16 +87,14 @@ library
       Language.Parser.Module
       Language.Parser.Pattern
       Language.Parser.Type
+      Language.Setting
       Tlang.Codegen
-      Tlang.Inference
       Tlang.Inference.Kind
       Tlang.Rep
       Tlang.Rep.Class
       Tlang.Rep.DataRep
       Tlang.Rep.Primitive
       Tlang.TH
-      Tlang.Unification
-      Tlang.Unification.Kind
       Transform.Desugar
       Transform.GraphType
       Transform.LowerType
@@ -235,6 +233,7 @@ test-suite t-lang-test
   other-modules:
       Test.Driver.Transform.GraphAndType
       Test.Driver.Unification
+      Test.Inference
       Paths_t_lang
   hs-source-dirs:
       test
