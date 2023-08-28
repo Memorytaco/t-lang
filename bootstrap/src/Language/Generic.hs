@@ -10,6 +10,9 @@ module Language.Generic
   , type (|:) (..)
   , type (|:$) (..)
 
+  , strip, stripBase
+  , fromX, toX
+
   -- ** term level open recursion
   , Recursion (..)
   , Recursion2 (..)
@@ -42,6 +45,19 @@ instance Functor f => Recursive (X f) where
   project (X v) = v
 instance Functor f => Corecursive (X f) where
   embed = X
+
+-- | strip annotation
+strip :: Functor f => f |: a -> X f
+strip (_ :| f) = X $ strip <$> f
+
+stripBase :: Corecursive c => (Base c |: a) -> c
+stripBase = fromX . strip
+
+fromX :: Corecursive t => X (Base t) -> t
+fromX = refix
+
+toX :: Recursive t => t -> X (Base t)
+toX = refix
 
 -- | general algebra operation
 class Alg f a | a -> f where

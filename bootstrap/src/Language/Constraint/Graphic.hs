@@ -56,18 +56,17 @@ import Language.Core.Extension
 
 import Graph.Core
 import Graph.Extension.GraphicType
-import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), Base)
+import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), strip, fromX)
 
 import Capability.State (HasState, get, modify)
-import Capability.Reader (HasReader, asks, ask)
+import Capability.Reader (HasReader, asks, ask, local)
 import Capability.Error (HasThrow, throw)
 import Control.Monad (forM, foldM, join, (<=<))
-import Control.Lens (makeLenses, (^..), _2, _1, (%~), (^.), (&), (.~))
+import Control.Lens (makeLenses, (^..), _2, _1, (%~), (^.), (&), (.~), _3, _4, _5, _6)
 import Data.Functor.Foldable (cata)
 import Data.Functor ((<&>))
 
 import Data.Kind (Constraint, Type)
-import Data.Text (Text)
 import Data.List (intersect, union, nub)
 import Data.Maybe (fromMaybe)
 import Data.String (IsString (fromString))
@@ -121,6 +120,10 @@ lookupBinding
   :: (HasBinding name nodes m, Eq name) => name -> m (Maybe (BindingType nodes))
 lookupBinding name = asks @"binding" (lookup name)
 
+-- | append local bindings
+localBinding
+  :: (HasBinding name nodes m) => BindingTable name nodes -> m a -> m a
+localBinding binds = local @"binding" (binds <>)
 
 -- | error data type for constraint generation, use it with `genConstraint`
 data ConstraintGenErr name
@@ -147,6 +150,17 @@ getInstance ix n@(Hole v _) gr =
         Nothing -> if i < ix then failCGenMsg "Internal Error, G node doesn't have sufficient instance"
                              else failCGenMsg "Internal Error, G node doesn't have that instance"
     Nothing -> failCGenMsg "Internal Error, Expect G node, but it is not"
+
+-- | with `pattern` as annotated syntax tree and with `bindings` as exported binding
+--
+--
+-- a pattern is a destructor which decomposes a value and exports its inner value.
+data PatternInfo lits injs nodes label name a = PatternData
+   { _pattern :: PatternF lits injs label name a |: Hole nodes Int
+   , _bindings :: [(name, (Instance, Hole nodes Int))]
+   }
+
+makeLenses ''PatternInfo
 
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
@@ -286,8 +300,58 @@ instance ConstraintGen (Value TypSurface) (ExprF f name |: Hole nodes Int) Int w
 type instance ConstrainGraphic (Selector Label) (ExprF f name |: Hole ns Int) m nodes edges info = ()
 instance ConstraintGen (Selector Label) (ExprF f name |: Hole nodes Int) Int where
 
-type instance ConstrainGraphic (LetGrp (PatSurface t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+type instance ConstrainGraphic (LetGrp (PatSurface t)) (ExprF f name |: Hole ns Int) m nodes edges info
+   = ( Monad m
+     , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
+     , edges :>+: '[Pht NDOrderLink, Pht Sub]
+     , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
+     , nodes :>+: '[T (NodeRef name), NDOrder]
+     , HasNodeCreator m
+     , HasConstraintGenErr name m
+     , HasOrderGraph nodes edges Int
+     , HasBinding name nodes m
+     , LetGrp (PatSurface t) :<: f
+     , name ~ Name, ns ~ nodes
+     )
 instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (LetGrp ms m) = do
+    envs <- forM ms \(mpat, me) -> do
+      StageConstraint (PatternData pat binds) p'g (p'deps, p'dep) p'gr <- genPatternConstraint mpat
+      StageConstraint e e'g (e'deps, e'dep) e'gr <- me
+      let sPat = (fromX $ strip pat) :: ((PatSurface t) (ExprF f name |: Hole nodes Int))
+      p'root <- getInstance 1 p'g p'gr
+      e'root <- getInstance 1 e'g e'gr
+      return . ((sPat, e), binds, [p'root, e'root] <> e'deps <> p'deps, e'dep, e'g, )
+        $ overlays
+        [ p'gr, e'gr
+        , e'root -++ T Unify ++- p'root
+        , p'g -<< T (Binding Flexible 1 $ Nothing @name) >>- e'g
+        , e'dep -<< Pht (Sub 1) >>- p'dep
+        ]
+    -- TODO: add duplication check for bindings
+    StageConstraint e (e'g :: Hole nodes Int) (e'deps, e'dep) e'gr <-
+      localBinding
+        [ (name, nd :| Inr (T inst))
+        | binds <- envs ^.. traverse . _2
+        , (name, (inst, nd)) <- binds ]
+        m
+    let unification = e'deps <> join (envs ^.. traverse . _3)
+        val = ExprF . inj $ LetGrp (envs ^.. traverse . _1) e
+    return $ StageConstraint (e'g :| val) e'g (unification, e'dep) $ overlays
+      [ e'gr
+      -- build constraint depencency relation
+      , overlays
+        [ e'dep -<< Pht (Sub i) >>- n
+        | (i, n) <- zip [1..] $ envs ^.. traverse . _4
+        ]
+      -- build constraint binding edges
+      , overlays
+        [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- e'g
+        | n <- envs ^.. traverse . _5
+        ]
+      -- merge graphs
+      , overlays $ envs ^.. traverse . _6
+      ]
 
 type instance ConstrainGraphic (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
 instance ConstraintGen (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
@@ -423,45 +487,28 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
 -- ** graphic constraint generation for simple pattern
 ------------------------------------------------------------------------------------------------
 
--- | with `pattern` as annotated syntax tree and with `bindings` as exported binding
---
---
--- a pattern is a destructor which decomposes a value and exports its inner value.
-data PatternInfo lits injs nodes label name expr = PatternData
-   { _pattern :: Base (Pattern lits injs label name (Base expr |: Hole nodes Int)) |: Hole nodes Int
-   , _bindings :: [(name, (Instance, Hole nodes Int))]
-   }
-
-makeLenses ''PatternInfo
-
 -- | constraint generation for a single pattern
 genPatternConstraint
-  :: forall lits injs label name a a' target m nodes edges f
+  :: forall nodes edges lits injs label name expr target m
    . ( -- for pattern
-       target ~ PatternInfo lits injs nodes label name a
+       target ~ PatternInfo lits injs nodes label name expr
      , ConstraintGen lits target Int, ConstrainGraphic lits target m nodes edges Int
      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
 
-      -- for expression
-     , a ~ Expr f name, a' ~ (Base a |: Hole nodes Int)
-     , ConstraintGen f a' Int, ConstrainGraphic f a' m nodes edges Int
-
      , edges :>+: '[T Sub, T (Binding name), T Instance, T Unify]
      , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas label)]
-     , Eq name
-     , Traversable lits, Traversable injs, Traversable f
-     , HasNodeCreator m
+     , Traversable lits, Traversable injs, HasNodeCreator m
      , HasConstraintGenErr name m
      , HasOrderGraph nodes edges Int
-     , HasBinding name nodes m
      , Pht NDOrderLink :<: edges, NDOrder :<: nodes, Pht Sub :<: edges
      )
-  => Pattern lits injs label name a -> m (StageConstraint nodes edges Int target)
+  => Pattern lits injs label name (m (StageConstraint nodes edges Int expr))
+  -> m (StageConstraint nodes edges Int target)
 
 genPatternConstraint = cata go
   where
     getInstance1 = getInstance 1
-    arrowGM = do
+    functionPattern g = do
       app <- node (T $ NodeApp 3)
       arr <- node (T NodeArr)
       domain <- node (T NodeBot)
@@ -472,7 +519,8 @@ genPatternConstraint = cata go
              , app -<< T (Sub 3) >>- codomain
              , Connect (link . T . Binding Flexible 1 $ Nothing @name)
                  (overlays $ Vertex <$> [arr, domain, codomain])
-                 (Vertex app)
+                 (Vertex g)
+             , app -<< T (Binding Flexible 1 $ Nothing @name) >>- g
              ]
       return ((app, domain, codomain), gr)
 
@@ -514,19 +562,24 @@ genPatternConstraint = cata go
       tup <- node (T $ NodeTup len)
       depR <- node NDOrder
       sia <- (`zip` [1..len]) <$> sequence sma
-      (overlays -> gr, join -> gdeps) <- unzip <$> forM sia \(StageConstraint _ n (gdeps, gdep) gr, i) -> do
+      (overlays -> gr, join -> gdeps) <-
+        unzip <$> forM sia \(StageConstraint _ n'g (gdeps, gdep) gr, i) -> do
         var <- node (T NodeBot)
-        n' <- getInstance1 n gr
+        n'root <- getInstance1 n'g gr
         return (overlays
           [ gr
+          -- add binding edge and structure edge
           , var -<< (T . Binding Flexible 1 $ Nothing @name) >>- tup
           , tup -<< T (Sub i) >>- var
-          , var -++ T Unify ++- n'
-          , n -<< T (Binding Flexible 1 $ Nothing @name) >>- tup
+          -- add unify constraint
+          , var -++ T Unify ++- n'root
+          -- bind sub constraint
+          , n'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+          -- add constraint dependency order
           , depR -<< Pht (Sub i) >>- gdep
-          ], gdeps <> [var, n'])
+          ], gdeps <> [var, n'root])
       let patd = PatternData (g :| PatTupF (sia ^.. traverse . _1 . atInfo . pattern))
-                             (join $ sia ^.. traverse . _1 . atInfo . bindings)
+                             (sia ^.. traverse . _1 . atInfo . bindings . traverse)
       return $ StageConstraint patd g (gdeps, depR)
         (overlays [ gr, tup -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
                   , g -<< T (Sub 1) >>- tup
@@ -560,41 +613,41 @@ genPatternConstraint = cata go
         , depR -++ Pht NDOrderLink ++- g
         ]
     go (PatSymF _ _) = error "wait for whole pass being completed"
-    go (PatViewF e ma) = do
+    go (PatViewF me ma) = do
       g <- node (G 1)
-      -- common pattern for arrow, with domain and codomain binds to root of type
-      ((app, domain, codomain), arr'gr) <- arrowGM
-      -- pattern constraint
-      StageConstraint (PatternData pat'a pat'bindings) pat'root (pat'deps, pat'dep) pat'gr <- ma
-      -- expression constraint
-      StageConstraint e' e'root (e'deps, e'dep) e'gr :: StageConstraint nodes edges Int a' <- genConstraint e
-      -- get instance of pattern G node, what we will use to unify with codomain
-      pat' <- getInstance1 pat'root pat'gr
       -- generate NDOrder tracker node
       depR <- node NDOrder
-      let patd = PatternData (g :| PatViewF e' pat'a) pat'bindings
+      -- common pattern for arrow, with domain and codomain binds to root of type
+      ((app, domain, codomain), arr'gr) <- functionPattern g
+      -- pattern constraint
+      StageConstraint (PatternData pat binds) pat'g (pat'deps, pat'dep) pat'gr <- ma
+      -- expression constraint
+      StageConstraint e e'g (e'deps, e'dep) e'gr <- me
+      -- get instance of pattern G node, what we will use to unify with codomain
+      pat'root <- getInstance1 pat'g pat'gr
+      let patd = PatternData (g :| PatViewF e pat) binds
           gr = overlays
               [ arr'gr, pat'gr, e'gr
               -- connect result node
               , g -<< T (Sub 1) >>- domain
-              , app -<< T (Binding Flexible 1 $ Nothing @name) >>- g
               -- connect right pattern node
-              , pat'root -<< T (Binding Flexible 1 $ Nothing @name) >>- g
-              , pat' -++ T Unify ++- codomain
+              , pat'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+              , pat'root -++ T Unify ++- codomain
               -- connect left expr node
-              , e'root -<< T (Binding Flexible 1 $ Nothing @name) >>- g
-              , e'root -<< T (Instance 1) >>- app
+              , e'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+              , e'g -<< T (Instance 1) >>- app
               -- connect tracker node
               , depR -<< Pht (Sub 1) >>- e'dep
               , depR -<< Pht (Sub 2) >>- pat'dep
+              , depR -++ Pht NDOrderLink ++- g
               ]
-      return $ StageConstraint patd g (e'deps <> pat'deps, depR) gr
+      return $ StageConstraint patd g ([pat'root, codomain] <> e'deps <> pat'deps, depR) gr
     go (PatBindF name ma) = do
-      StageConstraint a g dep gr <- ma
+      StageConstraint patd g dep gr <- ma
       let patInfo = StageConstraint
                   ( PatternData
-                    (g :| PatBindF name (a ^. pattern))
-                    ((name, (Instance 1, g)) :a ^. bindings)
+                    (g :| PatBindF name (patd ^. pattern))
+                    ((name, (Instance 1, g)) :patd ^. bindings)
                   )
       return $ patInfo g dep gr
     go (PatExtF injm) = stageConstraint injm
@@ -620,12 +673,13 @@ type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name 
     , HasOrderEdge edges
     , HasNodeCreator m
     , edges :>+: '[T (Binding name), T Sub, Pht NDOrderLink]
-    , nodes :>+: '[T (NodeLit Text), G, NDOrder]
+    , nodes :>+: '[T (NodeRef name), G, NDOrder]
+    , IsString name
     )
 instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralText (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeLit t)
+    n <- node (T $ NodeRef False $ fromString @name "text")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralText $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
@@ -633,6 +687,11 @@ instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr)
       , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
+
+-- | handle type cast in pattern matching
+type instance ConstrainGraphic ((@:) t) (PatternInfo lits injs ns label name expr) m nodes edges info
+  = ()
+instance ConstraintGen ((@:) t) (PatternInfo lits injs nodes label name expr) Int where
 
 -- | handle general literal
 type instance ConstrainGraphic (Literal t) (PatternInfo lits injs ns label name expr) m nodes edges info
@@ -663,12 +722,13 @@ type instance ConstrainGraphic LiteralInteger (PatternInfo lits injs ns label na
     , HasNodeCreator m
     , Pht NDOrderLink :<: edges, NDOrder :<: nodes
     , edges :>+: '[T (Binding name), T Sub, Pht NDOrderLink]
-    , nodes :>+: '[T (NodeLit Integer), G, NDOrder]
+    , nodes :>+: '[T (NodeRef name), G, NDOrder]
+    , IsString name
     )
 instance ConstraintGen LiteralInteger (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralInteger (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeLit t)
+    n <- node (T $ NodeRef False $ fromString @name "int")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralInteger $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
@@ -681,16 +741,17 @@ instance ConstraintGen LiteralInteger (PatternInfo lits injs nodes label name ex
 type instance ConstrainGraphic LiteralNumber (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
     , LiteralNumber :<: lits
-    , T (NodeLit Double) :<: nodes, G :<: nodes
+    , T (NodeRef name) :<: nodes, G :<: nodes
     , T (Binding name) :<: edges, T Sub :<: edges
     , Ord (edges (Link edges))
     , HasNodeCreator m
+    , IsString name
     , Pht NDOrderLink :<: edges, NDOrder :<: nodes
     )
 instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralNumber (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeLit t)
+    n <- node (T $ NodeRef False $ fromString @name "string")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj $ LiteralNumber $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
@@ -826,7 +887,8 @@ propagate scheme gr = do
   instances <- forM constraints \(source, t) -> do
     binder <- case lFrom @(T (Binding name)) (== t) gr of
       [(_, binder)] -> return binder
-      _ -> failSolvMsg "A node has none or multiple binders during propagation"
+      [] -> failSolvMsg "A node has no binders during propagation"
+      _ -> failSolvMsg "A node has multiple binders during propagation"
     return (source, t, binder)
   let folder (ounifications, ogr) (source, t, binder) = do
         (root, unifications, gType) <- expand @name source binder ogr
