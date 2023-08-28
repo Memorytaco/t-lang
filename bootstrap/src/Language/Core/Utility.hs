@@ -8,6 +8,7 @@ module Language.Core.Utility
 where
 
 import Data.Bifunctor.TH (deriveBifunctor)
+import Prettyprinter (Pretty (..))
 
 
 infixr 3 +>
@@ -18,6 +19,10 @@ data bind +> free
   | Free free -- ^ increase variable index, from (bind2 +> a) to (bind1 +> (bind2 +> a))
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 $(deriveBifunctor ''(+>))
+
+instance (Pretty a, Pretty b) => Pretty (a +> b) where
+  pretty (Bind a) = pretty a
+  pretty (Free b) = pretty b
 
 instance Applicative ((+>) bind) where
   pure = Free

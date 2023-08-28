@@ -102,7 +102,6 @@ library
       Transform.LowerType
       Transform.Pass
       Transform.TypeGraph
-      Utility
   other-modules:
       Paths_t_lang
   hs-source-dirs:

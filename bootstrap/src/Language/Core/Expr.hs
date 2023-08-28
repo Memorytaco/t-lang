@@ -11,10 +11,14 @@ import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 
 import Tlang.TH (fixQ)
+import Prettyprinter (Pretty (..), colon, (<+>))
 
 -- | type annotation with full power of the type system
 data typ @: term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
 $(deriveBifunctor ''(@:))
+
+instance (Pretty typ, Pretty term) => Pretty (typ @: term) where
+  pretty (term :@ typ) = pretty term <+> colon <+> pretty typ
 
 -- | a `Free` like structure for defining `Expr`
 --
@@ -26,6 +30,9 @@ data Expr f a
 
 deriving instance (Show (f (Expr f a)), Show a) => Show (Expr f a)
 deriving instance (Eq (f (Expr f a)), Eq a) => Eq (Expr f a)
+instance (forall x. Pretty x => Pretty (f x), Pretty a) => Pretty (Expr f a) where
+  pretty (Val a) = pretty a
+  pretty (Expr v) = pretty v
 
 instance Functor f => Applicative (Expr f) where
   pure = Val

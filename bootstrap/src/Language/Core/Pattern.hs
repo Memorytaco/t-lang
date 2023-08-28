@@ -1,5 +1,6 @@
 {- | * AST for Pattern match
 -}
+{-# LANGUAGE QuantifiedConstraints #-}
 module Language.Core.Pattern
   (
     -- ** Structure
@@ -15,6 +16,8 @@ where
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Tlang.TH (fixQ)
+import Prettyprinter
+import Data.Functor ((<&>))
 
 -- | pattern matching syntax
 data Pattern lit ext label name expr
@@ -41,6 +44,24 @@ deriving instance
   , Eq name, Eq expr, Eq label)
   => Eq (Pattern lit ext label name expr)
 
+instance
+  ( forall x. Pretty x => Pretty (lit x)
+  , forall x. Pretty x => Pretty (ext x)
+  , Pretty label, Pretty name, Pretty expr)
+  => Pretty (Pattern lit ext label name expr) where
+  pretty PatWild = "_"
+  pretty PatUnit = "()"
+  pretty (PatVar name) = "?" <> pretty name
+  pretty (PatPrm lit) = pretty lit
+  pretty (PatTup ts) = tupled (pretty <$> ts)
+  pretty (PatRec rs) = encloseSep lbrace rbrace comma $ rs <&> \(l, p) ->
+    pretty l <+> "=" <+> pretty p
+  pretty (PatSym l ps) = parens $ pretty l <+> hsep (pretty <$> ps)
+  pretty (PatView e p) = parens $ pretty e <+> "->" <+> pretty p
+  pretty (PatBind name p) = pretty name <> "@" <> pretty p
+  pretty (PatExt p) = pretty p
+  
+
 -- | pattern group with logic combination
 data PatGroup a
   = PatAlt [a] -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
@@ -49,7 +70,11 @@ data PatGroup a
                -- ^ thus, called pattern group.
   deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
 
-newtype Grp f a = Grp [f a] deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
+instance Pretty a => Pretty (PatGroup a) where
+  pretty (PatAlt ps) = concatWith (\a b -> a <+> pipe <+> b) (pretty <$> ps)
+  pretty (PatGrp ps) = concatWith (\a b -> a <+> comma <+> b) (pretty <$> ps)
+
+newtype Grp f a = Grp [f a] deriving (Pretty, Show, Eq, Ord, Functor, Traversable, Foldable)
 
 makeBaseFunctor $ fixQ [d|
   instance (Functor ext, Functor lit) => Recursive (Pattern lit ext label name expr)

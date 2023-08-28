@@ -15,7 +15,7 @@ import Control.Monad.Except
 import Data.Text as Text (Text, unpack, dropWhileEnd, dropWhile)
 import Data.Char (isSpace)
 import Text.Megaparsec hiding (runParser)
-import Text.Megaparsec.Char ( char, letterChar, spaceChar )
+import Text.Megaparsec.Char ( char, letterChar, spaceChar)
 import Control.Lens
 import Compiler.SourceParsing (getSurfaceExpr, getSurfaceDeclEof)
 import Data.Functor (($>))
@@ -24,9 +24,10 @@ import Language.Core
   ( Name (..)
   , TypSurface, ExprSurface, DeclSurface
   )
-import Language.Parser (reserved)
+import Language.Parser (reserved, reservedOp)
 
 import EvalLoop.Store
+import Data.Maybe (isNothing)
 
 newtype InterfaceT m a = InterfaceT
   { runInterfaceT :: ParsecT ReadError Text (ReaderT EvalState m) a
@@ -54,8 +55,10 @@ data ReadCommand
   | RShowModule Name
     -- | declare something in repl
   | RDefineGlobal DeclSurface
-    -- | query type of an expression
-  | RQueryTypeOf (ExprSurface TypSurface)
+    -- | query type of an expression, and display with or without sugar
+    --
+    -- True means add sugar
+  | RQueryTypeOf Bool (ExprSurface TypSurface)
     -- | load a object file from a path, which will be used in jit compilation
   | RLoadObject FilePath
     -- | load a dynamic object file from a path
@@ -97,11 +100,13 @@ interface = do
       name -> return . ReadCommand $ RListSource (Just name)
     Just "showm" -> getInput <&> ReadCommand . RShowModule . Name . stripSpace
     Just "run" -> do undefined
-    Just "type" -> nextExpr \case
-      Left err -> do
-        liftIO . putStrLn $ errorBundlePretty err
-        customFailure SubParseError
-      Right e -> return . ReadCommand $ RQueryTypeOf e
+    Just "type" -> do
+      (isNothing -> withSugar) <- optional (reservedOp "!")
+      nextExpr \case
+        Left err -> do
+          liftIO . putStrLn $ errorBundlePretty err
+          customFailure SubParseError
+        Right e -> return . ReadCommand $ RQueryTypeOf withSugar e
     Just "dump" ->
       getInput >>= getSurfaceExpr ops "stdin" >>= \case
         Left err -> do

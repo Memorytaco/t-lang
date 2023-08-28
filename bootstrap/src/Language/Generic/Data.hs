@@ -8,6 +8,7 @@ where
 import Data.Functor.Foldable (Recursive)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Tlang.TH (fixQ)
+import Prettyprinter
 
 infixr 3 :+:
 
@@ -23,6 +24,10 @@ data (f :+: g) a
 instance (Show (f a), Show (g a)) => Show ((f :+: g) a) where
   show (Inl v) = show v
   show (Inr v) = show v
+
+instance (Pretty (f a), Pretty (g a)) => Pretty ((f :+: g) a) where
+  pretty (Inl v) = pretty v
+  pretty (Inr v) = pretty v
 
 -- | a specialised Cofree and its relevant CofreeF
 infixl 2 |: , :|

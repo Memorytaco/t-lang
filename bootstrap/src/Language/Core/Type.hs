@@ -14,6 +14,7 @@ import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 import Tlang.TH (fixQ)
 import Language.Core.Utility
+import Prettyprinter (Pretty (..), (<+>), parens, hsep)
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Tlang.Extension.Type` for all available options.
@@ -65,10 +66,24 @@ instance
   , Show (bind (Type bind rep name a))
   ) => Show (Type bind rep name a) where
   show TypPht = "⊥"
-  show (Type t) = show t
   show (TypVar name) = show name
   show (TypBnd binder body) = "Bind { " <> show binder <> " = " <> show body <> " }"
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
+  show (Type t) = show t
+
+instance
+  ( forall x. Pretty x => Pretty (bind x)
+  , forall x. Pretty x => Pretty (rep x)
+  , Pretty name, Pretty a
+  )
+  => Pretty (Type bind rep name a) where
+  pretty TypPht = "⊥"
+  pretty (TypCon t ts) =
+    parens $ pretty t <>
+    if null ts then "" else " " <> hsep (pretty <$> ts)
+  pretty (TypBnd binder body) = pretty binder <+> pretty body
+  pretty (TypVar name) = pretty name
+  pretty (Type t) = pretty t
 
 infixr 3 :->
 

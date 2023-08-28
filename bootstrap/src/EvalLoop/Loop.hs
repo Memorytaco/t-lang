@@ -43,7 +43,8 @@ import qualified Data.ByteString as ByteString
 import Compiler.CodeGen (genExpr)
 import Driver.Compiler.CodeGen.LLVM (runWithDefaultMain)
 import Compiler.TypeChecking (tcExprToSyntacticType)
-import Transform.Desugar (desugarType)
+import Transform.Desugar (addSugarToType)
+import Prettyprinter (pretty)
 
 -- | store runtime information for repl
 data LoopControl state
@@ -137,17 +138,20 @@ repl'loop = do
                 RShowModule name -> lookupSurfaceModule name >>= liftInput . \case
                   Just m ->  outputStrLn $ prettyShowSurfaceModule m
                   Nothing -> outputStrLn $ "Can't not find module: '" <> show name <> "'"
-                RQueryTypeOf e ->
+                RQueryTypeOf withSugar e ->
                   tcExprToSyntacticType [] 0 ("a", 0) e >>= \case
                     Left err -> liftInput $ outputStrLn $ show err
-                    Right (t, _) -> liftInput $ outputStrLn $ show $ desugarType t
+                    Right (t, _) -> liftInput do
+                      if withSugar
+                      then outputStrLn $ show $ pretty $ addSugarToType t
+                      else outputStrLn $ show $ pretty t
                 RLoadObject _ -> undefined
                 RLoadShared _ -> undefined
                 RDumpBitcode e -> do
                   -- TODO: fix genExpr
                   m <- runWithDefaultMain "repl" undefined -- (genExpr e <&> snd)
                   liftIO $ withContext \ctx -> withModuleFromAST ctx m (ByteString.putStr <=< moduleLLVMAssembly)
-            ReadExpr e -> liftInput $ outputStrLn $ show e
+            ReadExpr e -> liftInput $ outputStrLn $ show $ pretty e
             ReadNothing -> return ()
       modify @UseLoop (loopEnding .~ False)
       modify @UseLoop (loopState . linesNumber %~ (+1))

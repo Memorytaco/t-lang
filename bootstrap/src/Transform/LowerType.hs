@@ -192,9 +192,10 @@ lowerTypeRepPartial handle = cata go
       body <- sequence $ bodym <&> sequence
       bind <- sequence fbind
       return $ TypBnd bind body
-    go (TypeF rma) = case prj rma of
-                           Just v -> handle v
-                           Nothing -> AST.Type . inj <$> sequence rma
+    go (TypeF rma) =
+      case prj rma of
+        Just v -> handle v
+        Nothing -> AST.Type . inj <$> sequence rma
 
 lowerTypeRep
   :: (f :~: (h :+: g), Rep :<: g, Traversable g, Functor f, Traversable bind, Monad m)

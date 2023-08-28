@@ -1,7 +1,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 -- {-# LANGUAGE AllowAmbiguousTypes #-}
 module Transform.Desugar
-  ( desugarType
+  ( addSugarToType
   )
 where
 
@@ -10,7 +10,7 @@ import Language.Core.Extension (Forall (..))
 import Language.Core.Constraint
 import Language.Generic 
 
-desugarType
+addSugarToType
   :: forall name bind rep a
    . ( Functor rep, Functor bind
      , Forall (Prefix name) :<: bind
@@ -18,14 +18,14 @@ desugarType
      , Eq name, Eq a
      )
   => Type bind rep name a -> Type bind rep name a
-desugarType = cata go
+addSugarToType = cata go
   where
     go TypPhtF = TypPht
     go (TypVarF a) = TypVar a
     go (TypConF a as) = TypCon a as
     go (TypBndF bnd a) =
       case prj @(Forall (Prefix name)) bnd >>= withPrefix of
-        Just (_name, typ) -> desugarType $ a >>= \case
+        Just (_name, typ) -> addSugarToType $ a >>= \case
           Bind _ -> typ
           Free t -> t
         Nothing -> TypBnd bnd a

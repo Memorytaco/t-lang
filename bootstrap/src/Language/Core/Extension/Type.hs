@@ -1,3 +1,4 @@
+{-# LANGUAGE QuantifiedConstraints #-}
 module Language.Core.Extension.Type
   (
     -- | * available binder extension
@@ -12,6 +13,8 @@ module Language.Core.Extension.Type
 where
 
 import Data.List (intercalate)
+import Prettyprinter (Pretty (..), (<+>), lparen, rparen, backslash, dot, encloseSep, langle, rangle, comma, colon)
+import Data.Functor ( (<&>) )
 
 -- | * Binder extension
 
@@ -31,6 +34,19 @@ newtype Variant label a
   = Variant [(label, Maybe a)]
   deriving (Eq, Ord, Functor, Foldable, Traversable)
 
+instance (Pretty label, Pretty a) => Pretty (Variant label a) where
+  pretty (Variant vs) =
+    encloseSep langle rangle comma $ vs <&> \(l, v'maybe) ->
+      case v'maybe of
+        Just v -> pretty l <+> colon <+> pretty v
+        Nothing -> pretty l
+
 instance (Show label, Show a) => Show (Variant label a) where
   show (Variant vs) = "<" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> ">"
 
+instance (forall x. Pretty x => Pretty (b x), Pretty t) => Pretty (Scope b t) where
+  pretty (Scope v) = backslash <> pretty v <> dot
+
+
+instance (forall x. Pretty x => Pretty (b x), Pretty t) => Pretty (Forall b t) where
+  pretty (Forall v) = "forall" <+> lparen <> pretty v <> rparen <> dot

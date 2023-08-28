@@ -23,12 +23,13 @@ where
 import Data.Maybe (fromMaybe)
 import Data.String (IsString)
 import Data.Text (Text, unpack)
-import Control.Lens
+import Prettyprinter (Pretty)
+import Control.Lens ( makeLenses )
 
 -- | a wrapper for name reference
 newtype Name = Name { __Name :: Text }
   deriving (Eq, Ord)
-  deriving (IsString, Semigroup, Monoid) via Text
+  deriving (IsString, Semigroup, Monoid, Pretty) via Text
 instance Show Name where
   show (Name text) = unpack text
 makeLenses ''Name
@@ -36,7 +37,7 @@ makeLenses ''Name
 newtype NameSpace
   = NameSpace { __NameSpace :: Text }
   deriving (Eq, Ord)
-  deriving (IsString, Semigroup, Monoid) via Text
+  deriving (IsString, Semigroup, Monoid, Pretty) via Text
 instance Show NameSpace where
   show (NameSpace text) = unpack text
 makeLenses ''NameSpace
@@ -74,7 +75,9 @@ instance Show name => Show (Alias name) where
   show (Alias name Nothing) = show name
 
 -- | label which is used to distinguish between `Name`
-newtype Label = Label { __Label :: Text } deriving (Eq, Ord) deriving IsString via Text
+newtype Label = Label { __Label :: Text }
+  deriving (Eq, Ord)
+  deriving (IsString, Pretty) via Text
 instance Show Label where
   show (Label text) = unpack text
 makeLenses ''Label

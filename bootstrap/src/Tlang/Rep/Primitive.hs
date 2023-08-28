@@ -29,6 +29,7 @@ import Data.Char (toLower)
 
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
+import Prettyprinter ( encloseSep, comma, Pretty(pretty) )
 
 -- | primitive type, as the type name suggests.
 --
@@ -58,12 +59,33 @@ data ScalaType
                     -- it can also treat 16 bits as u16 and it is endian sensitive.
   deriving (Eq, Ord)
 
+instance Pretty ScalaType where
+  pretty (NumT v) = pretty v
+  pretty (DataT v) = pretty v
+
 -- | Basic definition number type
 data NumType = IntegerT IntegerLength
              | FloatT FloatLength
              deriving (Eq, Ord)
 
+instance Pretty NumType where
+  pretty (IntegerT l) =
+    case l of
+      I8 -> "i8"
+      I16 -> "i16"
+      I32 -> "i32"
+      I64 -> "i64"
+      I128 -> "i128"
+  pretty (FloatT l) =
+    case l of
+      F32 -> "f32"
+      F64 -> "f64"
+      F128 -> "f128"
+
 newtype BitType = Bit Integer deriving (Eq, Ord)
+
+instance Pretty BitType where
+  pretty (Bit i) = "#" <> pretty i
 
 data IntegerLength = I8 | I16 | I32 | I64 | I128 deriving (Show, Eq, Ord, Enum)
 data FloatLength = F32 | F64 | F128 deriving (Show, Eq, Ord, Enum)
@@ -77,6 +99,16 @@ instance (Show a, Show (t (PrimitiveT t a))) => Show (PrimitiveT t a) where
   show (Struct ts False) = "{" <> intercalate ", " (show <$> ts) <> "}"
   -- show (Embed a) = "{|" <> show a <> "|}"
   show (Embed a) = show a
+
+instance (Pretty a, Pretty (t (PrimitiveT t a))) => Pretty (PrimitiveT t a) where
+  pretty VoidT = "void#"
+  pretty (Scala t) = pretty t <> "#"
+  pretty (Ptr t _) = pretty t <> "*"
+  pretty (Seq t) = pretty t
+  pretty (Struct ts True) = encloseSep "<{#" "#}>" comma (pretty <$> ts)
+  pretty (Struct ts False) = encloseSep "{#" "#}" comma (pretty <$> ts)
+  -- pretty (Embed a) = "{|" <> pretty a <> "|}"
+  pretty (Embed a) = pretty a
 
 instance Show ScalaType where
   show (NumT t) = show t

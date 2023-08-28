@@ -5,6 +5,7 @@
     LLVM IR type in this situation.
 
 -}
+{-# LANGUAGE QuantifiedConstraints #-}
 
 module Tlang.Rep.DataRep
   ( DataRep (..)
@@ -20,6 +21,7 @@ import Data.Maybe (fromMaybe)
 
 import Data.Functor.Foldable
 import Data.Functor.Foldable.TH
+import Prettyprinter (Pretty (..), encloseSep, (<+>))
 
 -- | runtime representation for type
 data DataRep t a where
@@ -28,6 +30,10 @@ data DataRep t a where
   -- | Introduce whatever type system using `f`
   DataRep :: a -> DataRep t a
   deriving (Functor)
+
+instance (forall x. Pretty x => Pretty (t x), Pretty a) => Pretty (DataRep t a) where
+  pretty (RepLift v) = pretty v
+  pretty (DataRep a) = pretty a
 
 instance (Show (t (DataRep t a)), Show a) => Show (DataRep t a) where
   show (RepLift v) = show v
@@ -40,6 +46,11 @@ data SeqT a where
   SeqVector :: a -> Integer -> SeqT a
   SeqArray  :: a -> Maybe Integer -> SeqT a
   deriving (Eq, Ord, Functor, Foldable, Traversable)
+
+instance Pretty a => Pretty (SeqT a) where
+  pretty (SeqVector a i) = encloseSep "<#" "#>" "x" [pretty a, pretty i]
+  pretty (SeqArray a (Just i)) = encloseSep "[#" "#]" "x" [pretty a, pretty i]
+  pretty (SeqArray a Nothing) = "[#" <+> pretty a  <+> "#]"
 
 instance (EncodeLLVMType (t (DataRep t a)), EncodeLLVMType a) => EncodeLLVMType (DataRep t a) where
     encodeLLVMType (RepLift a) = encodeLLVMType a

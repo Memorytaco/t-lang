@@ -17,6 +17,9 @@ module Language.Core.Extension.Expr
   )
 where
 
+import Prettyprinter (Pretty (..), (<+>), concatWith, line, align, hsep, parens, viaShow, backslash, pipe, brackets)
+import Data.Functor
+
 -- ** Surface Language
 
 -- | local name binding
@@ -24,15 +27,30 @@ data Let binder expr
   = Let (binder expr) expr expr
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
+instance (forall x. Pretty x => Pretty (binder x), Pretty expr) => Pretty (Let binder expr) where
+  pretty (Let bnd v e) =
+    "let" <+> pretty bnd <+> "=" <+> pretty v
+    <> line <> " in" <+> pretty e
+
 -- | group of local name binding. it serves mainly surface language.
 data LetGrp binder expr
   = LetGrp [(binder expr, expr)] expr
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
+instance (forall x. Pretty x => Pretty (binder x), Pretty expr) => Pretty (LetGrp binder expr) where
+  pretty (LetGrp groups e) = align $
+    "let" <+> align (concatWith (\a b -> a <+> ";;" <> line <> b) $ groups <&> \(a, b) -> pretty a <+> "=" <+> pretty b)
+    <> line <> " in" <+> pretty e
+
 -- | local name binding, recursive
 data Letrec binder expr
   = Letrec [(binder expr, expr)] expr
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+instance (forall x. Pretty x => Pretty (binder x), Pretty expr) => Pretty (Letrec binder expr) where
+  pretty (Letrec groups e) = align $
+    "let" <+> align (concatWith (\a b -> a <> ";;" <> line <> b) $ groups <&> \(a, b) -> pretty a <+> "=" <+> pretty b)
+    <> line <> " in" <+> pretty e
 
 -- | equation group, syntax of lambda for surface language.
 -- it supports both light and heavy notation.
@@ -47,6 +65,13 @@ data Equation bind prefix expr
   = Equation prefix (bind expr, expr) [(bind expr, expr)]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
+instance (forall x. Pretty x => Pretty (bind x), Pretty prefix, Pretty expr)
+  => Pretty (Equation bind prefix expr) where
+  pretty (Equation prefix p1 ps) =
+    brackets $ pretty prefix <+> ";;" <>
+      concatWith (\a b -> a <> line <> pipe <+> b) (p1:ps <&> printBranch)
+    where printBranch (a, b) = pretty a <+> "=" <+> pretty b
+
 -- | application, this includes both value application and type application
 --
 -- e.g.
@@ -56,10 +81,25 @@ data Apply expr
   = Apply expr expr [expr]
   deriving (Show, Eq, Functor, Foldable, Traversable)
 
+instance (Pretty expr) => Pretty (Apply expr) where
+  pretty (Apply a b as) = parens $
+    pretty a <+> pretty b <>
+      if null as
+      then ""
+      else " " <> hsep (as <&> pretty)
+
 -- | @.selector@, field projector
 newtype Selector name e = Selector name deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+instance (Pretty name) => Pretty (Selector name e) where
+  pretty (Selector name) = "." <> pretty name
+
+
 -- | @`Variant@ for polymorphic variant, variant constructor
 data Constructor name e = Constructor name [e] deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+instance (Pretty name, Pretty e) => Pretty (Constructor name e) where
+  pretty (Constructor name es) = "`" <> pretty name <+> hsep (es <&> pretty)
 
 -- ** Core Language Extension
 
@@ -82,8 +122,14 @@ data Coerce name typ
   | CoerceTrans (Coerce name typ) (Coerce name typ) -- ^ sequel application of type computation
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
+instance (Show name, Show typ) => Pretty (Coerce name typ) where
+  pretty = viaShow
+
 -- | abstraction block, support both type abstraction and value abstraction.
 data Lambda bind e = Lambda (bind e) e deriving (Show, Eq, Ord, Functor)
+
+instance (forall x. Pretty x => Pretty (bind x), Pretty e) => Pretty (Lambda bind e) where
+  pretty (Lambda bnd e) = backslash <> pretty bnd <+> "=" <+> pretty e
 
 -- | function block, which supports nested data type as deBruijn index.
 --

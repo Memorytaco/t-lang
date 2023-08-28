@@ -20,8 +20,9 @@ import Tlang.Rep.Primitive as Prim
 import Tlang.Rep.DataRep as DataRep
 
 import Control.Lens
+import Prettyprinter (Pretty)
 
 newtype Rep a = Rep { __Rep :: DataRep (PrimitiveT SeqT) a}
-  deriving newtype (Show, Eq, Ord, Functor)
+  deriving newtype (Show, Eq, Ord, Functor, Pretty)
 
 makeLenses ''Rep
