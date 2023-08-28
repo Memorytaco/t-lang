@@ -97,6 +97,7 @@ library
       Tlang.TH
       Tlang.Unification
       Tlang.Unification.Kind
+      Transform.Desugar
       Transform.GraphType
       Transform.LowerType
       Transform.Pass

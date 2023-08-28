@@ -43,6 +43,7 @@ import qualified Data.ByteString as ByteString
 import Compiler.CodeGen (genExpr)
 import Driver.Compiler.CodeGen.LLVM (runWithDefaultMain)
 import Compiler.TypeChecking (tcExprToSyntacticType)
+import Transform.Desugar (desugarType)
 
 -- | store runtime information for repl
 data LoopControl state
@@ -139,7 +140,7 @@ repl'loop = do
                 RQueryTypeOf e ->
                   tcExprToSyntacticType [] 0 ("a", 0) e >>= \case
                     Left err -> liftInput $ outputStrLn $ show err
-                    Right (t, _) -> liftInput $ outputStrLn $ show t
+                    Right (t, _) -> liftInput $ outputStrLn $ show $ desugarType t
                 RLoadObject _ -> undefined
                 RLoadShared _ -> undefined
                 RDumpBitcode e -> do
