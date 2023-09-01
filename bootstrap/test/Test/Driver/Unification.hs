@@ -32,8 +32,12 @@ buildAssertion :: Text -> Text -> Assertion
 buildAssertion ia ib = do
   ta <- assertType ia
   tb <- assertType ib
-  ((r1, g1 :: CustomG), i) <- runToGraph mempty 1 ta
-  ((r2, g2), j) <- runToGraph mempty i tb
+  ((r1, g1 :: CustomG), i) <- toGraphicType mempty 1 ta >>= \case
+    Right val -> return val
+    Left err -> fail $ show err
+  ((r2, g2), j) <- toGraphicType mempty i tb >>= \case
+    Right val -> return val
+    Left err -> fail $ show err
   let root = hole (G 1) (j + 1)
       gr = overlays
            [ g1, g2

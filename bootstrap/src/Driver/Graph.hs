@@ -32,7 +32,9 @@ parseTypeGrpah typ = do
    res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypSurface eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
-        ((_, g :: SurfaceG), _) <- runToGraph mempty 0 t
+        g <- toGraphicType mempty 0 t >>= \case
+          Left err -> fail $ show err
+          Right ((_, g :: SurfaceG), _) -> return g
         writeFile "graph.dot" $ exportViaShow g
         return g
      (Left (err :: ParseErrorBundle Text Void), _) -> putStrLn (errorBundlePretty err) >> error "see previous message"

@@ -26,7 +26,9 @@ buildAssertion text = do
     Right t -> return t
 
   -- convert type into graph
-  ((root, g :: SurfaceG), _) <- runToGraph mempty 1 typ
+  ((root, g :: SurfaceG), _) <- toGraphicType mempty 1 typ >>= \case
+    Left err -> fail $ show err
+    Right v -> return v
   typ2 <- runGraphType g [] ("@test", 1) syntacticType root >>= \case
     Left err -> fail $ show err
     Right (typ2, _) -> return typ2
