@@ -121,6 +121,7 @@ library
       TypeApplications
       TypeOperators
       ViewPatterns
+      BangPatterns
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies
@@ -185,6 +186,7 @@ executable t-lang-exe
       TypeApplications
       TypeOperators
       ViewPatterns
+      BangPatterns
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies
@@ -234,6 +236,7 @@ test-suite t-lang-test
       Test.Driver.Transform.GraphAndType
       Test.Driver.Unification
       Test.Inference
+      Test.Language.Constraint.Graphic
       Paths_t_lang
   hs-source-dirs:
       test
@@ -254,6 +257,7 @@ test-suite t-lang-test
       TypeApplications
       TypeOperators
       ViewPatterns
+      BangPatterns
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies

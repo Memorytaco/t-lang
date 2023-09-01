@@ -78,6 +78,7 @@ default-extensions:
 - TypeApplications
 - TypeOperators
 - ViewPatterns
+- BangPatterns
 
 - FlexibleInstances
 - FlexibleContexts

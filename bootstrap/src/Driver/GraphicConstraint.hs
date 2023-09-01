@@ -39,7 +39,7 @@ import Capability.Reader (HasReader, MonadReader (..))
 import Capability.Error (HasThrow, HasCatch, MonadError (..), Ctor (..), Rename (..))
 
 import Control.Monad.Except (ExceptT, runExceptT)
-import Control.Monad.State (StateT (..))
+import Control.Monad.State.Strict (StateT (..))
 import Control.Monad.Reader (ReaderT (..))
 import GHC.Generics (Generic)
 
@@ -90,23 +90,23 @@ genGC e = driveGCGen (genConstraint e)
 
 
 -- | top level error structure to hold every sub error
-data SolverErr name err
-  = ConstraintSolvErr (ConstraintSolvErr err)
+data SolverErr name node gr err
+  = ConstraintSolvErr (ConstraintSolvErr node gr err)
   | ConstraintGenErr (ConstraintGenErr name)
    deriving (Show, Eq, Ord, Generic)
 
 type GCSolver' name err nodes edges m
   = ReaderT (Unifier err nodes edges Int (GCSolver name err nodes edges m))
-      (StateT Int (ExceptT (SolverErr name err) m))
+      (StateT Int (ExceptT (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) m))
 newtype GCSolver name err nodes edges m a = GCSolver
   { runGCSolver ::  GCSolver' name err nodes edges m a
   } deriving newtype (Functor, Applicative, Monad)
     deriving (HasState "NodeCreator" Int, HasSink "NodeCreator" Int, HasSource "NodeCreator" Int)
       via MonadState (GCSolver' name err nodes edges m)
 
-    deriving (HasThrow SolverErr (SolverErr name err), HasCatch SolverErr (SolverErr name err))
+    deriving (HasThrow SolverErr (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err), HasCatch SolverErr (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err))
       via MonadError (GCSolver' name err nodes edges m)
-    deriving (HasThrow ConstraintSolvErr (ConstraintSolvErr err), HasCatch ConstraintSolvErr (ConstraintSolvErr err))
+    deriving (HasThrow ConstraintSolvErr (ConstraintSolvErr (Hole nodes Int) (CoreG nodes edges Int) err), HasCatch ConstraintSolvErr (ConstraintSolvErr (Hole nodes Int) (CoreG nodes edges Int) err))
       via Rename "ConstraintSolvErr" (Ctor "ConstraintSolvErr" SolverErr (MonadError (GCSolver' name err nodes edges m)))
     deriving (HasThrow ConstraintGenErr (ConstraintGenErr name), HasCatch ConstraintGenErr (ConstraintGenErr name))
       via Rename "ConstraintGenErr" (Ctor "ConstraintGenErr" SolverErr (MonadError (GCSolver' name err nodes edges m)))
@@ -120,7 +120,7 @@ driveGCSolver
   :: GCSolver name err nodes edges m a
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
   -> Int
-  -> m (Either (SolverErr name err) (a, Int))
+  -> m (Either (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) (a, Int))
 driveGCSolver solver unify i = runExceptT (runStateT (runReaderT (runGCSolver solver) unify) i)
 
 -- | solve a stage constraint
@@ -134,7 +134,7 @@ solve
   => StageConstraint nodes edges Int a
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
   -> Int
-  -> m (Either (SolverErr name err) (StageConstraint nodes edges Int a, Int))
+  -> m (Either (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) (StageConstraint nodes edges Int a, Int))
 solve c = driveGCSolver (solveConstraint @name c)
 
 -- | directly generate presolution from expression
@@ -150,7 +150,7 @@ preInfer
      )
   => Expr f name -> BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
-  -> m (Either (SolverErr name err) (StageConstraint nodes edges Int target, Int))
+  -> m (Either (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) (StageConstraint nodes edges Int target, Int))
 preInfer e env i unify = do
   genGC e env i >>= \case
     Right (constraint, i') ->
@@ -171,7 +171,7 @@ infer
   => BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
   -> Expr f name
-  -> m (Either (SolverErr name err) ((Hole nodes Int, CoreG nodes edges Int), Int))
+  -> m (Either (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) ((Hole nodes Int, CoreG nodes edges Int), Int))
 infer env i unify e =
   genGC e env i >>= \case
     Right (constraint, i') ->

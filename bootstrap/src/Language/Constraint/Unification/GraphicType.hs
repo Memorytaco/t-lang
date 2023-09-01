@@ -10,9 +10,10 @@ module Language.Constraint.Unification.GraphicType
   -- ** Core environment
     UnifyConstraint
 
-  -- ** unification error data and sub data
+  -- ** unification error
   , GraphUnifyError (..)
   , GraphProperty (..)
+  , HasGraphUnifyError
 
   -- ** basic error handler
   , failMsg
@@ -61,7 +62,7 @@ import Data.Function (fix)
 -------------------------------------
 
 type UnifyConstraint m ns es info =
-  ( HasThrow "failure" (GraphUnifyError (Hole ns info)) m
+  ( HasGraphUnifyError (Hole ns info) m
   , HasState "graph" (CoreG ns es info) m
   , T NodeBot :<: ns, Histo :<: ns
   , HasOrderGraph ns es info
@@ -95,13 +96,13 @@ type Decorator m ns info = Unifier m ns info -> Unifier m ns info
 --        if match u2, then u2 a b
 --        ...
 foldCase
-  :: ( HasCatch "failure" (GraphUnifyError (Hole ns info)) m
+  :: ( HasGraphUnifyError (Hole ns info) m
      , Eq info, Eq (ns (Hole ns info))
      )
   => Case m ns info -> Unifier m ns info
 foldCase (Case us) =
   let foldT (Unifier (Recursion2 f)) (Unifier (Recursion2 g)) = Unifier . Recursion2 $ \r a b ->
-        catch @"failure" (f r a b) $ \case
+        catchUnifyErr (f r a b) $ \case
           e@(FailWithUnmatch ea eb) ->
             -- we deal with only one layer, since `r` is a recursive call
             if ea == a && eb == b || ea == b || eb == a
@@ -109,8 +110,8 @@ foldCase (Case us) =
                then g r a b
                -- if not, it means there is a recursive call and all unifiers can't handle these two nodes.
                -- thus we return the error.
-               else throw @"failure" e
-          e -> throw @"failure" e
+               else failUnifyErr e
+          e -> failUnifyErr e
    in foldr foldT (Unifier $ Recursion2 \_ a b -> unmatch a b) us
 
 -- | unwrap a unifier to a normal function
@@ -124,7 +125,7 @@ runUnifier (Unifier (Recursion2 f)) = fix f
 -- | unification hook pre: G
 --
 -- add guard to detect existence of `G` node, constraint nodes can not be unified
-hook1 :: (G :<: ns, HasThrow "failure" (GraphUnifyError (Hole ns info)) m) => Decorator m ns info
+hook1 :: (G :<: ns, HasGraphUnifyError (Hole ns info) m) => Decorator m ns info
 hook1 (Unifier (Recursion2 f)) = Unifier . Recursion2 $ \r a b -> do
   let tru _ _ = True
   when (isHole @G a tru || isHole @G b tru) $ failMsg "unexpected G node"
@@ -389,21 +390,35 @@ data GraphProperty node
   | NodeNoLeastCommonBinder node node -- ^ no least common binder for these two nodes
   deriving (Show, Eq)
 
+-- | setting for unification
+type HasGraphUnifyError node m =
+  ( HasThrow GraphUnifyError (GraphUnifyError node) m
+  , HasCatch GraphUnifyError (GraphUnifyError node) m
+  )
+
 -------------------
 -- ** Error handler
 -------------------
 
 -- | fail with an message
-failMsg :: HasThrow "failure" (GraphUnifyError (Hole ns info)) m => String -> m a
-failMsg = throw @"failure" . FailWithMessage
+failMsg :: HasGraphUnifyError (Hole ns info) m => String -> m a
+failMsg = throw @GraphUnifyError . FailWithMessage
 
 -- | fail with unsatisfied property
-failProp :: HasThrow "failure" (GraphUnifyError (Hole ns info)) m => GraphProperty (Hole ns info) -> m a
-failProp = throw @"failure" . FailWithProperty
+failProp :: HasGraphUnifyError (Hole ns info) m => GraphProperty (Hole ns info) -> m a
+failProp = throw @GraphUnifyError . FailWithProperty
 
 -- | fail with unmatched nodes, it behaves like a failure of pattern match and is recoverable
-unmatch :: HasThrow "failure" (GraphUnifyError node) m => node -> node -> m a
-unmatch a b = throw @"failure" $ FailWithUnmatch a b
+unmatch :: HasGraphUnifyError node m => node -> node -> m a
+unmatch a b = throw @GraphUnifyError $ FailWithUnmatch a b
+
+-- | catch unification error
+catchUnifyErr :: HasGraphUnifyError node m => m a -> (GraphUnifyError node -> m a) -> m a
+catchUnifyErr = catch @GraphUnifyError
+
+-- | throw unification error
+failUnifyErr :: HasGraphUnifyError node m => GraphUnifyError node -> m a
+failUnifyErr = throw @GraphUnifyError
 
 -- | a handler to help with node matching
 --
@@ -449,7 +464,7 @@ binderInfo node g = lFrom (== node) g >>= \(T (Binding flag i name), binder) -> 
 -- | rebind binding edge for node n, this should happen after `==>`.
 rebind :: forall name ns es info m
         . ( HasState "graph" (CoreG ns es info) m
-          , HasThrow "failure" (GraphUnifyError (Hole ns info)) m
+          , HasGraphUnifyError (Hole ns info) m
           , HasOrderGraph ns es info
           , T (Binding name) :<: es, T NodeBot :<: ns, T Sub :<: es
           , Eq name

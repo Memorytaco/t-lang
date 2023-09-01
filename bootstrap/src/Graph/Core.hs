@@ -6,6 +6,8 @@
 --
 -- This module contains common operations on graph and also
 -- some simple algorithms like dfs.
+--
+-- TODO: create a compact representation of graph
 -}
 module Graph.Core
   (
@@ -38,17 +40,20 @@ module Graph.Core
   , induceLink, replaceLink
 
   -- ** algorithms
-  , reachable, linkable, Algebra.transpose, dfs
+  , reachable, linkable, Algebra.transpose, dfs, isHoleOf, compress, linkList
   )
 where
 
 import qualified Algebra.Graph.Labelled as Algebra
-import Data.Set (Set, singleton, toList, fromList)
-import qualified Data.Set as Set (filter, member)
-import Data.List (sort)
+import qualified Data.Set as Set
+import qualified Data.List as List
+import Control.Monad ((<=<))
 
 import Language.Generic ((:<:), inj, prj)
 import Data.Maybe (maybeToList)
+import Data.Bifunctor.TH (deriveBifunctor)
+import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Control.Lens ( (^..), _1 )
 
 -- | algebraic edge for graph
 newtype Link e = Link (e (Link e))
@@ -64,8 +69,17 @@ deriving instance (Ord (e (Hole e a)), Ord a) => Ord (Hole e a)
 
 -- ** core structure and method for graph unification
 
+-- | TODO: use this implementation as default algebraic graph
+data Graph e a
+  = Empty
+  | Vertex a
+  | Connect e (Graph e a) (Graph e a)
+  deriving (Show, Eq, Ord, Functor)
+deriveBifunctor ''Graph
+makeBaseFunctor ''Graph
+
 -- | core structure for graphic representation of syntactic type
-type CoreG nodes edges info = Algebra.Graph (Set (Link edges)) (Hole nodes info)
+type CoreG nodes edges info = Algebra.Graph (Set.Set (Link edges)) (Hole nodes info)
 
 type HasOrderGraph nodes edges info = (HasOrderNode nodes info, HasOrderEdge edges)
 type HasOrderNode nodes info = (Ord info, Ord (nodes (Hole nodes info)))
@@ -76,8 +90,8 @@ type HasEqNode nodes info = (Eq info, Eq (nodes (Hole nodes info)))
 type HasEqEdge edges = Eq (edges (Link edges))
 
 -- | construct new link
-link :: e :<: edges => e (Link edges) -> Set (Link edges)
-link = singleton . Link . inj
+link :: e :<: edges => e (Link edges) -> Set.Set (Link edges)
+link = Set.singleton . Link . inj
 link' :: e :<: edges => e (Link edges) -> Link edges
 link' = Link . inj
 
@@ -90,14 +104,14 @@ infixl 5 -<<, >>-, -++, ++-
 
 -- | helpers for constructing arbitrary edges and nodes
 
-(-<<) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Set (Link edges))
+(-<<) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Set.Set (Link edges))
 (-<<) a e = (a, link e)
-(>>-) :: (Hole nodes info, Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
+(>>-) :: (Hole nodes info, Set.Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
 (>>-) (a, e) = Algebra.edge e a
 
-(-++) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Set (Link edges))
+(-++) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Set.Set (Link edges))
 (-++) a e = (a, link e)
-(++-) :: (Ord (edges (Link edges))) => (Hole nodes info, Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
+(++-) :: (Ord (edges (Link edges))) => (Hole nodes info, Set.Set (Link edges)) -> Hole nodes info -> CoreG nodes edges info
 (++-) (a, e) b = overlay (Algebra.edge e a b) (Algebra.edge e b a)
 
 -- | re-export of algebra edge
@@ -142,13 +156,34 @@ vertices = Algebra.vertices
 -- | query adjacent edges and nodes
 linkFrom, linkTo :: (HasOrderGraph ns es info)
                  => (Hole ns info -> Bool) -> CoreG ns es info -> [(Link es, Hole ns info)]
-linkFrom p g = sort [(e, b)|(es, a, b) <- Algebra.edgeList g, p a, e <- toList es]
-linkTo p g = sort [(e, a)|(es, a, b) <- Algebra.edgeList g, p b, e <- toList es]
+linkFrom p g = List.sort $ List.nub $ [(e, a)|(es, a) <- (Algebra.outputs <=< maybeToList) $ Algebra.context p g, e <- Set.toList es]
+linkTo p g = List.sort $ List.nub $ [(e, a)|(es, a) <- (Algebra.inputs <=< maybeToList) $ Algebra.context p g, e <- Set.toList es]
 
 lFrom, lTo :: (e :<: es, HasOrderGraph ns es info)
            => (Hole ns info -> Bool) -> CoreG ns es info -> [(e (Link es), Hole ns info)]
 lFrom p g = [(v, n)| (Link e, n) <- linkFrom p g, Just v <- [prj e]]
 lTo p g = [(v, n)| (Link e, n) <- linkTo p g, Just v <- [prj e]]
+
+-- edgeList :: CoreG ns es info -> [(Set.Set (Link es), Hole ns info, Hole ns info)]
+-- edgeList = undefined
+
+linkList :: (HasOrderGraph ns es info) => CoreG ns es info -> [(Link es, Hole ns info, Hole ns info)]
+linkList gr = List.sort $ [(e, a, b) | (es, a, b) <- Algebra.edgeList gr, e <- Set.toList es]
+
+-- | compress a graph, O(order(gr))
+compress :: HasOrderGraph ns es info => CoreG ns es info -> CoreG ns es info
+compress gr =
+  let res = [ (e, a, b) | (es, a, b) <- Algebra.edgeList gr, e <- Set.toList es]
+  in overlays [ gr' | es <- groupFst (sortFst res), gr' <- pure . overlays $ merge <$> groupSnd (sortSnd es)]
+  where
+    sortFst = List.sortBy (\(_, a, _) (_, b, _) -> compare a b)
+    groupFst = List.groupBy (\(_, a, _) (_, b, _) -> a == b)
+    sortSnd = List.sortBy (\(_, _, a) (_, _, b) -> compare a b)
+    groupSnd = List.groupBy (\(_, _, a) (_, _, b) -> a == b)
+    merge [] = Algebra.Empty
+    merge ((e, a, b):xs)
+      = Algebra.Connect (Set.fromList . (e:) $ xs ^.. traverse . _1)
+        (Algebra.Vertex a) (Algebra.Vertex b)
 
 -- | act like `maybe` function but test against `Hole`
 maybeHole
@@ -166,6 +201,9 @@ isHole :: (node :<: nodes) => Hole nodes info -> (node (Hole nodes info) -> info
 isHole node p = maybeHole (const False) (const p) node
 {-# INLINE isHole #-}
 
+isHoleOf :: forall node nodes info. (node :<: nodes) => Hole nodes info -> Bool
+isHoleOf = maybeHole @node (const False) (\ _ _ _ -> True)
+
 -- | act like `maybe` function but test against `Link`
 maybeLink :: edge :<: edges => (Link edges -> a) -> (edge (Link edges) -> a) -> Link edges -> a
 maybeLink f g l@(Link (prj -> e'Maybe)) = maybe (f l) g e'Maybe
@@ -181,7 +219,7 @@ isLinkOf = isLink @edge (const True)
 
 -- | get links between two nodes, there may not exist links
 getLink :: (HasOrderEdge edges, HasEqNode nodes info)
-        => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> Set (Link edges)
+        => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> Set.Set (Link edges)
 getLink = Algebra.edgeLabel
 {-# INLINE getLink #-}
 
@@ -211,7 +249,7 @@ replaceLink
   :: HasOrderGraph nodes es info
   => (Link es -> Maybe (Link es))
   -> Hole nodes info -> Hole nodes info -> CoreG nodes es info -> CoreG nodes es info
-replaceLink f a b gr = Algebra.replaceEdge (fromList $ (>>= maybeToList . f) $ toList $ getLink a b gr) a b gr
+replaceLink f a b gr = Algebra.replaceEdge (Set.fromList $ (>>= maybeToList . f) $ Set.toList $ getLink a b gr) a b gr
 
 -- | predicates
 hasVertex :: (Hole nodes info -> Bool) -> CoreG nodes edges info -> Bool
@@ -220,8 +258,8 @@ hasVertex p = Algebra.foldg False p (const (||))
 -- ** algorithms
 
 -- | get a collection of reachable nodes, with a predicate to select valid edge
-reachable :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Set (Hole ns info)
-reachable p g n = fromList $ dfs p g n
+reachable :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Set.Set (Hole ns info)
+reachable p g n = Set.fromList $ dfs p g n
 {-# INLINE reachable #-}
 
 -- | get a collection of reachable nodes, with a predicate to select valid routing edge

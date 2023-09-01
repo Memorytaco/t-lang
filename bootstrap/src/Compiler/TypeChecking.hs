@@ -22,8 +22,8 @@ import Driver.GraphicConstraint (SolverErr)
 import Transform.GraphType (GraphToTypeErr)
 
 data TypeCheckingErr
-  = TCSolverErr (SolverErr Name (GraphUnifyError (Hole UnifyGNodes Int)))
-  | TCTransForm2Typ (GraphToTypeErr (Hole UnifyGNodes Int))
+  = TCSolverErr (SolverErr Name (Hole UnifyGNodes Int) (CoreG UnifyGNodes UnifyGEdges Int) (GraphUnifyError (Hole UnifyGNodes Int)))
+  | TCToSyntacticTyp (GraphToTypeErr (Hole UnifyGNodes Int))
   deriving (Show, Eq)
 
 tcExprToGraphciType
@@ -36,7 +36,7 @@ tcExprToGraphciType
      )
   => BindingTable Name nodes -> Int
   -> ExprSurface TypSurface
-  -> m (Either (DGC.SolverErr Name (GraphUnifyError (Hole nodes Int))) ((Hole nodes Int, CoreG nodes edges Int), Int))
+  -> m (Either (DGC.SolverErr Name (Hole nodes Int) (CoreG nodes edges Int) (GraphUnifyError (Hole nodes Int))) ((Hole nodes Int, CoreG nodes edges Int), Int))
 tcExprToGraphciType env i = DGC.infer env i unify
 
 tcExprToSyntacticType
@@ -49,7 +49,7 @@ tcExprToSyntacticType env i s e =
   tcExprToGraphciType @UnifyGNodes @UnifyGEdges env i e >>= \case
   Left err -> return $ Left $ TCSolverErr err
   Right (source, i') -> transfromType s source >>= \case
-    Left err -> return $ Left $ TCTransForm2Typ err
+    Left err -> return $ Left $ TCToSyntacticTyp err
     Right (t :: TypSurface, _) -> return $ Right (t, i')
   where
     transfromType x (g, gr) = runGraphType gr [] x syntacticType g

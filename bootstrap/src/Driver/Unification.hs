@@ -32,7 +32,7 @@ newtype GraphUnify ns es m a = GraphUnify
   { runGraphUnify ::
       StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m) a
   } deriving newtype (Functor, Applicative, Monad)
-    deriving (HasThrow "failure" (GraphUnifyError (Hole ns Int)), HasCatch "failure" (GraphUnifyError (Hole ns Int)))
+    deriving (HasThrow GraphUnifyError (GraphUnifyError (Hole ns Int)), HasCatch GraphUnifyError (GraphUnifyError (Hole ns Int)))
         via MonadError (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
     deriving (HasState "graph" (CoreG ns es Int), HasSource "graph" (CoreG ns es Int), HasSink "graph" (CoreG ns es Int))
         via MonadState (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
