@@ -37,6 +37,7 @@ import Language.Core.Extension
 import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Generic ((:<:), inj, prj, Recursion (..))
+import Language.Setting ( asksGraph, HasGraphReader )
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
@@ -72,7 +73,7 @@ failProp :: HasGraphToTypeErr node m => GraphTypeProperty node -> m a
 failProp = throw @GraphToTypeErr . GTFailProperty
 
 data Conversion nodes edges info bind rep name m a
-  = HasReader "graph" (CoreG nodes edges info) m
+  = HasGraphReader nodes edges info m
   => Conversion (Recursion m (Hole nodes info) (Type bind rep name a))
 
 -- | drive a conversion from graph to type
@@ -83,7 +84,7 @@ runConversion (Conversion (Recursion f)) = fix f
 
 -- | build a tree like conversion
 treeConversion
-  :: (HasGraphToTypeErr (Hole nodes info) m, HasEqNode nodes info, HasReader "graph" (CoreG nodes edges info) m)
+  :: (HasGraphToTypeErr (Hole nodes info) m, HasEqNode nodes info, HasGraphReader nodes edges info m)
   => [Conversion nodes edges info bind rep name m a] -> Conversion nodes edges info bind rep name m a
 treeConversion = foldr foldT (Conversion $ Recursion \_ n -> unmatch n)
   where
@@ -101,9 +102,9 @@ treeConversion = foldr foldT (Conversion $ Recursion \_ n -> unmatch n)
 -- These are general code snippets
 
 -- | structure link from, sort by sub edge
-sFrom :: (HasReader "graph" (CoreG nodes edges info) m, Eq (Hole nodes info), Ord (edges (Link edges)), T Sub :<: edges, Ord info, Ord (nodes (Hole nodes info)))
+sFrom :: (HasGraphReader nodes edges info m, HasOrderGraph nodes edges info, T Sub :<: edges)
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
-sFrom root = asks @"graph" $ lFrom @(T Sub) (== root)
+sFrom root = asksGraph $ lFrom @(T Sub) (== root)
 
 -- | query whether one node has been translated into syntactic form, if so return the name
 lookupName :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, name)] m)
@@ -122,11 +123,11 @@ withLocal root m = lookupName root >>= \case
 -- | environment for `WithBinding`
 type WithBindingEnv m nodes edges info bind rep name a =
   ( name ~ a
-  , HasReader "graph" (CoreG nodes edges info) m
+  , HasGraphReader nodes edges info m
   , HasReader "local" [(Hole nodes info, a)] m
   , HasReader "scheme" (Maybe a -> m a) m
   , T (Binding a) :<: edges
-  , Ord a , Eq a
+  , Ord a
   , Forall (Prefix a) :<: bind
   , Functor rep, Functor bind
   , HasOrderGraph nodes edges info
@@ -137,7 +138,7 @@ withBinding
   :: forall m nodes edges info bind rep name a. (WithBindingEnv m nodes edges info bind rep name a)
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- asks @"graph" $ lTo @(T (Binding a)) (== root)
+  preBinds <- asksGraph $ lTo @(T (Binding a)) (== root)
   scheme <- ask @"scheme"
   localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Binding flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
   body <- local @"local" ((snd <$> localBinds) <>) m
@@ -165,7 +166,7 @@ literal01
   => Conversion nodes edges info bind rep name m a
 literal01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeTup _)) _ ->
   withLocal root $ withBinding restore root do
-    subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
+    subLinks <- asksGraph $ lFrom @(T Sub) (== root)
     Type . inj . Tuple <$> mapM restore (snd <$> subLinks)
 
 -- | RULE: T (NodeRef name)
@@ -266,7 +267,7 @@ special01
   => Conversion nodes edges info bind rep name m a
 special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _ ->
   withLocal root $ withBinding restore root do
-    subLinks <- asks @"graph" $ lFrom @(T Sub) (== root)
+    subLinks <- asksGraph $ lFrom @(T Sub) (== root)
     typs <- mapM restore (snd <$> subLinks)
     case typs of
       [typ] -> return typ
@@ -286,7 +287,7 @@ special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBo
 -- | a helper function to unfold `NodeHas` node into pairs of label and type
 unfoldLabel
   :: forall label m nodes edges info bind rep name a
-  . ( HasReader "graph" (CoreG nodes edges info) m
+  . ( HasGraphReader nodes edges info m
     , Eq (Hole nodes info)
     , T Sub :<: edges
     , T (NodeHas label) :<: nodes
@@ -301,7 +302,7 @@ unfoldLabel restore root@(Hole tag _) = do
     Just (T (NodeHas _ label)) -> return label
     Nothing -> unexpect "Expect Tag Node but it is not"
   -- extract type node, a label may or may not have a type field
-  fields <- asks @"graph" $ lFrom @(T Sub) (== root)
+  fields <- asksGraph $ lFrom @(T Sub) (== root)
   case fields of
     [snd -> n] -> (label,) . Just <$> restore n
     [] -> return (label, Nothing)

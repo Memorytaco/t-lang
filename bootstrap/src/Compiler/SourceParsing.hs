@@ -41,7 +41,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Driver.Parser (driveParser, surfaceDecl, surfaceType, surfaceExpr, surfaceModule)
 
 import Language.Parser.Lexer ( reservedOp )
-import Text.Megaparsec (eof, ParseErrorBundle, MonadParsec (lookAhead))
+import Text.Megaparsec (eof, ParseErrorBundle, MonadParsec (lookAhead), errorBundlePretty)
 import Data.Void (Void)
 import Data.Functor ( ($>) )
 import Control.Lens ( (<&>), (%~), _2, (^..), (^.) )
@@ -49,6 +49,8 @@ import Capability.State ( modify, gets )
 import qualified Data.Map as Map
 import qualified Data.Text.IO as Text
 import Capability.Reader (asks)
+
+import Control.Monad.Except (runExceptT, MonadTrans (..), MonadError (throwError))
 
 -- ** general methods for surface module
 
@@ -63,7 +65,7 @@ prettyShowSurfaceModule (Module header impts decls) = intercalate "\n" (headerDo
 -- ** actions for source file
 
 loadModuleFromFile
-  :: (HasCompilerStore m, MonadFail m, MonadIO m) => FilePath -> m ModuleSurface
+  :: (HasCompilerStore m, MonadIO m) => FilePath -> m (Either String ModuleSurface)
 loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText path
 {-# INLINE loadModuleFromFile #-}
 
@@ -73,15 +75,16 @@ loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText pat
 --
 -- TOOD: consider outdated files
 loadModuleFromText
-  :: (HasCompilerStore m, MonadFail m) => String -> Text -> m ModuleSurface
-loadModuleFromText path content = do
-  sources <- gets @UseCompilerStore (^.. (stageSourceParsing . spSources . traverse . _2))
+  :: (HasCompilerStore m) => String -> Text -> m (Either String ModuleSurface)
+loadModuleFromText path content = runExceptT do
+  sources <- lift $ gets @UseCompilerStore (^.. (stageSourceParsing . spSources . traverse . _2))
   (m'either, _) <- driveParser builtinStore (surfaceModule sources (reservedOp ";;" $> ()) eof) path content
   m <- case m'either of
     Right m -> return m
-    Left _ -> fail "" -- TOOD: complete error message
-  modify @UseCompilerStore ((stageSourceParsing . spSources) %~ ((path, m):))
-  modify @UseCompilerStore ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
+    Left err -> throwError $ errorBundlePretty err
+  lift do
+    modify @UseCompilerStore ((stageSourceParsing . spSources) %~ ((path, m):))
+    modify @UseCompilerStore ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
   return m
 
 getSurfaceExpr

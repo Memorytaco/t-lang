@@ -45,11 +45,11 @@ import Language.Core (Name (..))
 import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Generic ((:<:), prj, Recursion2 (..))
+import Language.Setting ( getsGraph, modifyGraph, HasGraph )
 
 import Control.Monad (when, unless, forM, foldM)
 import Data.Functor ((<&>), ($>))
 import Capability.Error (HasThrow, HasCatch, throw, catch)
-import Capability.State (HasState, get, gets, modify)
 import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy)
 import Data.Set (toList)
@@ -63,7 +63,7 @@ import Data.Function (fix)
 
 type UnifyConstraint m ns es info =
   ( HasGraphUnifyError (Hole ns info) m
-  , HasState "graph" (CoreG ns es info) m
+  , HasGraph ns es info m
   , T NodeBot :<: ns, Histo :<: ns
   , HasOrderGraph ns es info
   , T Sub :<: es
@@ -127,8 +127,7 @@ runUnifier (Unifier (Recursion2 f)) = fix f
 -- add guard to detect existence of `G` node, constraint nodes can not be unified
 hook1 :: (G :<: ns, HasGraphUnifyError (Hole ns info) m) => Decorator m ns info
 hook1 (Unifier (Recursion2 f)) = Unifier . Recursion2 $ \r a b -> do
-  let tru _ _ = True
-  when (isHole @G a tru || isHole @G b tru) $ failMsg "unexpected G node"
+  when (isHoleOf @G a || isHoleOf @G b) $ failMsg "unexpected G node"
   f r a b
 
 ------------------------------------------
@@ -361,18 +360,6 @@ case60 = Unifier $ Recursion2 \_unify ->
     -- merge node, keep `a`
     b ==> a >> rebind @Name a >> return a
 
-----------------------------------------
--- ** Environment operator
-----------------------------------------
-
-getsGraph :: HasState "graph" (CoreG ns es info) m => (CoreG ns es info -> a) -> m a
-getsGraph = gets @"graph"
-{-# INLINE getsGraph #-}
-
-modifyGraph :: HasState "graph" (CoreG ns es info) m => (CoreG ns es info -> CoreG ns es info) -> m ()
-modifyGraph = modify @"graph"
-{-# INLINE modifyGraph #-}
-
 ----------------------------
 -- ** Unification Error
 ----------------------------
@@ -463,7 +450,7 @@ binderInfo node g = lFrom (== node) g >>= \(T (Binding flag i name), binder) -> 
 
 -- | rebind binding edge for node n, this should happen after `==>`.
 rebind :: forall name ns es info m
-        . ( HasState "graph" (CoreG ns es info) m
+        . ( HasGraph ns es info m
           , HasGraphUnifyError (Hole ns info) m
           , HasOrderGraph ns es info
           , T (Binding name) :<: es, T NodeBot :<: ns, T Sub :<: es
@@ -479,7 +466,7 @@ rebind n = do
   (b, bs) <- case nub $ bn1 <> bn2 of
                a:as -> return (a, as)
                [] -> failProp $ NodeWrongWithBinder n
-               {- Important!!! for every node, there should exist a binder. -}
+               {- Important!!! for every node, there should exist exactly a binder. -}
   bn <- foldM lcb b bs
   i <- maximum <$> forM binders \(f, i, name, v) ->
     modifyGraph (filterLink (isLink \(T (Binding f' i' name')) -> f == f' && i == i' && name == name') n v) $> i
@@ -488,7 +475,7 @@ rebind n = do
     -- | return direct ancestors of node n, if it is partially grafted node.
     -- if this is used during unification, '==>' should be used first.
     partial = do
-      candidates <- get @"graph" <&> transpose <&> \g -> toList $ reachable (isLinkOf @(T Sub)) g n
+      candidates <- getsGraph transpose <&> \g -> toList $ reachable (isLinkOf @(T Sub)) g n
       -- a partially grafted node only requires that a bottom node exists among
       -- its merged ancestors.
       --
@@ -523,7 +510,7 @@ rebind n = do
 --
 -- `Histo` is not a concrete node, and it should not appear in either constraint nodes
 -- or type nodes.
-(==>) :: (HasState "graph" (CoreG ns es info) m, Eq info, Eq (ns (Hole ns info)), Pht O :<: es, Histo :<: ns, Ord (es (Link es)))
+(==>) :: (HasGraph ns es info m, HasEqNode ns info, HasOrderEdge es, Pht O :<: es, Histo :<: ns)
       => Hole ns info -> Hole ns info -> m (Hole ns info)
 (==>) from to@(Hole _ info) = do
 

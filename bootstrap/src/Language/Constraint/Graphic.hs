@@ -65,8 +65,8 @@ import Language.Core.Extension
 import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), strip, fromX)
+import Language.Setting ( newNodeCounter, node, HasNodeCreator )
 
-import Capability.State (HasState, get, modify)
 import Capability.Reader (HasReader, asks, ask, local)
 import Capability.Error (HasThrow, throw)
 import Control.Monad (forM, foldM, join, (<=<))
@@ -109,13 +109,6 @@ class ConstraintGen f a info | f a -> info where
 -- ** Helper functions and Definition of Environments
 ------------------------------------------------------------------------------------------------
 ------------------------------------------------------------------------------------------------
-
-type HasNodeCreator m = HasState "NodeCreator" Int m
-newNodeInfo :: HasNodeCreator m => m Int
-newNodeInfo = modify @"NodeCreator" (+1) >> get @"NodeCreator"
-node :: forall node nodes m. (HasNodeCreator m, node :<: nodes)
-     => node (Hole nodes Int) -> m (Hole nodes Int)
-node v = newNodeInfo <&> hole  @node v
 
 -- | environment for local binding
 type HasBinding name nodes m = HasReader "binding" (BindingTable name nodes) m
@@ -840,7 +833,7 @@ copy (scheme, Instance i) !gr = do
       -- all interiorCs bound to scheme
       interiorCBinds = lTo @(T (Binding name)) (== scheme) gr & traverse %~ \(a, b) -> (b, a)
   -- we generate copies of nodes
-  freshInteriors <- forM interiors \n@(Hole tag _) -> newNodeInfo <&> (n,) . Hole tag
+  freshInteriors <- forM interiors \n@(Hole tag _) -> newNodeCounter <&> (n,) . Hole tag
   freshFrontiers <- forM frontiers \n -> node (T NodeBot) <&> (n,)
   sc <- case lookup s freshInteriors of
     Just sc -> return sc

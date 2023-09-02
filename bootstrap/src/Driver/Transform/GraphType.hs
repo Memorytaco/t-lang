@@ -16,6 +16,7 @@ import Language.Core (Type, Label)
 import Language.Core.Extension
 import Language.Generic ((:>+:))
 import Language.Core.Constraint
+import Language.Setting
 import Graph.Extension.GraphicType
 import Graph.Core
 
@@ -23,7 +24,7 @@ import Control.Monad.Reader (ReaderT (..))
 import Control.Monad.State (StateT (..))
 import Control.Monad.Except (ExceptT (..), runExceptT)
 
-import Capability.Reader (HasReader, MonadReader (..), Field (..))
+import Capability.Reader (HasReader, MonadReader (..), Field (..), Rename (..))
 import Capability.State (HasState, modify, gets, MonadState (..))
 import Capability.Source (HasSource)
 import Capability.Sink (HasSink)
@@ -52,8 +53,8 @@ newtype GraphToType nodes edges name m a = GraphToType
     deriving ( HasSource "scheme" (Maybe name -> GraphToType nodes edges name m name)
              , HasReader "scheme" (Maybe name -> GraphToType nodes edges name m name)
              ) via Field "scheme" () (MonadReader (GraphToType'  nodes edges name m))
-    deriving ( HasSource "graph" (CoreG nodes edges Int), HasReader "graph" (CoreG nodes edges Int))
-      via Field "graph" () (MonadReader (GraphToType' nodes edges name m))
+    deriving ( HasSource GraphReader (CoreG nodes edges Int), HasReader GraphReader (CoreG nodes edges Int))
+      via Rename "graph" (Field "graph" () (MonadReader (GraphToType' nodes edges name m)))
     deriving (HasSource "name info" (String, Int), HasSink "name info" (String, Int), HasState "name info" (String, Int))
       via MonadState (GraphToType' nodes edges name m)
     deriving (HasThrow GraphToTypeErr (GraphToTypeErr (Hole nodes Int)), HasCatch GraphToTypeErr (GraphToTypeErr (Hole nodes Int)))

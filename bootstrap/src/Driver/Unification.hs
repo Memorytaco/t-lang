@@ -19,6 +19,7 @@ import Data.Text (Text)
 import Language.Constraint.Unification.GraphicType
 import Graph.Core ( CoreG, Hole, HasOrderGraph )
 import Language.Core (Label, Name)
+import Language.Setting ( GraphState )
 import Language.Generic ((:>+:))
 
 import Capability.Sink (HasSink)
@@ -34,7 +35,7 @@ newtype GraphUnify ns es m a = GraphUnify
   } deriving newtype (Functor, Applicative, Monad)
     deriving (HasThrow GraphUnifyError (GraphUnifyError (Hole ns Int)), HasCatch GraphUnifyError (GraphUnifyError (Hole ns Int)))
         via MonadError (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
-    deriving (HasState "graph" (CoreG ns es Int), HasSource "graph" (CoreG ns es Int), HasSink "graph" (CoreG ns es Int))
+    deriving (HasState GraphState (CoreG ns es Int), HasSource GraphState (CoreG ns es Int), HasSink GraphState (CoreG ns es Int))
         via MonadState (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
 
 runUnify

@@ -27,6 +27,7 @@ where
 import Language.Constraint.Graphic
 import Language.Generic ((:>+:), type (|:) (..))
 import Language.Core (ExprF (..), Expr (..))
+import Language.Setting
 
 import Graph.Core (Hole (..), CoreG, HasOrderEdge, HasOrderGraph)
 import Graph.Extension.GraphicType
@@ -55,7 +56,7 @@ newtype GCGen name ns m a = GCGen
   } deriving newtype (Functor, Applicative, Monad)
     deriving (HasThrow ConstraintGenErr (ConstraintGenErr name), HasCatch ConstraintGenErr (ConstraintGenErr name))
       via MonadError (GCGen' name ns m)
-    deriving (HasState "NodeCreator" Int, HasSink "NodeCreator" Int, HasSource "NodeCreator" Int)
+    deriving (HasState NodeCreator Int, HasSink NodeCreator Int, HasSource NodeCreator Int)
       via MonadState (GCGen' name ns m)
     deriving (HasReader "binding" (BindingTable name ns), HasSource "binding" (BindingTable name ns))
       via MonadReader (GCGen' name ns m)
@@ -101,7 +102,7 @@ type GCSolver' name err nodes edges m
 newtype GCSolver name err nodes edges m a = GCSolver
   { runGCSolver ::  GCSolver' name err nodes edges m a
   } deriving newtype (Functor, Applicative, Monad)
-    deriving (HasState "NodeCreator" Int, HasSink "NodeCreator" Int, HasSource "NodeCreator" Int)
+    deriving (HasState NodeCreator Int, HasSink NodeCreator Int, HasSource NodeCreator Int)
       via MonadState (GCSolver' name err nodes edges m)
 
     deriving (HasThrow SolverErr (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err), HasCatch SolverErr (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err))

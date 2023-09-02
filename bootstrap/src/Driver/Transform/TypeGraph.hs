@@ -27,7 +27,7 @@ type M name nodes edges m
   = ReaderT (TypeContextTable name nodes edges Int)
       (StateT Int (ExceptT (ToGraphicTypeErr name) m))
 
-newtype TypeToGraphM name nodes edges m a = TypeToGraphM
+newtype ToGraphicType name nodes edges m a = TypeToGraphM
   { runTypeToGraphM :: M name nodes edges m a
   } deriving newtype (Functor, Applicative, Monad, MonadFail)
     deriving ( HasSource TypeContext (TypeContextTable name nodes edges Int)
@@ -41,8 +41,8 @@ newtype TypeToGraphM name nodes edges m a = TypeToGraphM
 
 -- | actual driver to start the engine, and it allows monad transform
 toGraphicType
-  :: ( ConstrainGraph bind nodes edges Int (TypeToGraphM name nodes edges m)
-     , ConstrainGraph rep nodes edges Int (TypeToGraphM name nodes edges m)
+  :: ( ConstrainGraph bind nodes edges Int (ToGraphicType name nodes edges m)
+     , ConstrainGraph rep nodes edges Int (ToGraphicType name nodes edges m)
      , FoldBinderTypeGraph bind Int, FoldTypeGraph rep Int
      , Ord (edges (Link edges))
      , Functor bind, Functor rep

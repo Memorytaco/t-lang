@@ -133,8 +133,9 @@ repl'loop = do
                   liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (print . fuseModuleName)
                 RListDecls -> do
                   liftInput $ mapM_ (outputStrLn . show) $ getDecls $ lControl ^. loopState . evalStore . thisModule . moduleDecls
-                RLoadSource path -> loadModuleFromFile path >>= \m ->
-                  liftInput $ outputStrLn $ "load module "<> show (fuseModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
+                RLoadSource path -> loadModuleFromFile path >>= \case
+                  Right m -> liftInput $ outputStrLn $ "load module "<> show (fuseModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
+                  Left s -> liftInput $ outputStrLn s
                 RShowModule name -> lookupSurfaceModule name >>= liftInput . \case
                   Just m ->  outputStrLn $ prettyShowSurfaceModule m
                   Nothing -> outputStrLn $ "Can't not find module: '" <> show name <> "'"
