@@ -190,8 +190,9 @@ instance ( ExprC e m, Apply :<: f
   tokenize _ parser _ = do
     let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr f name))
                      (void . lookAhead . choice $ reservedOp <$> [",", "=", "|"]) Go
-        gPat = iPat `sepBy1` reservedOp "," <&> PatExt . inj . PatGrp <?> "group pattern"
-        sPat = gPat `sepBy1` reservedOp "|" <&> PatExt . inj . PatAlt <?> "sequence pattern" <|> fail "expect a pattern definition"
+        gPat = PatGrp <$> iPat <*> many (reservedOp "," *> iPat) <&> PatExt . inj <?> "group pattern"
+        sPat = PatAlt <$> gPat <*> many (reservedOp "|" *> gPat) <&> PatExt . inj <?> "sequence pattern"
+           <|> fail "expect a pattern definition"
         branch = (,) <$> sPat <*> (reservedOp "=" *> parser (void . lookAhead $ reservedOp "]" <|> reservedOp "|") Go)
              <|> fail "expect equation"
         lambda = do
@@ -211,7 +212,7 @@ instance ( ExprC e m, Apply :<: f
     let iPat = pratt @proxy @(pat (Expr f name))
                      (void . lookAhead . choice $ reservedOp <$> [",", "="]) Go
                <?> "Lambda Parameter pattern"
-        gPat = iPat `sepBy1` reservedOp "," <&> Grp
+        gPat = Grp <$> iPat <*> many (reservedOp "," *> iPat)
         branch = (,) <$> gPat <*> (reservedOp "=" *> parser (void $ lookAhead end) Go)
         lambda = do
           heads <- Equation . Prefixes . fromMaybe [] <$> optional

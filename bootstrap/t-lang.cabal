@@ -43,6 +43,7 @@ library
       Driver.GraphicConstraint
       Driver.Parser
       Driver.Transform
+      Driver.Transform.Desugar
       Driver.Transform.GraphType
       Driver.Transform.TypeGraph
       Driver.Unification
@@ -95,6 +96,7 @@ library
       Tlang.Rep.DataRep
       Tlang.Rep.Primitive
       Tlang.TH
+      Transform.CPSTransform
       Transform.Desugar
       Transform.GraphType
       Transform.LowerType
@@ -144,7 +146,6 @@ library
     , exceptions
     , fgl
     , free >=5.1.9
-    , graphviz
     , haskeline
     , lens
     , libffi
@@ -154,6 +155,7 @@ library
     , mtl
     , optparse-applicative
     , prettyprinter
+    , random
     , recursion-schemes
     , tasty
     , tasty-hunit
@@ -209,7 +211,6 @@ executable t-lang-exe
     , exceptions
     , fgl
     , free >=5.1.9
-    , graphviz
     , haskeline
     , lens
     , libffi
@@ -219,6 +220,7 @@ executable t-lang-exe
     , mtl
     , optparse-applicative
     , prettyprinter
+    , random
     , recursion-schemes
     , t-lang
     , tasty
@@ -280,7 +282,6 @@ test-suite t-lang-test
     , exceptions
     , fgl
     , free >=5.1.9
-    , graphviz
     , haskeline
     , lens
     , libffi
@@ -290,6 +291,7 @@ test-suite t-lang-test
     , mtl
     , optparse-applicative
     , prettyprinter
+    , random
     , recursion-schemes
     , t-lang
     , tasty

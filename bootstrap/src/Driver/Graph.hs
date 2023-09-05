@@ -32,7 +32,7 @@ parseTypeGrpah typ = do
    res <- driveParser builtinStore (pratt @(TypeLang Void _) @TypSurface eof Go) "stdin" typ
    case res of
      (Right t, _) -> do
-        g <- toGraphicType mempty 0 t >>= \case
+        g <- toGraphicTypeMock mempty 0 t >>= \case
           Left err -> fail $ show err
           Right ((_, g :: SurfaceG), _) -> return g
         writeFile "graph.dot" $ exportViaShow g

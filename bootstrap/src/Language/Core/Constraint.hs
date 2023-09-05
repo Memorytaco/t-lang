@@ -12,7 +12,7 @@ import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 import Tlang.TH (fixQ)
-import Prettyprinter (Pretty (..), (<+>))
+import Prettyprinter (Pretty (..), (<+>), hsep, parens)
 
 -- ** HM(X) constraint framework, both for term language and type language
 
@@ -53,7 +53,9 @@ instance (Pretty name, Pretty typ) => Pretty (Prefix name typ) where
 
 newtype Prefixes name typ = Prefixes [Prefix name typ]
   deriving (Show, Ord, Eq, Functor, Traversable, Foldable)
-  deriving Pretty via [Prefix name typ]
+
+instance (Pretty name, Pretty typ) => Pretty (Prefixes name typ) where
+  pretty (Prefixes ps) = hsep $ parens . pretty <$> ps
 
 -- data Prefix qual name typ
 --   = typ :~ name  -- ^ `name` is rigid bound to `typ`

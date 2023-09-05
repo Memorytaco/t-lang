@@ -45,7 +45,7 @@ runUnify u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
 
 unify
   :: ( Monad m, HasOrderGraph ns es Int
-     , ns :>+: '[T NodeTup, T NodeSum, T NodeRec, T (NodeHas Label), T (NodeRef Name), NodePht]
+     , ns :>+: '[T NodeTup, T NodeSum, T NodeRec, T (NodeHas Label), T (NodeRef Name), T NodeArr, NodePht]
      , ns :>+: '[T (NodeLit Integer), T (NodeLit Text), T NodeApp, T NodeBot, Histo, G]
      , es :>+: '[T (Binding Name), T Sub, Pht O]
      )
@@ -56,7 +56,7 @@ unify = runUnify . hook1 . foldCase $ Case
   [ case1, case2
   , case10
   , case20, case21, case25 @Label
-  , case30
+  , case30, case31
   , case40 @Integer
   , case40 @Text
   -- phantom node

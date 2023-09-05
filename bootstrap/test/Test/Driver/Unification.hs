@@ -7,12 +7,14 @@ import Test.Tasty
 import Test.Tasty.HUnit
 
 import Driver.Transform
+import Driver.Transform.Desugar (addBindingToType)
 import Driver.Unification
 
 import Language.Core (builtinStore, Name, TypSurface)
 import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Generic ((:+:))
+import Prettyprinter
 
 import Data.Text (Text, pack)
 import Text.Megaparsec
@@ -28,34 +30,31 @@ assertType text = do
     Left err -> fail $ "Parser Error: " <> errorBundlePretty err
     Right t -> return t
 
-buildAssertion :: Text -> Text -> Assertion
-buildAssertion ia ib = do
+buildAssertion :: Text -> Text -> (String -> IO ()) -> Assertion
+buildAssertion ia ib output = do
   ta <- assertType ia
   tb <- assertType ib
-  ((r1, g1 :: CustomG), i) <- toGraphicType mempty 1 ta >>= \case
-    Right val -> return val
+  ((r1, g1 :: CustomG), i) <- toGraphicTypeMock mempty 1 ta >>= \case
+    Right ((root, gr), i) -> (, i) . (root, ) <$> (snd <$> addBindingToType gr root)
     Left err -> fail $ show err
-  ((r2, g2), j) <- toGraphicType mempty i tb >>= \case
-    Right val -> return val
+  ((r2, g2), j) <- toGraphicTypeMock mempty i tb >>= \case
+    Right ((root, gr), j) -> (, j) . (root, ) <$> (snd <$> addBindingToType gr root)
     Left err -> fail $ show err
   let root = hole (G 1) (j + 1)
       gr = overlays
            [ g1, g2
            , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
-           , r2 -<< T (Binding Flexible 2 (Nothing @Name)) >>- root
+           , r2 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
            ]
-  res <- unify gr r1 r2
-  case res of
+  unify gr r1 r2 >>= \case
     Left err -> fail $ show err
-    Right (r, g) -> do
-      runGraphType g [] ("@test", 1) syntacticType r >>= \case
-        Left err -> fail $ show err
-        Right (_ :: TypSurface, _) -> return ()
-      return ()
-  return ()
+    Right (r, g) ->
+      runGraphType g [] ("@", 1) syntacticType r >>= \case
+      Left err -> fail $ show err
+      Right (t :: TypSurface, _) -> output $ show (pretty t)
 
 buildCase :: (String, String) -> TestTree
-buildCase v@(l, r) = testCase (show v) (buildAssertion (pack l) (pack r))
+buildCase v@(l, r) = testCaseSteps (show v) $ buildAssertion (pack l) (pack r)
 
 -- ** test cases
 
@@ -69,6 +68,14 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   , ("forall a b c. (a, b, c)", "forall x y. (x, y, x)")
   , ("forall a b c. (a, b, c)", "forall x y z. (x, y, z)")
   , ("forall a b. (b, b)", "forall a. (a, a)")
-  -- , ("forall a b (c ~ (a, b)) . (a, c, b)", "forall x y z. (x, y, z)")
-  -- , ("forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c", "forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c")
+  , ("forall a b (c ~ (a, b)) . (a, c, b)", "forall x y z. (x, y, z)")
+  , ("forall a b. a -> b", "forall a. a -> a")
+  , ("forall a b. a -> int", "forall a. a -> a")
+  , ("forall a b. a -> int", "forall a. float -> a")
+  , ("forall a b. (a, (b, b))", "forall a b. (a, a)")
+
+  -- , ("forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c"
+  --   , "forall b (a = b -> b) (c ~ forall (x = forall x. x -> x) b. (x -> x) -> (b -> b) ) . a -> c"
+  --   )
+  , ("forall x. maybe x", "forall f y. maybe (f y)")
   ]

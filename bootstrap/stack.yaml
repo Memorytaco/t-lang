@@ -1,5 +1,8 @@
 # resolver: ghc-8.10.7
-resolver: lts-20.19
+resolver: lts-20.26
+
+ghc-options:
+  '$everything': -haddock
 
 # User packages to be built.
 # Various formats can be used as shown in the example below.

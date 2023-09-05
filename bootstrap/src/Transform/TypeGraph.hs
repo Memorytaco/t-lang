@@ -92,12 +92,16 @@ lookupLocalName name
   = asks @TypeContext (lookup $ Bind name)
   >>= maybe (failToGraphicTypeErr (TGMissLocalBind name)) return
 
-lookupGlobalName
+-- | with free name, we first lookup it in a predefined environment and if
+-- failed, we invoke a dynamic function to fetch its name.
+lookupFreeName
   :: (Eq name, HasTypeContext name nodes edges info m, HasToGraphicTypeErr name m)
-  => name -> m (Hole nodes info, CoreG nodes edges info)
-lookupGlobalName name
+  => (name -> m (Maybe (Hole nodes info, CoreG nodes edges info)))
+  -> name -> m (Hole nodes info, CoreG nodes edges info)
+lookupFreeName lookupGlobal name
   = asks @TypeContext (lookup $ Free name)
-  >>= maybe (failToGraphicTypeErr (TGMissGlobalBind name)) return
+  >>= maybe (lookupGlobal name) (return . Just)
+  >>= maybe (failToGraphicTypeErr (TGMissFreeBind name)) return
 
 -- | internal use only, it is useful when you want to add local type binding to type context
 appendContext
@@ -108,7 +112,9 @@ appendContext tbl = local @TypeContext (tbl <>)
 
 -- | error used for transforming type into graphic type
 data ToGraphicTypeErr name
-  = TGMissGlobalBind name
+  -- | variables that freely bound
+  = TGMissFreeBind name
+  -- | local variables
   | TGMissLocalBind name
   deriving (Show, Eq, Ord)
 
@@ -172,7 +178,8 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
         ns <- sequence $ m: ms
         let len = toInteger $ length ns
         top <- node (T $ NodeApp len)
-        gs <- forM (zip [1..len] ns) \(i, (sub, subg)) -> return $ Connect (link . T $ Sub i) (Vertex top) (Vertex sub) <> subg
+        gs <- forM (zip [1..len] ns) \(i, (sub, subg)) ->
+          return $ (top -<< T (Sub i) >>- sub) <> subg
         return (top, overlays gs)
       go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv <&> \case
         Bind name -> lookupLocalName name
@@ -193,8 +200,8 @@ toGraph
      , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
      , HasToGraphicTypeErr name m
      )
-  => Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
-toGraph = foldTypeGraph . fmap lookupGlobalName
+  => (name -> m (Maybe (Hole nodes Int, CoreG nodes edges Int))) -> Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
+toGraph lookupGlobal = foldTypeGraph . fmap (lookupFreeName lookupGlobal)
 
 -- ** instances
 

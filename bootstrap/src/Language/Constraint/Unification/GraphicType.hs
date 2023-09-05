@@ -31,13 +31,18 @@ module Language.Constraint.Unification.GraphicType
   , case1, case2
   , case10
   , case20, case21, case25
-  , case30
+  , case30, case31
   , case40, case41
   , case50, case51, case52
   , case60
 
   -- ** algorithm hook
   , hook1
+
+  -- ** Internal
+  , rebind
+  , (==>)
+  , sequel
   )
 where
 
@@ -48,8 +53,9 @@ import Language.Generic ((:<:), prj, Recursion2 (..))
 import Language.Setting ( getsGraph, modifyGraph, HasGraph )
 
 import Control.Monad (when, unless, forM, foldM)
-import Data.Functor ((<&>), ($>))
+import Control.Lens ((^..), _1, _4)
 import Capability.Error (HasThrow, HasCatch, throw, catch)
+import Data.Functor ((<&>), ($>))
 import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy)
 import Data.Set (toList)
@@ -266,6 +272,18 @@ case30 = Unifier $ Recursion2 \unify ->
     -- TODO: check name node and deal with type alias, it is complex
     -- we now assume no type alias is involved
 
+-- | unification: NodeArr
+case31
+  :: ( UnifyConstraint m ns es info
+     , T NodeArr :<: ns
+     , T (Binding Name) :<: es
+     )
+  => Unifier m ns info
+case31 = Unifier $ Recursion2 \_unify ->
+  match unmatch \(a, T NodeArr, _ia) ->
+  match (failProp . NodeDoesn'tMatch a) \(b, T NodeArr, _ib) -> do
+    b ==> a >> rebind @Name a $> a
+
 -- | unification: NodeLit
 --
 -- unification for literal type node
@@ -374,7 +392,7 @@ data GraphUnifyError node
 data GraphProperty node
   = NodeWrongWithBinder node          -- ^ every node should have exactly one binder
   | NodeDoesn'tMatch node node        -- ^ two nodes have different category and thus no equality
-  | NodeNoLeastCommonBinder node node -- ^ no least common binder for these two nodes
+  | NodeNoLeastCommonBinder node [node] node [node] -- ^ no least common binder for these two nodes
   deriving (Show, Eq)
 
 -- | setting for unification
@@ -444,7 +462,7 @@ sequel unify ((a,b): xs) = do
   return $ val : vals
 
 -- | get node's binder and flag
-binderInfo :: (Ord (es (Link es)), T (Binding name) :<: es, Ord info, Ord (ns (Hole ns info)))
+binderInfo :: (HasOrderGraph ns es info, T (Binding name) :<: es)
            => Hole ns info -> CoreG ns es info -> [(Flag, Integer, Maybe name, Hole ns info)]
 binderInfo node g = lFrom (== node) g >>= \(T (Binding flag i name), binder) -> return (flag, i, name, binder)
 
@@ -460,8 +478,8 @@ rebind :: forall name ns es info m
        => Hole ns info -> m ()
 rebind n = do
   binders :: [(Flag, Integer, Maybe name, Hole ns info)] <- getsGraph $ binderInfo n
-  let bn1 = binders <&> \(_, _, _ , b) -> b
-      flag = maximum $ binders <&> \(f, _, _, _) -> f
+  let bn1 = binders ^.. traverse . _4
+      flag = maximum $ binders ^.. traverse . _1
   bn2 <- partial
   (b, bs) <- case nub $ bn1 <> bn2 of
                a:as -> return (a, as)
@@ -497,7 +515,7 @@ rebind n = do
       ns1 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n1
       ns2 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n2
       case zip (reverse ns1) (reverse ns2) >>= \(a, b) -> if a == b then pure a else [] of
-        [] -> failProp $ NodeNoLeastCommonBinder n1 n2
+        [] -> failProp $ NodeNoLeastCommonBinder n1 ns1 n2 ns2
         ls -> return $ last ls
 
 -- | merge operation for nodes
@@ -514,7 +532,7 @@ rebind n = do
       => Hole ns info -> Hole ns info -> m (Hole ns info)
 (==>) from to@(Hole _ info) = do
 
-  -- substitutes `from` node to `to` node
+  -- map `from` node to `to` node
   modifyGraph (fmap \node -> if node == from then to else node)
 
   -- for every two merged nodes, we add a phantom link between result

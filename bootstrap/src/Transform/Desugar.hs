@@ -1,14 +1,27 @@
 {-# LANGUAGE QuantifiedConstraints #-}
--- {-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 module Transform.Desugar
   ( addSugarToType
+
+  , treeSugarRule
+  , runSugarRule
+
+  , case01
+  , case10
   )
 where
+
+import Graph.Core
+import Graph.Extension.GraphicType
 
 import Language.Core (Type (..), TypeF (..), type (+>) (..))
 import Language.Core.Extension (Forall (..))
 import Language.Core.Constraint
-import Language.Generic 
+import Language.Generic
+import Language.Setting
+
+import Data.Function (fix)
+import Control.Monad (foldM, forM_)
 
 addSugarToType
   :: forall name bind rep a
@@ -34,3 +47,75 @@ addSugarToType = cata go
           if typ == TypPht then Nothing else Just (name, typ)
         withPrefix (Forall (name :> typ)) = if typ == TypPht then Nothing else Just (name, typ)
     go (TypeF f) = Type f
+
+data SugarRule nodes edges info m a
+  = HasGraph nodes edges info m
+  => SugarRule (Recursion m (Hole nodes info) a)
+
+-- | structure link from, sort by sub edge
+sFrom :: (HasGraph nodes edges info m, T Sub :<: edges, HasOrderGraph nodes edges info)
+      => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
+sFrom root = getsGraph $ lFrom @(T Sub) (== root)
+
+hasBinding
+  :: forall name nodes edges info. (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+  => Hole nodes info -> CoreG nodes edges info -> Bool
+hasBinding root = not . null . lFrom @(T (Binding name)) (== root)
+
+addBinding
+  :: forall name nodes edges info. (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+  => (Hole nodes info, Flag) -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
+addBinding (from, flag) to gr = overlay gr (from -<< T (Binding flag i $ Nothing @name) >>- to)
+  where i = toInteger . (+1) . length $ lTo @(T (Binding name)) (== to) gr
+
+treeSugarRule :: HasGraph nodes edges info m => [SugarRule nodes edges info m Bool] -> SugarRule nodes edges info m Bool
+treeSugarRule = foldr foldT (SugarRule $ Recursion \_ _ -> return False)
+  where
+    foldT (SugarRule (Recursion f)) (SugarRule (Recursion g)) = SugarRule $ Recursion \sugar n ->
+      f sugar n >>= \case
+      True -> return True
+      False -> g sugar n
+
+runSugarRule :: SugarRule nodes edges info m a -> Hole nodes info -> m a
+runSugarRule (SugarRule (Recursion f)) = fix f
+
+-- | RULE: NodeApp
+--
+-- TODO: consider arity and variance in 'NodeApp'
+case01
+  :: forall name nodes edges info m
+  . ( edges :>+: '[T Sub, T (Binding name)]
+    , nodes :>+: '[T NodeApp]
+    , HasGraph nodes edges info m
+    , HasOrderGraph nodes edges info
+    )
+ => SugarRule nodes edges info m Bool
+case01 = SugarRule $ Recursion \sugar ->
+  maybeHole (const $ return False) \root (T (NodeApp _)) _ -> do
+    subs <- fmap snd <$> sFrom root
+    gr <- getGraph
+    let foldT gr' n =
+          if hasBinding @name n gr'
+          then return gr'
+          else return $ addBinding @name (n, Flexible) root gr'
+    foldM foldT gr subs >>= putGraph >> forM_ subs sugar
+    return True
+
+-- | RULE: NodeTup
+case10
+  :: forall name nodes edges info m
+  . ( edges :>+: '[T Sub, T (Binding name)]
+    , nodes :>+: '[T NodeTup]
+    , HasGraph nodes edges info m
+    , HasOrderGraph nodes edges info
+    )
+ => SugarRule nodes edges info m Bool
+case10 = SugarRule $ Recursion \sugar ->
+  maybeHole (const $ return False) \root (T (NodeTup _)) _ -> do
+    subs <- fmap snd <$> sFrom root
+    forM_ subs \n -> do
+      getsGraph (hasBinding @name n) >>= \case
+        True -> return ()
+        False -> modifyGraph (addBinding @name (n, Flexible) root)
+      sugar n
+    return True

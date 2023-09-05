@@ -60,21 +60,29 @@ instance
   pretty (PatView e p) = parens $ pretty e <+> "->" <+> pretty p
   pretty (PatBind name p) = pretty name <> "@" <> pretty p
   pretty (PatExt p) = pretty p
-  
+
 
 -- | pattern group with logic combination
 data PatGroup a
-  = PatAlt [a] -- ^ __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
-  | PatGrp [a] -- ^ __pat1, pat2, pat3__, match with multiple patterns simutaneously, capture all
-               -- ^ of them at a time. some special rules will be applied to it.
-               -- ^ thus, called pattern group.
+
+  -- | __pat1 | pat2__, match with sequential patterns, one by one, capture only one of them
+  = PatAlt a [a]
+
+  -- | __pat1, pat2, pat3__, match with multiple patterns simutaneously, capture all
+  -- of them at a time. some special rules will be applied to it.
+  -- thus, called pattern group.
+  | PatGrp a [a]
   deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
 
 instance Pretty a => Pretty (PatGroup a) where
-  pretty (PatAlt ps) = concatWith (\a b -> a <+> pipe <+> b) (pretty <$> ps)
-  pretty (PatGrp ps) = concatWith (\a b -> a <+> comma <+> b) (pretty <$> ps)
+  pretty (PatAlt p ps) = concatWith (\a b -> a <+> pipe <+> b) (pretty <$> p:ps)
+  pretty (PatGrp p ps) = concatWith (\a b -> a <+> comma <+> b) (pretty <$> p:ps)
 
-newtype Grp f a = Grp [f a] deriving (Pretty, Show, Eq, Ord, Functor, Traversable, Foldable)
+-- | used to define sequence pattern
+data Grp f a = Grp (f a) [f a] deriving (Show, Eq, Ord, Functor, Traversable, Foldable)
+
+instance Pretty (f a) => Pretty (Grp f a) where
+  pretty (Grp p ps) = concatWith (\a b -> a <+> comma <+> b) (pretty <$> p:ps)
 
 makeBaseFunctor $ fixQ [d|
   instance (Functor ext, Functor lit) => Recursive (Pattern lit ext label name expr)

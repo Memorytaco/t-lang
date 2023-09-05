@@ -53,7 +53,6 @@ module Language.Constraint.Graphic
   , expand
   , propagate
   , recurUnify
-  , verifyUnifier
   , solvUnify
   , solvInst
   )
@@ -187,30 +186,24 @@ genConstraint
 genConstraint = cata go
   where
     go (ValF name) = do
+      -- TODO: correctly handle constraint depencency when meeting a variable
       val'maybe <- lookupBinding name
       g <- node (G 1)
-      -- root of tracker tree
-      o1 <- node NDOrder
       var <- node (T NodeBot)
+      depR <- node NDOrder
       let gr = overlays
              [ g -<< T (Sub 1) >>- var
              , var -<< T (Binding Flexible 1 $ Just name) >>- g
-             , o1 -++ Pht NDOrderLink ++- g
+             , depR -++ Pht NDOrderLink ++- g
              ]
       case val'maybe of
         Just (n :| Inl (T Unify)) -> do
-          o2 <- node NDOrder
-          return $ StageConstraint (g :| ValF name) g ([n, var], o1) $ overlays
+          return $ StageConstraint (g :| ValF name) g ([n, var], depR) $ overlays
             [ gr, n -++ T Unify ++- var
-            , o2 -++ Pht NDOrderLink ++- n
-            , o1 -<< Pht (Sub 1) >>- o2
             ]
         Just (n :| Inr (T (Instance i))) -> do
-          o2 <- node NDOrder
-          return $ StageConstraint (g :| ValF name) g ([], o1) $ overlays
+          return $ StageConstraint (g :| ValF name) g ([], depR) $ overlays
             [ gr, n -<< T (Instance i) >>- var
-            , o2 -++ Pht NDOrderLink ++- n
-            , o1 -<< Pht (Sub 1) >>- o2
             ]
         Nothing -> failCGen $ FailGenMissingVar name
     go (ExprF v) = stageConstraint v
@@ -289,11 +282,107 @@ instance ConstraintGen (Let (Pattern plit pinj label name)) (ExprF f name |: Hol
   stageConstraint = undefined
 
 -- TODO: complete following constraint generation
-type instance ConstrainGraphic (Equation (GPatSurface t) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+type instance ConstrainGraphic (Equation (GPatSurface t) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info
+  = ()
 instance ConstraintGen (Equation (GPatSurface t) (Prefixes name t)) (ExprF f name |: Hole nodes Int) Int where
 
-type instance ConstrainGraphic (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+type instance ConstrainGraphic (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF f name |: Hole ns Int) m nodes edges info
+  = ( Monad m
+    , HasNodeCreator m
+    , HasConstraintGenErr name m
+    , HasOrderGraph nodes edges info
+    , HasBinding name nodes m
+    , Equation (Grp (PatSurface t)) (Prefixes name t) :<: f
+    , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
+    , edges :>+: '[Pht NDOrderLink, Pht Sub]
+    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
+    , nodes :>+: '[T (NodeRef name), NDOrder]
+    , name ~ Name, info ~ Int, ns ~ nodes
+    )
 instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF f name |: Hole nodes Int) Int where
+  stageConstraint (Equation _prefix br brs) = do
+    -- TODO: handle local type binding
+    g <- node (G 1)
+    var <- node (T NodeBot)
+    depR <- node NDOrder
+    br'c <- handleBranch br
+    br'cs <- forM brs handleBranch
+    let val = (g :|) . ExprF . inj $ Equation _prefix (br'c ^. atInfo) (br'cs ^.. traverse . atInfo)
+        collect (us, gr) (i, StageConstraint _ g' (us', d') gr') = do
+          r <- getInstance 1 g' gr'
+          return . ([r, var] <> us <> us',) $ overlays
+            [ gr, gr'
+            , depR -<< Pht (Sub i) >>- d'
+            , r -++ T Unify ++- var
+            , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+            ]
+    -- unify every branch with bottom node and need to bind
+    -- every sub G to top G
+    (us, gr) <- foldM collect ([], Empty) (zip [1..] $ br'c: br'cs)
+    -- since we duplicate graph many times, we need to compress
+    -- the graph to get a minimal representation
+    return $ StageConstraint val g (us, depR) $ compress $ overlays
+      [ gr
+      , depR -++ Pht NDOrderLink ++- g
+      , g -<< T (Sub 1) >>- var
+      , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      ]
+    where
+      -- turn a pattern binds into unifiable bindings
+      asBinding gr binds = forM binds \(name, (Instance i, n)) -> do
+        n' <- getInstance i n gr
+        return (name, n' :| Inl (T Unify))
+
+      genLambda (r'g, (r'us, r'd), r'gr) (StageConstraint _ pat'g (pat'us, pat'd) pat'gr) = do
+        g <- node (G 1)
+        depR <- node NDOrder
+        (app, arr, domain, codomain) <-
+           (,,,) <$> node (T $ NodeApp 3)
+                 <*> node (T NodeArr)
+                 <*> node (T NodeBot)
+                 <*> node (T NodeBot)
+        pat'n <- getInstance 1 pat'g pat'gr
+        return . (g, ([domain, pat'n] <> r'us <> pat'us, depR), ) $ overlays
+          [ r'gr, pat'gr
+          -- build skeleton
+          , overlays  -- skeleton binding edge
+            [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+            | n <- [app, arr, domain, codomain]
+            ]
+          , overlays {- skeleton -} $ zip [1..] [arr, domain, codomain]
+              <&> \(i, n) -> app -<< T (Sub i) >>- n
+          , g -<< T (Sub 1) >>- app
+          -- add binding edge
+          , r'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g    -- pattern
+          , pat'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g  -- body
+          -- add constraint edge
+          , r'g -<< T (Instance 1) >>- codomain -- body instance
+          , domain -++ T Unify ++- pat'n  -- domain unification
+          -- add tracker node
+          , depR -++ Pht NDOrderLink ++- g
+          , depR -<< Pht (Sub 1) >>- r'd
+          , depR -<< Pht (Sub 2) >>- pat'd
+          ]
+
+      -- generate a lambda here
+      handleBranch (Grp mpat mpats, mbody) = do
+        -- generate first pattern
+        s@(StageConstraint (PatternData _ pa'binds) _ _ pa'gr) <- genPatternConstraint mpat
+        pa'bindings <- asBinding pa'gr pa'binds
+        (stage'pats, lbindings) <- foldM foldT ([s], pa'bindings) $ genPatternConstraint <$> mpats
+        StageConstraint e e'g e'scope e'gr <- localBinding lbindings mbody
+        let pats :: [(PatSurface t) (ExprF f name |: Hole nodes Int)]
+            pats = reverse $ fromX . strip <$> (stage'pats ^.. traverse . atInfo . pattern)
+            branch = (Grp (head pats) (tail pats), e)
+        (g, scopes, gr) <- foldM genLambda (e'g, e'scope, e'gr) stage'pats
+        return $ StageConstraint branch g scopes gr
+          where
+          -- stage constraint is built in reverse order
+          foldT (ss, lbindings) mb = do
+            s@(StageConstraint (PatternData _ pb'binds) _ _ pb'gr) <-
+              localBinding lbindings mb
+            pb'bindings <- asBinding pb'gr pb'binds
+            return (s:ss, pb'bindings <> lbindings)
 
 type instance ConstrainGraphic (Value TypSurface) (ExprF f name |: Hole ns Int) m nodes edges info = ()
 instance ConstraintGen (Value TypSurface) (ExprF f name |: Hole nodes Int) Int where
@@ -302,18 +391,18 @@ type instance ConstrainGraphic (Selector Label) (ExprF f name |: Hole ns Int) m 
 instance ConstraintGen (Selector Label) (ExprF f name |: Hole nodes Int) Int where
 
 type instance ConstrainGraphic (LetGrp (PatSurface t)) (ExprF f name |: Hole ns Int) m nodes edges info
-   = ( Monad m
-     , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
-     , edges :>+: '[Pht NDOrderLink, Pht Sub]
-     , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
-     , nodes :>+: '[T (NodeRef name), NDOrder]
-     , HasNodeCreator m
-     , HasConstraintGenErr name m
-     , HasOrderGraph nodes edges Int
-     , HasBinding name nodes m
-     , LetGrp (PatSurface t) :<: f
-     , name ~ Name, ns ~ nodes
-     )
+  = ( Monad m
+    , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
+    , edges :>+: '[Pht NDOrderLink, Pht Sub]
+    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
+    , nodes :>+: '[T (NodeRef name), NDOrder]
+    , HasNodeCreator m
+    , HasConstraintGenErr name m
+    , HasOrderGraph nodes edges Int
+    , HasBinding name nodes m
+    , LetGrp (PatSurface t) :<: f
+    , name ~ Name, ns ~ nodes
+    )
 instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (LetGrp ms m) = do
     envs <- forM ms \(mpat, me) -> do
@@ -336,7 +425,7 @@ instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) 
         | binds <- envs ^.. traverse . _2
         , (name, (inst, nd)) <- binds ]
         m
-    let unification = e'deps <> join (envs ^.. traverse . _3)
+    let unification = e'deps <> (envs ^.. traverse . _3 . traverse)
         val = ExprF . inj $ LetGrp (envs ^.. traverse . _1) e
     return $ StageConstraint (e'g :| val) e'g (unification, e'dep) $ overlays
       [ e'gr
@@ -528,64 +617,70 @@ genPatternConstraint = cata go
     -- runner
     go PatWildF = do
       g <- node (G 1)
-      depR <- node NDOrder
       var <- node (T NodeBot)
+      depR <- node NDOrder
       return $ StageConstraint (PatternData (g :| PatWildF) []) g ([], depR)
-        (overlays [ g -<< T (Sub 1) >>- var
-                  , var -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
-                  , depR -++ Pht NDOrderLink ++- g
-                  ])
+        $ overlays
+        [ g -<< T (Sub 1) >>- var
+        , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , depR -++ Pht NDOrderLink ++- g
+        ]
+
     go PatUnitF = do
       g <- node (G 1)
-      depR <- node NDOrder
       n <- node (T $ NodeTup 0)
-      let patd = PatternData (g :| PatUnitF) []
-          gr = overlays
-               [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
-               , g -<< T (Sub 1) >>- n
-               , depR -++ Pht NDOrderLink ++- g
-               ]
-      return $ StageConstraint patd g ([], depR) gr
+      depR <- node NDOrder
+      return $ StageConstraint (PatternData (g :| PatUnitF) []) g ([], depR)
+        $ overlays
+        [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , g -<< T (Sub 1) >>- n
+        , depR -++ Pht NDOrderLink ++- g
+        ]
+
     go (PatVarF name) = do
       g <- node (G 1)
-      depR <- node NDOrder
       var <- node (T NodeBot)
-      let gr = overlays
-               [ g -<< T (Sub 1) >>- var
-               , var -<< (T . Binding Flexible 1 $ Just name) >>- g
-               , depR -++ Pht NDOrderLink ++- g
-               ]
-      return $ StageConstraint (PatternData (g :| PatVarF name) [(name, (Instance 1, g))]) g ([], depR) gr
+      depR <- node NDOrder
+      return $ StageConstraint (PatternData (g :| PatVarF name) [(name, (Instance 1, g))]) g ([], depR)
+        $ overlays
+        [ g -<< T (Sub 1) >>- var
+        , var -<< T (Binding Flexible 1 $ Just name) >>- g
+        , depR -++ Pht NDOrderLink ++- g
+        ]
+
     go (PatPrmF litm) = stageConstraint litm
+
     go (PatTupF sma) = do
       let len = toInteger $ length sma
       g <- node (G 1)
       tup <- node (T $ NodeTup len)
       depR <- node NDOrder
       sia <- (`zip` [1..len]) <$> sequence sma
-      (overlays -> gr, join -> gdeps) <-
-        unzip <$> forM sia \(StageConstraint _ n'g (gdeps, gdep) gr, i) -> do
+      (join -> gdeps, overlays -> gr) <-
+        unzip <$> forM sia \(StageConstraint _ n'g (n'us, n'd) n'gr, i) -> do
         var <- node (T NodeBot)
-        n'root <- getInstance1 n'g gr
-        return (overlays
-          [ gr
+        n'root <- getInstance1 n'g n'gr
+        return . (var: n'root: n'us, ) $ overlays
+          [ n'gr
           -- add binding edge and structure edge
-          , var -<< (T . Binding Flexible 1 $ Nothing @name) >>- tup
+          , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
           , tup -<< T (Sub i) >>- var
           -- add unify constraint
           , var -++ T Unify ++- n'root
           -- bind sub constraint
           , n'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
           -- add constraint dependency order
-          , depR -<< Pht (Sub i) >>- gdep
-          ], gdeps <> [var, n'root])
+          , depR -<< Pht (Sub i) >>- n'd
+          ]
       let patd = PatternData (g :| PatTupF (sia ^.. traverse . _1 . atInfo . pattern))
                              (sia ^.. traverse . _1 . atInfo . bindings . traverse)
-      return $ StageConstraint patd g (gdeps, depR)
-        (overlays [ gr, tup -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
-                  , g -<< T (Sub 1) >>- tup
-                  , depR -++ Pht NDOrderLink ++- g
-                  ])
+      return $ StageConstraint patd g (gdeps, depR) $ overlays
+        [ gr, tup -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , g -<< T (Sub 1) >>- tup
+        , depR -++ Pht NDOrderLink ++- g
+        ]
+
+    -- | TODO: recheck constraint generation rule
     go (PatRecF sma) = do
       let len = toInteger $ length sma
       g <- node (G 1)
@@ -694,6 +789,11 @@ type instance ConstrainGraphic ((@:) t) (PatternInfo lits injs ns label name exp
   = ()
 instance ConstraintGen ((@:) t) (PatternInfo lits injs nodes label name expr) Int where
 
+type instance ConstrainGraphic PatGroup (PatternInfo lits injs ns label name expr) m nodes edges info
+  = ()
+instance ConstraintGen PatGroup (PatternInfo lits injs nodes label name expr) Int where
+
+
 -- | handle general literal
 type instance ConstrainGraphic (Literal t) (PatternInfo lits injs ns label name expr) m nodes edges info
   = ( ns ~ nodes
@@ -777,11 +877,12 @@ data ConstraintSolvErr node gr err
   = FailSolvMsg String
   | FailSolvUnify err
   | FailSolvProperty gr (ConstraintSolvPropErr node)
-   deriving (Show, Eq, Ord)
+  deriving (Show, Eq, Ord)
 
 data ConstraintSolvPropErr node
   = CSPropMultipleNodes node [node] String
-   deriving (Show, Eq, Ord)
+  | CSPropMultipleBinder node [node] String
+  deriving (Show, Eq, Ord)
 
 type HasSolvErr node gr err m = HasThrow ConstraintSolvErr (ConstraintSolvErr node gr err) m
 
@@ -892,12 +993,12 @@ propagate :: forall name edges nodes err m
     , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
   => Hole nodes Int -> CoreG nodes edges Int
   -> m ([Hole nodes Int], CoreG nodes edges Int)
-propagate scheme gr = do
+propagate scheme (compress -> gr) = do
   instances <- forM constraints \(source, t) -> do
     binder <- case lFrom @(T (Binding name)) (== t) gr of
       [(_, binder)] -> return binder
-      [] -> failSolvMsg "A node has no binders during propagation"
-      _ -> failSolvMsg "A node has multiple binders during propagation"
+      [] -> failSolvProp gr $ CSPropMultipleBinder t [] "A node has no binders during propagation"
+      binders -> failSolvProp gr $ CSPropMultipleBinder t (snd <$> binders) "A node has multiple binders during propagation"
     return (source, t, binder)
   let folder (ounifications, ogr) (source, t, binder) = do
         (root, unifications, gType) <- expand @name source binder ogr
@@ -926,34 +1027,19 @@ type Unifier err nodes edges info m =
 recurUnify
   ::  ( HasUnifier err nodes edges info m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m
       , HasOrderGraph nodes edges info, T Unify :<: edges)
-  => CoreG nodes edges info -> Hole nodes info -> m (Hole nodes info, CoreG nodes edges info)
+  => CoreG nodes edges info -> Hole nodes info -> m (CoreG nodes edges info)
 recurUnify graph start = do
   unify <- ask @"Unifier"
-  let go (s, gr) [] = return (s, gr)
-      go (s, gr) (n:ns) = do
-        unify gr s n >>= \case
+  case nub $ snd <$> lFrom @(T Unify) (== start) graph of
+    [] -> return graph
+    ls@(_:_) ->
+      case filter (/= start) ls of
+        [] -> return (replaceLink justUnifyLink start start graph)
+        x:_ -> unify graph start x >>= \case
           Left err -> failSolvUnify err
-          Right left@(s', gr') -> go left ns'
-            where
-              ns' = (filter (`notElem` [s,n,s']) $ (snd <$> lFrom @(T Unify) (== s') gr') <> ns)
-  go (start, graph)
-    $ filter (/= start)
-    $ nub $ snd <$> lFrom @(T Unify) (== start) graph
-
--- | make sure every unified nodes has `Unify` edge point to itself and
--- we clear those edges in graph.
---
--- Use this with `solvUnify`.
-verifyUnifier
-  :: (HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m, edges :>+: '[T Unify], HasOrderGraph nodes edges info)
-  => CoreG nodes edges info -> [Hole nodes info] -> m (CoreG nodes edges info)
-verifyUnifier graph [] = return graph
-verifyUnifier graph (n:ns) = do
-  let targets = snd <$> lFrom @(T Unify) (== n) graph
-  case filter (/= n) $ nub targets of
-    [] -> let graph' = replaceLink (\e -> if isLinkOf @(T Unify) e then Nothing else Just e) n n graph
-          in verifyUnifier graph' ns
-    _ -> failSolvMsg "Failure when verifying unified nodes"
+          Right (next, gr) -> recurUnify gr next
+  where
+    justUnifyLink e = if isLinkOf @(T Unify) e then Nothing else Just e
 
 -- | solve all `Unify` edges in a stage constraint
 solvUnify
@@ -961,14 +1047,9 @@ solvUnify
       , HasOrderGraph nodes edges info, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
   => StageConstraint nodes edges info a -> m (StageConstraint nodes edges info a)
 solvUnify (StageConstraint info root (nub -> unifications, dep) graph) = do
-  gr <- go graph unifications
-  gr' <- verifyUnifier gr unifications
-  return (StageConstraint info root ([], dep) gr')
-  where
-    go gr [] = return gr
-    go gr (n:ns) = do
-      (n', gr') <- recurUnify gr n
-      go gr' $ filter (/= n') ns
+  gr <- foldM recurUnify graph unifications
+  -- gr' <- verifyUnifier gr unifications
+  return (StageConstraint info root ([], dep) gr)
 
 -- | solve a `Instance` edge
 solvInst
@@ -1027,13 +1108,8 @@ getSolution
 getSolution source !graph = do
   root <- node NodePht
   (gRoot, unifications, gr) <- expand source root graph
-  gr' <- go (overlays [gr, root -<< T (Sub 1) >>- gRoot]) unifications
-  (root,) <$> verifyUnifier gr' unifications
-  where
-    go gr [] = return gr
-    go gr (n:ns) = do
-      (n', gr') <- recurUnify gr n
-      go gr' $ filter (/= n') ns
+  gr' <- foldM recurUnify (overlays [gr, root -<< T (Sub 1) >>- gRoot]) unifications
+  return (root, gr')
 
 -- | get a solution from a constraint presolution
 getSolutionFromConstraint

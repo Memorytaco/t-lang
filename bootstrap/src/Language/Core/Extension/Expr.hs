@@ -17,7 +17,7 @@ module Language.Core.Extension.Expr
   )
 where
 
-import Prettyprinter (Pretty (..), (<+>), concatWith, line, align, hsep, parens, viaShow, backslash, pipe, brackets)
+import Prettyprinter (Pretty (..), (<+>), concatWith, line, align, hsep, parens, viaShow, backslash, pipe, brackets, indent, vsep)
 import Data.Functor
 
 -- ** Surface Language
@@ -67,10 +67,14 @@ data Equation bind prefix expr
 
 instance (forall x. Pretty x => Pretty (bind x), Pretty prefix, Pretty expr)
   => Pretty (Equation bind prefix expr) where
+  pretty (Equation prefix (a, b) []) =
+    "\\" <> pretty prefix <+> ";;" <+> (pretty a <+> "=" <+> align (pretty b))
   pretty (Equation prefix p1 ps) =
-    brackets $ pretty prefix <+> ";;" <>
-      concatWith (\a b -> a <> line <> pipe <+> b) (p1:ps <&> printBranch)
-    where printBranch (a, b) = pretty a <+> "=" <+> pretty b
+    align . brackets $ pretty prefix <+> ";;"
+      <> line <> indent 2 (printBranch p1)
+      <> line <> vsep ((pipe <+>) . printBranch <$> ps)
+      <> line
+    where printBranch (a, b) = pretty a <+> "=" <+> align (pretty b)
 
 -- | application, this includes both value application and type application
 --
@@ -149,3 +153,6 @@ deriving instance (forall a. Ord (bind a), forall a. Ord (f a)) => Ord (LambdaI 
 -- | pattern match expression
 data Match match e
   = Match e [(match e, e)]
+
+-- | Continuation Operator
+data Continue

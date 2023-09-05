@@ -11,17 +11,18 @@ import Language.Core
 import Data.Text
 import Text.Megaparsec
 import Test.Tasty (TestTree, testGroup)
-import Test.Tasty.HUnit (testCase, assertFailure, assertBool)
-
+import Test.Tasty.HUnit (testCase, testCaseSteps, assertFailure, assertBool)
+import Prettyprinter
+import Transform.Desugar (addSugarToType)
 
 buildCorrectCase :: Text -> TestTree
-buildCorrectCase text = testCase (unpack text) do
+buildCorrectCase text = testCaseSteps (unpack text) \output -> do
   res'either <- getSurfaceExpr builtinStore "Under Testing" text
   e <- case res'either of
     Left err -> assertFailure $ "Parser Error: " <> errorBundlePretty err
     Right e -> return e
   tcExprToSyntacticType [] 0 ("t", 0) e >>= \case
-    Right (_, _) -> return ()
+    Right (t, _) -> output $ show $ pretty $ addSugarToType t
     Left err -> assertFailure $ "Inference Error: " <> show err
 
 buildWrongCase :: Text -> TestTree

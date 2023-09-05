@@ -35,7 +35,6 @@ dependencies:
 - megaparsec
 - text
 - fgl
-- graphviz
 - optparse-applicative
 - exceptions
 - type-errors
@@ -46,6 +45,7 @@ dependencies:
 - algebraic-graphs == 0.7
 - prettyprinter
 - lens
+- random
 
 ghc-options:
 - -Wall
