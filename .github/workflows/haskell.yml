@@ -21,11 +21,11 @@ jobs:
           ${{ runner.os }}-stack-global-
 
     - name: Setup Haskell Stack
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
         stack-setup-ghc: true
         enable-stack: true
-        stack-version: 'latest'
+        stack-version: '2.13.1'
         cabal-version: '3.6.0.0'
 
     - name: LLVM Environment
@@ -65,11 +65,11 @@ jobs:
           ${{ runner.os }}-stack-global-
 
     - name: Setup Haskell Stack
-      uses: haskell/actions/setup@v2
+      uses: haskell-actions/setup@v2
       with:
         stack-setup-ghc: true
         enable-stack: true
-        stack-version: 'latest'
+        stack-version: '2.13.1'
         cabal-version: '3.6.0.0'
 
     - name: LLVM Environment
