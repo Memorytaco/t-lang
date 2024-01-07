@@ -31,9 +31,9 @@ jobs:
     - name: LLVM Environment
       run: |
         curl https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-15 main"
+        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main"
         sudo apt-get update
-        sudo apt-get -y install llvm-15-dev
+        sudo apt-get -y install llvm-17-dev
       shell: bash
 
     - name: Cache and Restore Local builds
@@ -48,5 +48,48 @@ jobs:
       run: |
         cd bootstrap
         stack build
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Cache and Restore Haskell Dependency
+      uses: actions/cache@v3
+      with:
+        path: ~/.stack
+        key: ${{ runner.os }}-stack-global-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-stack-global-
+
+    - name: Setup Haskell Stack
+      uses: haskell/actions/setup@v2
+      with:
+        stack-setup-ghc: true
+        enable-stack: true
+        stack-version: 'latest'
+        cabal-version: '3.6.0.0'
+
+    - name: LLVM Environment
+      run: |
+        curl https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-17 main"
+        sudo apt-get update
+        sudo apt-get -y install llvm-17-dev
+      shell: bash
+
+    - name: Cache and Restore Local builds
+      uses: actions/cache@v3
+      with:
+        path: bootstrap/.stack-work
+        key: ${{ runner.os }}-stack-work-${{ hashFiles('stack.yaml') }}-${{ hashFiles('package.yaml') }}-${{ hashFiles('**/*.hs') }}
+        restore-keys: |
+          ${{ runner.os }}-stack-work-
+
+    - name: Stack Test
+      run: |
+        cd bootstrap
         stack test
-        cd ..
+

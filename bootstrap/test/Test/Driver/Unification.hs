@@ -30,8 +30,8 @@ assertType text = do
     Left err -> fail $ "Parser Error: " <> errorBundlePretty err
     Right t -> return t
 
-buildAssertion :: Text -> Text -> (String -> IO ()) -> Assertion
-buildAssertion ia ib output = do
+buildAssertionText :: Text -> Text -> (String -> IO ()) -> Assertion
+buildAssertionText ia ib output = do
   ta <- assertType ia
   tb <- assertType ib
   ((r1, g1 :: CustomG), i) <- toGraphicTypeMock mempty 1 ta >>= \case
@@ -54,7 +54,7 @@ buildAssertion ia ib output = do
       Right (t :: TypSurface, _) -> output $ show (pretty t)
 
 buildCase :: (String, String) -> TestTree
-buildCase v@(l, r) = testCaseSteps (show v) $ buildAssertion (pack l) (pack r)
+buildCase v@(l, r) = testCaseSteps (show v) $ buildAssertionText (pack l) (pack r)
 
 -- ** test cases
 

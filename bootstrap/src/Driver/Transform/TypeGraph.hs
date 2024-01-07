@@ -9,7 +9,8 @@ module Driver.Transform.TypeGraph
   )
 where
 
-import Transform.TypeGraph (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph, TypeContext, ToGraphicTypeErr (..), TypeContextTable)
+import Transform.TypeGraph
+  (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph, TypeContext, ToGraphicTypeErr (..), TypeContextTable)
 import Language.Core (Type, type (+>) (Free))
 import Graph.Extension.GraphicType
 import Graph.Core (CoreG, Hole, HasOrderEdge, Graph (..), overlays, (-<<), (>>-))
@@ -70,7 +71,6 @@ toGraphicTypeConstraintMock
      , Functor bind, Functor rep
      , nodes :>+: '[T NodeBot, T NodeApp, T NodeArr, T (NodeRef name), G]
      , edges :>+: '[T Sub, T (Binding name)]
-     , T Sub :<: edges
      , Eq name, IsString name, Monad m
      )
   => TypeContextTable name nodes edges Int

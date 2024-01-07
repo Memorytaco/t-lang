@@ -138,17 +138,19 @@ data Power
 -- | core algorithm for the pratt parser
 pratt' :: forall tag a e m. (MonadParsec e Text m, PrattToken tag a m) => Proxy tag -> m () -> Power -> m a
 pratt' sel end rbp = do
-  tok <- tokenize sel (pratt' sel) end
+  tok <- nextSemantic
   left <- nud tok end
   (end $> left) <|> loop left
     where
+      nextSemantic :: m (Semantic m a)
+      nextSemantic = tokenize sel (pratt' sel) end
       loop left = do
-        lbp' <- lookAhead (tokenize sel (pratt' sel) end :: m (Semantic m a)) >>= lbp
+        lbp' <- lookAhead nextSemantic >>= lbp
         if rbp < lbp'
-           then do tok <- tokenize sel (pratt' sel) end
-                   left' <- led tok end left
-                   (end $> left') <|> loop left'
-           else return left
+          then do tok <- nextSemantic
+                  left' <- led tok end left
+                  (end $> left') <|> loop left'
+          else return left
 
 -- | if language defined `PrattToken`, then it has a pratt parser automatically
 -- built from this "token".

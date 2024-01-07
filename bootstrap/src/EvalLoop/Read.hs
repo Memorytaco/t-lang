@@ -11,7 +11,6 @@ where
 import Control.Monad
 import Control.Applicative (Alternative)
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
-import Control.Monad.Except
 import Data.Text as Text (Text, unpack, dropWhileEnd, dropWhile)
 import Data.Char (isSpace)
 import Text.Megaparsec hiding (runParser)
@@ -28,6 +27,7 @@ import Language.Parser (reserved, reservedOp)
 
 import EvalLoop.Store
 import Data.Maybe (isNothing)
+import Control.Monad.IO.Class (MonadIO (..))
 
 newtype InterfaceT m a = InterfaceT
   { runInterfaceT :: ParsecT ReadError Text (ReaderT EvalState m) a
@@ -89,7 +89,7 @@ interface = do
           liftIO . putStrLn $ errorBundlePretty err
           customFailure SubParseError
         Right res -> return . ReadCommand $ RDefineGlobal res
-    Just "load" -> getInput <&> unpack . stripSpace <&> ReadCommand . RLoadSource
+    Just "load" -> getInput <&> ReadCommand . RLoadSource . unpack . stripSpace 
     Just "list" -> reserved "module" $> ReadCommand RListModules
                <|> reserved "source" $> ReadCommand (RListSource Nothing)
                <|> return (ReadCommand RListDecls)

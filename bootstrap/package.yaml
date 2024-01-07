@@ -2,39 +2,34 @@ name:                t-lang
 version:             0.1.0.0
 github:              "memorytaco/t-lang"
 license:             BSD3
-author:              "xbo1"
-maintainer:          "xbo1@dunor.dev"
-copyright:           "2022 Xbo1"
+author:              "dunor"
+maintainer:          "dunor@dunor.dev"
+copyright:           "2024 dunor"
 
 extra-source-files:
 - README.md
 - CHANGELOG.md
 
 # Metadata used when publishing your package
-# synopsis:            Short description of your package
-category:            Programming Language
-
-# To avoid duplicated efforts in documentation and dealing with the
-# complications of embedding Haddock markup inside cabal files, it is
-# common to point users to the README.md file.
+synopsis:            Compiler implementation of t-lang in Haskell.
+category:            Programming Language (PL)
 description:         Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
 
 dependencies:
 - base >= 4.9 && < 5
 - mtl
-- containers >= 0.6.5 && < 0.7
+- containers
 - bytestring
-- llvm-hs >= 9.0.0
-- llvm-hs-pure >= 9.0.0
+- llvm-hs
+- llvm-hs-pure
 - haskeline
-- transformers >= 0.5.6.2
+- transformers
 - recursion-schemes
-- free >= 5.1.9
+- free
 - bifunctors
 - libffi
 - megaparsec
 - text
-- fgl
 - optparse-applicative
 - exceptions
 - type-errors
@@ -79,6 +74,7 @@ default-extensions:
 - TypeOperators
 - ViewPatterns
 - BangPatterns
+- LinearTypes
 
 - FlexibleInstances
 - FlexibleContexts

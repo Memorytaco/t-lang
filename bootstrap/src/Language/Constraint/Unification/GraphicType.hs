@@ -60,6 +60,7 @@ import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy)
 import Data.Set (toList)
 import Data.Function (fix)
+import Control.Applicative ((<|>))
 
 -- import Data.Kind (Constraint, Type)
 
@@ -514,9 +515,11 @@ rebind n = do
     lcb n1 n2 = do
       ns1 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n1
       ns2 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n2
-      case zip (reverse ns1) (reverse ns2) >>= \(a, b) -> if a == b then pure a else [] of
-        [] -> failProp $ NodeNoLeastCommonBinder n1 ns1 n2 ns2
-        ls -> return $ last ls
+      
+      -- case zip (reverse ns1) (reverse ns2) >>= \(a, b) -> if a == b then pure a else [] of
+      case foldl (<|>) Nothing $ ns1 <&> \a -> if a `elem` ns2 then Just a else Nothing of
+        Nothing -> failProp $ NodeNoLeastCommonBinder n1 ns1 n2 ns2
+        Just a -> return a
 
 -- | merge operation for nodes
 --

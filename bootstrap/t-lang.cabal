@@ -1,18 +1,19 @@
 cabal-version: 1.12
 
--- This file has been generated from package.yaml by hpack version 0.35.2.
+-- This file has been generated from package.yaml by hpack version 0.36.0.
 --
 -- see: https://github.com/sol/hpack
 
 name:           t-lang
 version:        0.1.0.0
+synopsis:       Compiler implementation of t-lang in Haskell.
 description:    Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
-category:       Programming Language
+category:       Programming Language (PL)
 homepage:       https://github.com/memorytaco/t-lang#readme
 bug-reports:    https://github.com/memorytaco/t-lang/issues
-author:         xbo1
-maintainer:     xbo1@dunor.dev
-copyright:      2022 Xbo1
+author:         dunor
+maintainer:     dunor@dunor.dev
+copyright:      2024 dunor
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -54,6 +55,7 @@ library
       Example
       Graph.Core
       Graph.Extension.GraphicType
+      Graph.GraphParser
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic
@@ -124,6 +126,7 @@ library
       TypeOperators
       ViewPatterns
       BangPatterns
+      LinearTypes
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies
@@ -142,15 +145,14 @@ library
     , bifunctors
     , bytestring
     , capability
-    , containers >=0.6.5 && <0.7
+    , containers
     , exceptions
-    , fgl
-    , free >=5.1.9
+    , free
     , haskeline
     , lens
     , libffi
-    , llvm-hs >=9.0.0
-    , llvm-hs-pure >=9.0.0
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , optparse-applicative
@@ -161,7 +163,7 @@ library
     , tasty-hunit
     , template-haskell
     , text
-    , transformers >=0.5.6.2
+    , transformers
     , type-errors
   default-language: Haskell2010
 
@@ -189,6 +191,7 @@ executable t-lang-exe
       TypeOperators
       ViewPatterns
       BangPatterns
+      LinearTypes
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies
@@ -207,15 +210,14 @@ executable t-lang-exe
     , bifunctors
     , bytestring
     , capability
-    , containers >=0.6.5 && <0.7
+    , containers
     , exceptions
-    , fgl
-    , free >=5.1.9
+    , free
     , haskeline
     , lens
     , libffi
-    , llvm-hs >=9.0.0
-    , llvm-hs-pure >=9.0.0
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , optparse-applicative
@@ -227,7 +229,7 @@ executable t-lang-exe
     , tasty-hunit
     , template-haskell
     , text
-    , transformers >=0.5.6.2
+    , transformers
     , type-errors
   default-language: Haskell2010
 
@@ -260,6 +262,7 @@ test-suite t-lang-test
       TypeOperators
       ViewPatterns
       BangPatterns
+      LinearTypes
       FlexibleInstances
       FlexibleContexts
       FunctionalDependencies
@@ -278,15 +281,14 @@ test-suite t-lang-test
     , bifunctors
     , bytestring
     , capability
-    , containers >=0.6.5 && <0.7
+    , containers
     , exceptions
-    , fgl
-    , free >=5.1.9
+    , free
     , haskeline
     , lens
     , libffi
-    , llvm-hs >=9.0.0
-    , llvm-hs-pure >=9.0.0
+    , llvm-hs
+    , llvm-hs-pure
     , megaparsec
     , mtl
     , optparse-applicative
@@ -298,6 +300,6 @@ test-suite t-lang-test
     , tasty-hunit
     , template-haskell
     , text
-    , transformers >=0.5.6.2
+    , transformers
     , type-errors
   default-language: Haskell2010

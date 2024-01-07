@@ -104,12 +104,12 @@ instance (ExprC e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operato
             Unifix -> return (cons (Val $ Name op) left)
             Postfix -> return (cons (Val $ Name op) left)
             PostInfix -> do
-              right'maybe <- optional $ parser end (Power r)
+              right'maybe <- optional . try $ parser end (Power r)
               case right'maybe of
                 Nothing -> return (cons (Val $ Name op) left)
                 Just right -> return . Expr . inj $ Apply (Val $ Name op) left [right]
             UniInfix -> do
-              right'maybe <- optional $ parser end (Power r)
+              right'maybe <- optional . try $ parser end (Power r)
               case right'maybe of
                 Nothing -> return (cons (Val $ Name op) left)
                 Just right -> return . Expr . inj $ Apply (Val $ Name op) left [right]

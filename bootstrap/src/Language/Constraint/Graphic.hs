@@ -1025,7 +1025,8 @@ type Unifier err nodes edges info m =
 -- we can feed `recurUnify` with any of a, b or c and we get a single final node "x"
 -- with unification edge points to itself and "x" is among a, b or c.
 recurUnify
-  ::  ( HasUnifier err nodes edges info m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m
+  ::  ( HasUnifier err nodes edges info m
+      , HasSolvErr (Hole nodes Int) (CoreG nodes edges info) err m
       , HasOrderGraph nodes edges info, T Unify :<: edges)
   => CoreG nodes edges info -> Hole nodes info -> m (CoreG nodes edges info)
 recurUnify graph start = do
@@ -1044,7 +1045,7 @@ recurUnify graph start = do
 -- | solve all `Unify` edges in a stage constraint
 solvUnify
   ::  ( HasUnifier err nodes edges info m, edges :>+: '[T Unify]
-      , HasOrderGraph nodes edges info, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
+      , HasOrderGraph nodes edges info, HasSolvErr (Hole nodes Int) (CoreG nodes edges info) err m)
   => StageConstraint nodes edges info a -> m (StageConstraint nodes edges info a)
 solvUnify (StageConstraint info root (nub -> unifications, dep) graph) = do
   gr <- foldM recurUnify graph unifications

@@ -40,7 +40,8 @@ import Capability.State (HasState, MonadState (..))
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)
 
-import Control.Monad.State (StateT (..), MonadPlus)
+import Control.Monad.State (StateT (..))
+import Control.Monad (MonadPlus)
 import Control.Monad.Reader (ReaderT (..))
 import Control.Applicative (Alternative)
 
@@ -155,20 +156,19 @@ type PatLang e m typ expr ltyp lexpr = WithPattern e m
 data WholeExpr (e :: D.Type) (m :: D.Type -> D.Type) (t :: D.Type)
 type PredefExprLang m = WholeExpr Void m (PatSurface TypSurface :- GPatSurface TypSurface :- TypSurface)
 
-instance ( MonadFail m, MonadParsec e Text m
-         , name ~ Name
-         , HasReader "TermOperator" [Operator Text] m
-         , PrattToken (TypeLang e m) typ m
-         , PrattToken (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
-           (pat (Expr f name)) m
-         , PrattToken (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
-           (bpat (Expr f name)) m
-         , PrattToken (ExprLang e m typ pat bpat (TypeLang e m)
-                        (PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ)))
-                      )
-           (Expr f name) m
-         , MonadParsecDbg e Text m
-         )
+instance
+  ( MonadFail m, MonadParsec e Text m
+  , name ~ Name
+  , langPat ~ PatLang e m typ (Expr f name) (TypeLang e m) (WholeExpr e m (pat :- bpat :- typ))
+
+  , HasReader "TermOperator" [Operator Text] m
+  , PrattToken (TypeLang e m) typ m
+  , PrattToken langPat (pat (Expr f name)) m
+  , PrattToken langPat (bpat (Expr f name)) m
+  , PrattToken (ExprLang e m typ pat bpat (TypeLang e m) langPat)
+    (Expr f name) m
+  , MonadParsecDbg e Text m
+  )
   => Rule (WholeExpr e m (pat :- bpat :- typ)) (Expr f name) m where
   rule _ end =
     pratt @(ExprLang e m typ pat bpat (TypeLang e m)

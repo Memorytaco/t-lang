@@ -50,7 +50,8 @@ import qualified Data.Map as Map
 import qualified Data.Text.IO as Text
 import Capability.Reader (asks)
 
-import Control.Monad.Except (runExceptT, MonadTrans (..), MonadError (throwError))
+import Control.Monad.Except (runExceptT, MonadError (throwError))
+import Control.Monad.Trans (MonadTrans(..))
 
 -- ** general methods for surface module
 
