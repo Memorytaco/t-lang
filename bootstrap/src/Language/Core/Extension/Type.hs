@@ -15,17 +15,23 @@ where
 import Data.List (intercalate)
 import Prettyprinter (Pretty (..), (<+>), lparen, rparen, backslash, dot, encloseSep, langle, rangle, comma, colon)
 import Data.Functor ( (<&>) )
+import Data.Bifunctor.TH (deriveBifunctor)
 
 -- | * Binder extension
 
+-- | binder extension wrapper
+
+
 -- | higher kinded type, naming an incompleted type
-newtype Scope b t = Scope (b t) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+data Scope b name t = Scope (b name t) t deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+deriveBifunctor ''Scope
 -- | universal quantified type, using de bruijn indice. this needs help from `name` type
-newtype Forall b a = Forall (b a) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+data Forall b name t = Forall (b name t) t deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+deriveBifunctor ''Forall
 -- | type constraint, a predicate
-newtype Constrain cs a = Constrain (cs a) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
--- | Isomorphic equvilent type
-newtype Equiv hd t = Equiv (hd t) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+newtype Constrain cs t = Constrain (cs t) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
+-- | Isomorphic equvilent type, usually used to denote recursive type.
+newtype Equiv eq t = Equiv (eq t) deriving (Functor, Foldable, Traversable, Show, Eq, Ord)
 
 -- | * Structural type extenstion
 
@@ -44,9 +50,9 @@ instance (Pretty label, Pretty a) => Pretty (Variant label a) where
 instance (Show label, Show a) => Show (Variant label a) where
   show (Variant vs) = "<" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> ">"
 
-instance (forall x. Pretty x => Pretty (b x), Pretty t) => Pretty (Scope b t) where
-  pretty (Scope v) = backslash <> pretty v <> dot
+instance (forall x. Pretty x => Pretty (b name x), Pretty t) => Pretty (Scope b name t) where
+  pretty (Scope v t) = backslash <> pretty v <> dot <> pretty t
 
 
-instance (forall x. Pretty x => Pretty (b x), Pretty t) => Pretty (Forall b t) where
-  pretty (Forall v) = "forall" <+> lparen <> pretty v <> rparen <> dot
+instance (forall x. Pretty x => Pretty (b name x), Pretty t) => Pretty (Forall b name t) where
+  pretty (Forall v t) = "forall" <+> lparen <> pretty v <> rparen <> dot <> pretty t

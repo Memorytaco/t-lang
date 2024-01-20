@@ -1,13 +1,19 @@
-module std/ctype ;;
+/*
+    This is wrapper for common c types.
 
-// cstring, pointer to a sequence of bytes, ended with \0
-data cstr = #[ptr (bit 8)]
-;;
+    Date: 2024/01/11
+*/
+module std/foreign/ctype ;;
 
+// # a phantom data type for representing "void" in c
 data cvoid
 ;;
 
-// a strong typed c pointer
+// # cstring, pointer to a sequence of bytes, ended with \0
+data cstr = #[ptr (bit 8)]
+;;
+
+// # a strong typed c pointer
 data cptr a = #[ptr $(a)]
 ;;
 
@@ -34,10 +40,6 @@ data cuint32 = #[uint32]
 data cuint64 = #[uint64]
 ;;
 
-// c floating
+// floating numbers in c
 data cfloat = #[float]
 ;;
-
-// c struct, allow copy of data.
-// data cstruct (a : nat) = #[a]
-// ;;

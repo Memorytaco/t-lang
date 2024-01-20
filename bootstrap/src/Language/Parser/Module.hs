@@ -19,7 +19,6 @@ import Data.Functor ((<&>))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Control.Monad (void, forM, forM_)
-import Control.Applicative (liftA2)
 
 import Capability.State (HasState, modify)
 

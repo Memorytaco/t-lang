@@ -1,7 +1,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 module Transform.Desugar
-  ( addSugarToType
+  ( pruneForallType
 
   , treeSugarRule
   , runSugarRule
@@ -14,7 +14,7 @@ where
 import Graph.Core
 import Graph.Extension.GraphicType
 
-import Language.Core (Type (..), TypeF (..), type (+>) (..))
+import Language.Core (Type (..), TypeF (..))
 import Language.Core.Extension (Forall (..))
 import Language.Core.Constraint
 import Language.Generic
@@ -23,29 +23,26 @@ import Language.Setting
 import Data.Function (fix)
 import Control.Monad (foldM, forM_)
 
-addSugarToType
+-- FIXME: Add syntactic sugar rule
+pruneForallType
   :: forall name bind rep a
-   . ( Functor rep, Functor bind
-     , Forall (Prefix name) :<: bind
-     , forall x. Eq x => Eq (bind x), forall x. Eq x => Eq (rep x)
+   . ( Functor rep, Functor (bind name)
+     , Forall Prefix :<<: bind
+     , forall x. Eq x => Eq (bind name x), forall x. Eq x => Eq (rep x)
      , Eq name, Eq a
      )
   => Type bind rep name a -> Type bind rep name a
-addSugarToType = cata go
+pruneForallType = cata go
   where
     go TypPhtF = TypPht
     go (TypVarF a) = TypVar a
     go (TypConF a as) = TypCon a as
-    go (TypBndF bnd a) =
-      case prj @(Forall (Prefix name)) bnd >>= withPrefix of
-        Just (_name, typ) -> addSugarToType $ a >>= \case
-          Bind _ -> typ
-          Free t -> t
-        Nothing -> TypBnd bnd a
-      where
-        withPrefix (Forall ((name :: name) :~ typ)) =
-          if typ == TypPht then Nothing else Just (name, typ)
-        withPrefix (Forall (name :> typ)) = if typ == TypPht then Nothing else Just (name, typ)
+    go (TypBndF bnd) =
+      case prjj @(Forall Prefix) bnd of
+        Just (Forall binding a) -> case binding of
+          (name :~ typ) -> pruneForallType @name a
+          (name :> typ) -> pruneForallType @name a
+        Nothing -> TypBnd bnd
     go (TypeF f) = Type f
 
 data SugarRule nodes edges info m a

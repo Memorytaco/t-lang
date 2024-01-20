@@ -17,7 +17,7 @@ module Language.Core
     TypSurface
 
   , TypSurfaceExt
-  , TypSurfaceBExt
+  , TypSurfaceBndExt
 
   -- ** surface lang for pattern
   , PatSurface
@@ -105,11 +105,11 @@ import Data.Text (Text)
 -- ** Surface type
 ------------------
 
-type TypSurface = Type TypSurfaceBExt TypSurfaceExt Name Name
+type TypSurface = Type TypSurfaceBndExt TypSurfaceExt Name Name
 type TypSurfaceExt
   = Tuple :+: Record Label :+: Variant Label
   :+: Ext.Literal Integer :+: Ext.Literal Text :+: Rep
-type TypSurfaceBExt = Forall (Prefix Name) :+: Scope (Prefix Name)
+type TypSurfaceBndExt = Forall Prefix :++: Scope Prefix
 
 ---------------------
 -- ** Surface Pattern

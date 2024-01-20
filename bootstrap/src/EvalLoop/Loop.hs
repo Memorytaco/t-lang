@@ -43,7 +43,7 @@ import qualified Data.ByteString as ByteString
 import Compiler.CodeGen (genExpr)
 import Driver.Compiler.CodeGen.LLVM (runWithDefaultMain)
 import Compiler.TypeChecking (tcExprToSyntacticType)
-import Transform.Desugar (addSugarToType)
+import Transform.Desugar (pruneForallType)
 import Prettyprinter (pretty)
 
 -- | store runtime information for repl
@@ -144,7 +144,7 @@ repl'loop = do
                     Left err -> liftInput $ outputStrLn $ show err
                     Right (t, _) -> liftInput do
                       if withSugar
-                      then outputStrLn $ show $ pretty $ addSugarToType t
+                      then outputStrLn $ show $ pretty $ pruneForallType t
                       else outputStrLn $ show $ pretty t
                 RLoadObject _ -> undefined
                 RLoadShared _ -> undefined

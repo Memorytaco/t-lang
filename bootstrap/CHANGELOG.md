@@ -1,4 +1,4 @@
-# Changelog for `t-lang`
+# Changelog for yo-lang bootstrap compiler
 
 All notable changes to this project will be documented in this file.
 
@@ -8,4 +8,20 @@ and this project adheres to the
 
 ## Unreleased
 
-## 0.1.0.0 - YYYY-MM-DD
+## [0.1.0.0] - 2024-01-01
+
+### Added
+
+#### dependencies
+
+- linear-base
+  > used for supporting efficient implementation of algebraic graph
+
+### Removed
+
+- Tlang directory
+- Remove unnecessary nested deBruign type in Type.hs and replace it with a bifunctor
+
+### Plan
+- Refactor Parser for better error message and flexibility
+- Refactor implementation of algebraic graph

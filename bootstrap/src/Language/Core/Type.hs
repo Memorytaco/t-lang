@@ -14,47 +14,46 @@ import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
 import Tlang.TH (fixQ)
 import Language.Core.Utility
-import Prettyprinter (Pretty (..), (<+>), parens, hsep)
+import Prettyprinter (Pretty (..), parens, hsep)
+
+import qualified Data.Kind as T (Type)
 
 -- | type representation. parameterised with some extensions.
--- please refer to `Tlang.Extension.Type` for all available options.
+-- please refer to `Language.Core.Extension.Type` for all available options.
+type Type :: (T.Type -> T.Type -> T.Type) -> (T.Type -> T.Type) -> T.Type -> T.Type -> T.Type
 data Type bind rep name a where
   -- | empty type (bottom type) or "forall a. a" type
   TypPht :: Type bind rep name a
   -- | refer to named type or type variable
   TypVar :: a -> Type bind rep name a
-  -- | type application or type prmtructor
+  -- | type application or type constructor
   TypCon :: Type bind rep name a -> [Type bind rep name a] -> Type bind rep name a
-  -- | a uniform way to represent arbitrary binding logic
-  TypBnd :: bind (Type bind rep name a)
-         -> Type bind rep name (name +> Type bind rep name a)
-         -> Type bind rep name a
+  -- | a uniform way to represent arbitrary binding logic.
+  --   a binder is a bifunctor.
+  TypBnd :: bind name (Type bind rep name a) -> Type bind rep name a
   -- | Allow artibrary injection, to provide further information of syntax tree. e.g. literal, kind annotation
   Type :: rep (Type bind rep name a) -> Type bind rep name a
   deriving (Functor, Foldable, Traversable)
 $(deriveBifunctor ''Type)
 
-instance (Functor bind, Functor rep) => Applicative (Type bind rep name) where
+instance (Functor (bind name), Functor rep) => Applicative (Type bind rep name) where
   pure = TypVar
   TypPht <*> _ = TypPht
   TypVar f <*> a = f <$> a
   TypCon f fs <*> a = TypCon (f <*> a) ((<*> a) <$> fs)
-  TypBnd fbnd fbod <*> x = TypBnd ((<*> x) <$> fbnd) (lift <$> fbod)
-    where lift = fmap (<*> x)
+  TypBnd fbnd <*> x = TypBnd ((<*> x) <$> fbnd)
   Type f <*> a = Type $ (<*> a) <$> f
 
-instance (Functor bind, Functor rep) => Monad (Type bind rep name) where
+instance (Functor (bind name), Functor rep) => Monad (Type bind rep name) where
   TypPht >>= _ = TypPht
   TypVar v >>= f = f v
   TypCon m ms >>= f = TypCon (m >>= f) ((>>= f) <$> ms)
-  TypBnd fa m >>= f =
-    let g = fmap (>>= f)
-     in TypBnd ((>>= f) <$> fa) (g <$> m)
+  TypBnd fa >>= f = TypBnd ((>>= f) <$> fa)
   Type fa >>= f = Type ((>>= f) <$> fa)
 
-deriving instance (Eq a, Eq name, forall x. Eq x => Eq (bind x), forall x. Eq x => Eq (rep x)) => Eq (Type bind rep name a)
+deriving instance (Eq a, Eq name, forall x. Eq x => Eq (bind name x), forall x. Eq x => Eq (rep x)) => Eq (Type bind rep name a)
 deriving instance ( Ord a, Ord name
-                  , forall x. Eq x => Eq (bind x), forall x. Ord x => Ord (bind x)
+                  , forall x. Eq x => Eq (bind name x), forall x. Ord x => Ord (bind name x)
                   , forall x. Eq x => Eq (rep x), forall x. Ord x => Ord (rep x)
                   )
                   => Ord (Type bind rep name a)
@@ -62,17 +61,16 @@ deriving instance ( Ord a, Ord name
 instance
   ( Show a, Show name, Show (a +> name)
   , forall x. Show x => Show (rep x)
-  , forall x. Show x => Show (bind x)
-  , Show (bind (Type bind rep name a))
+  , forall x. Show x => Show (bind name x)
   ) => Show (Type bind rep name a) where
   show TypPht = "⊥"
   show (TypVar name) = show name
-  show (TypBnd binder body) = "Bind { " <> show binder <> " = " <> show body <> " }"
+  show (TypBnd binder) = show binder
   show (TypCon t ts) = "(" <> show t <> " " <> show ts <> ")"
   show (Type t) = show t
 
 instance
-  ( forall x. Pretty x => Pretty (bind x)
+  ( forall x. Pretty x => Pretty (bind name x)
   , forall x. Pretty x => Pretty (rep x)
   , Pretty name, Pretty a
   )
@@ -81,7 +79,7 @@ instance
   pretty (TypCon t ts) =
     parens $ pretty t <>
     if null ts then "" else " " <> hsep (pretty <$> ts)
-  pretty (TypBnd binder body) = pretty binder <+> pretty body
+  pretty (TypBnd binder) = pretty binder
   pretty (TypVar name) = pretty name
   pretty (Type t) = pretty t
 
@@ -131,8 +129,8 @@ instance (Show info, Show a, forall x. Show x => Show (f x)) => Show (Kind f inf
   show (Kind anno) = show anno
 
 makeBaseFunctor $ fixQ [d|
-  instance (Functor rep, Functor bind) => Recursive (Type bind rep name a)
+  instance (Functor rep, Functor (bind name)) => Recursive (Type bind rep name a)
   instance (Functor f) => Recursive (Kind f info a)
   |]
-deriving instance (Show name, Show a, Show r, forall x. Show x => Show (rep x), forall x. Show x => Show (bind x))
+deriving instance (Show name, Show a, Show r, forall x. Show x => Show (rep x), forall x. Show x => Show (bind name x))
   => Show (TypeF bind rep name a r)

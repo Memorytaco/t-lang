@@ -67,17 +67,6 @@ deriving instance (Show (e (Hole e a)), Show a) => Show (Hole e a)
 deriving instance (Eq (e (Hole e a)), Eq a) => Eq (Hole e a)
 deriving instance (Ord (e (Hole e a)), Ord a) => Ord (Hole e a)
 
--- ** core structure and method for graph unification
-
--- | TODO: use this implementation as default algebraic graph
-data Graph e a
-  = Empty
-  | Vertex a
-  | Connect e (Graph e a) (Graph e a)
-  deriving (Show, Eq, Ord, Functor)
-deriveBifunctor ''Graph
-makeBaseFunctor ''Graph
-
 -- | core structure for graphic representation of syntactic type
 type CoreG nodes edges info = Algebra.Graph (Set.Set (Link edges)) (Hole nodes info)
 

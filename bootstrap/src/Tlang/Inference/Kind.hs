@@ -117,7 +117,7 @@ genConstraint
      , HasReader "env" [Kind f String solved @: name] m -- name with solved kind, kind should be closed
      , HasReader "local" [Kind f String String @: name] m -- local bound
      , HasState "constraint" [Kind f String String :<> Kind f String String] m -- generated constraint
-     , Functor f, Functor rep, Functor bind
+     , Functor f, Functor rep, Functor (bind name)
      )
   => Type bind rep name a
   -> m (AnnotatedType bind rep (Kind f String String @: name) a (Kind f String String))

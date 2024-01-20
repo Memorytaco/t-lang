@@ -21,7 +21,7 @@ import Data.List (find)
 import Data.Functor (($>), (<&>))
 import qualified Data.Kind as Kind (Type)
 import Text.Megaparsec hiding (Label)
-import Language.Generic ((:<:), inj)
+import Language.Generic ((:<:), (:<<:), inj, injj)
 import Language.Core.Extension
   ( Tuple (..), Forall (..), Variant (..), Record (..)
   , Scope (..), Literal (..)
@@ -175,35 +175,29 @@ instance (TypeC e m, Rep.Rep :<: rep)
       lft = symbol "$" *> parens (parser (lookAhead $ symbol ")" $> ()) Go) <&> Rep.Embed . Rep.DataRep
 
 -- | `Forall` quantified type
-instance (TypeC e m, (Forall (Prefix Name)) :<: bind, a ~ Name, name ~ Name, Functor rep, Functor bind)
+instance (TypeC e m, Forall Prefix :<<: bind, a ~ Name, name ~ Name)
   => PrattToken (WithType e m "forall") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
-        bound = (\a -> (a, a :> TypPht)) <$> name <|> parens do
+        bound = (:> TypPht) <$> name <|> parens do
           name' <- name
           op <- reservedOp "~" $> (:>) <|> reservedOp "=" $> (:~)
-          bnd <- op name' <$> parser (lookAhead $ reservedOp ")" $> ()) Go
-          return (name', bnd)
+          op name' <$> parser (lookAhead $ reservedOp ")" $> ()) Go
     bounds <- reserved "forall" *> bound `someTill` reservedOp "."
     body <- parser end Go
-    return . literal $ foldr addIndex body bounds
+    return . literal $ foldr collect body bounds
     where
-      addIndex (name, bound) typ = TypBnd (inj @(Forall (Prefix Name)) @bind $ Forall bound) (lift name typ)
+      collect bound typ = TypBnd (injj @(Forall Prefix) @bind $ Forall bound typ)
 
 -- | `Scope` quantified type
-instance (TypeC e m, (Scope (Prefix Name)) :<: bind, name ~ Name, a ~ Name, Functor rep, Functor bind)
+instance (TypeC e m, Scope Prefix :<<: bind, name ~ Name, a ~ Name)
   => PrattToken (WithType e m "abstract") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
-        bound = do
-          name' <- name
-          return (name', name' :> TypPht)
+        bound = (:> TypPht) <$> name
     bounds <- reservedOp "\\" *> bound `someTill` reservedOp "."
     body <- parser end Go
-    return . literal $ foldr addIndex body bounds
+    return . literal $ foldr collect body bounds
     where
       -- addIndex :: Scope b :<: bind => (name, b name) -> Type bind rep name a
-      addIndex (name, bound) typ = TypBnd (inj @(Scope (Prefix Name)) @bind $ Scope bound) (lift name typ)
-
-lift :: (Eq a, Monad m, Functor f) => a -> f a -> f (a +> m a)
-lift name = fmap \a -> if name == a then Bind a else Free (return a)
+      collect bound typ = TypBnd (injj @(Scope Prefix) @bind $ Scope bound typ)

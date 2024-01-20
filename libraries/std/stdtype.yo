@@ -1,8 +1,6 @@
 module std/type
 ;;
 
-use std;;
-
 // optional data defintion
 data optional a
 | none
@@ -29,7 +27,10 @@ data list a
 | cons a (list a)
 ;;
 
-// a string piece
+// a string piece, internal represented as
+// an anonymous struct with fixed size.
 data str = #[{uint32, ptr (bit 8)}]
 ;;
 
+data int = #[int32]
+;;

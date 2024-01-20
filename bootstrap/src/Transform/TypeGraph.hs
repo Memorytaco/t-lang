@@ -14,6 +14,7 @@ module Transform.TypeGraph
   , FoldTypeGraph (..)
   -- ** companion type family for extending environment
   , ConstrainGraph
+  , ConstrainBinderGraph
 
   , TypeContext
   , HasTypeContext
@@ -28,7 +29,7 @@ where
 import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Core.Extension
-import Language.Generic ((:+:) (..), (:<:))
+import Language.Generic ((:+:) (..), (:<:), (:++:))
 import Tlang.Rep (Rep (..))
 import Language.Setting (HasNodeCreator, node)
 
@@ -45,18 +46,20 @@ import Language.Core (type (+>) (..), Prefix (..))
 -- ** for signature
 import Data.Kind (Constraint, Type)
 import Capability.Error
+import Language.Generic.Data ((:++:)(..))
 
 -- ** definition for handler
 
 type ConstrainGraph :: (Type -> Type) -> (Type -> Type) -> (Type -> Type) -> Type -> (Type -> Type) -> Constraint
 type family ConstrainGraph source nodes edges info m :: Constraint
+type ConstrainBinderGraph :: (Type -> Type -> Type) -> Type -> (Type -> Type) -> (Type -> Type) -> Type -> (Type -> Type) -> Constraint
+type family ConstrainBinderGraph source name nodes edges info m :: Constraint
 
 -- | for handling binder structure
-class FoldBinderTypeGraph binder info | binder -> info where
+class FoldBinderTypeGraph binder name info | binder name -> info where
   foldBinderTypeGraph
-    :: ConstrainGraph binder nodes edges info m
-    => binder (m (Hole nodes info, CoreG nodes edges info))
-    -> m (Hole nodes info, CoreG nodes edges info)
+    :: ConstrainBinderGraph binder name nodes edges info m
+    => binder name (m (Hole nodes info, CoreG nodes edges info))
     -> m (Hole nodes info, CoreG nodes edges info)
 
 -- | for handling representation, type constructor
@@ -67,12 +70,14 @@ class FoldTypeGraph f info | f -> info where
     -> m (Hole nodes info, CoreG nodes edges info)
 
 -- ** definition for `:+:`
+type instance ConstrainBinderGraph (f :++: g) name nodes edges info m
+  = (ConstrainBinderGraph f name nodes edges info m, ConstrainBinderGraph g name nodes edges info m)
 type instance ConstrainGraph (f :+: g) nodes edges info m
   = (ConstrainGraph f nodes edges info m, ConstrainGraph g nodes edges info m)
 
-instance (FoldBinderTypeGraph f info, FoldBinderTypeGraph g info) => FoldBinderTypeGraph (f :+: g) info where
-  foldBinderTypeGraph (Inl v) = foldBinderTypeGraph v
-  foldBinderTypeGraph (Inr v) = foldBinderTypeGraph v
+instance (FoldBinderTypeGraph f name info, FoldBinderTypeGraph g name info) => FoldBinderTypeGraph (f :++: g) name info where
+  foldBinderTypeGraph (Inll v) = foldBinderTypeGraph v
+  foldBinderTypeGraph (Inrr v) = foldBinderTypeGraph v
 instance (FoldTypeGraph f info, FoldTypeGraph g info) => FoldTypeGraph (f :+: g) info where
   foldTypeGraph (Inl v) = foldTypeGraph v
   foldTypeGraph (Inr v) = foldTypeGraph v
@@ -161,13 +166,13 @@ moveBindingEdge from to g = foldl move g $ lTo @(T (Binding name)) (== from) g
 
 type instance ConstrainGraph (Type.Type bind f name) nodes edges info m =
   ( FoldTypeGraph f info, ConstrainGraph f nodes edges info m
-  , FoldBinderTypeGraph bind info, ConstrainGraph bind nodes edges info m
+  , FoldBinderTypeGraph bind name info, ConstrainBinderGraph bind name nodes edges info m
   , HasTypeContext name nodes edges info m
   , HasNodeCreator m
   , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
   , Ord (edges (Link edges))
   , HasToGraphicTypeErr name m
-  , Eq name, Functor f, Functor bind
+  , Eq name, Functor f, Functor (bind name)
   )
 instance FoldTypeGraph (Type.Type bind f name) Int where
   foldTypeGraph = cata go
@@ -181,9 +186,10 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
         gs <- forM (zip [1..len] ns) \(i, (sub, subg)) ->
           return $ (top -<< T (Sub i) >>- sub) <> subg
         return (top, overlays gs)
-      go (Type.TypBndF binder fv) = foldBinderTypeGraph binder . foldTypeGraph $ fv <&> \case
-        Bind name -> lookupLocalName name
-        Free m -> m
+      go (Type.TypBndF binder) = foldBinderTypeGraph binder
+      --  <&> \case
+      --   Bind name -> lookupLocalName name
+      --   Free m -> m
       go (Type.TypeF v) = foldTypeGraph v
 
 
@@ -192,11 +198,11 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
 toGraph
   :: ( HasNodeCreator m
      , HasTypeContext name nodes edges Int m
-     , FoldBinderTypeGraph bind Int, ConstrainGraph bind nodes edges Int m
+     , FoldBinderTypeGraph bind name Int, ConstrainBinderGraph bind name nodes edges Int m
      , FoldTypeGraph f Int, ConstrainGraph f nodes edges Int m
      , Eq name
      , Ord (edges (Link edges))
-     , Functor bind, Functor f
+     , Functor (bind name), Functor f
      , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
      , HasToGraphicTypeErr name m
      )
@@ -207,24 +213,24 @@ toGraph lookupGlobal = foldTypeGraph . fmap (lookupFreeName lookupGlobal)
 
 -- *** handle binders
 
-type instance ConstrainGraph (Prefix name) nodes edges info m
+type instance ConstrainBinderGraph Prefix name nodes edges info m
   = ( HasOrderGraph nodes edges info
     , T (Binding name) :<: edges, T Sub :<: edges
     , NodePht :<: nodes
     , HasNodeCreator m
     , HasTypeContext name nodes edges info m
     )
--- | handle binder
-instance FoldBinderTypeGraph (Prefix name) Int where
-  foldBinderTypeGraph bounds mbody = do
-    -- fetch relevant binding name, its bounded type and permission
+type instance ConstrainBinderGraph (Forall Prefix) name nodes edges info m = ConstrainBinderGraph Prefix name nodes edges info m
+-- | handle `Forall` binder
+instance FoldBinderTypeGraph (Forall Prefix) name Int where
+  foldBinderTypeGraph (Forall bounds mbody) = do
     (name, mbound, flag) <- case bounds of
       name :~ mbound -> return (name, mbound, Rigid)
       name :> mbound -> return (name, mbound, Flexible)
     -- convert bounds first
-    a@(var, bbody) <- mbound
+    binding@(var, bbody) <- mbound
     -- convert type body
-    (root, body) <- appendContext [(Bind name, a)] mbody
+    (root, body) <- appendContext [(Bind name, binding)] mbody
     -- check whether the body is merely bounded type nodes, if so there
     -- may exist a loop via binding edge, and a phantom node needs to be put here
     -- to remove the self binding loop
@@ -236,14 +242,10 @@ instance FoldBinderTypeGraph (Prefix name) Int where
                             , pht -<< T (Sub 1) >>- root])
     else return (root, overlays [shiftBindingEdge @name root body, bbody, var -<< T (Binding flag 1 (Just name)) >>- root])
 
-type instance ConstrainGraph (Forall f) nodes edges info m = ConstrainGraph f nodes edges info m
--- | handle `Forall` binder
-instance FoldBinderTypeGraph f Int => FoldBinderTypeGraph (Forall f) Int where
-  foldBinderTypeGraph (Forall v) = foldBinderTypeGraph v
-type instance ConstrainGraph (Scope f) nodes edges info m = ConstrainGraph f nodes edges info m
+type instance ConstrainBinderGraph (Scope Prefix) name nodes edges info m = ConstrainBinderGraph Prefix name nodes edges info m
 -- | handle `Scope` binder
-instance FoldBinderTypeGraph f Int => FoldBinderTypeGraph (Scope f) Int where
-  foldBinderTypeGraph (Scope v) = foldBinderTypeGraph v
+instance FoldBinderTypeGraph (Scope Prefix) name Int where
+  foldBinderTypeGraph (Scope _v _mt) = error "Not implemented, Type system doesn't support type level lambda"
 
 -- *** handle literals
 

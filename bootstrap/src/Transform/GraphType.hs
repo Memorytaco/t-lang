@@ -36,7 +36,7 @@ import Language.Core.Extension
 
 import Graph.Core
 import Graph.Extension.GraphicType
-import Language.Generic ((:<:), inj, prj, Recursion (..))
+import Language.Generic ((:<:), inj, prj, Recursion (..), (:<<:), injj)
 import Language.Setting ( asksGraph, HasGraphReader )
 
 import Capability.Reader (HasReader, ask, asks, local)
@@ -128,8 +128,8 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , HasReader "scheme" (Maybe a -> m a) m
   , T (Binding a) :<: edges
   , Ord a
-  , Forall (Prefix a) :<: bind
-  , Functor rep, Functor bind
+  , Forall Prefix :<<: bind
+  , Functor rep, Functor (bind name)
   , HasOrderGraph nodes edges info
   )
 
@@ -144,17 +144,12 @@ withBinding restore root m = do
   body <- local @"local" ((snd <$> localBinds) <>) m
   bindings <- forM localBinds \(flag, (node, name)) -> do
     typ <- restore node
-    case flag of
-      Rigid -> return (name, name :~ typ)
-      Flexible -> return (name, name :> typ)
-      Explicit -> return (name, name :> typ)
-  let shift val term = do
-        var <- term
-        if var == val
-           then return (Bind var)
-           else return . Free $ return var
+    return case flag of
+      Rigid -> name :~ typ
+      Flexible -> name :> typ
+      Explicit -> name :> typ
   -- return the final type
-  return $ foldr (\(name, bnd) bod -> TypBnd (inj $ Forall bnd) $ shift name bod) body bindings
+  return $ foldr (\bnd bod -> TypBnd (injj $ Forall bnd bod)) body bindings
 
 
 -- | RULE: T NodeTup

@@ -10,7 +10,7 @@ module Driver.Transform.TypeGraph
 where
 
 import Transform.TypeGraph
-  (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph, TypeContext, ToGraphicTypeErr (..), TypeContextTable)
+  (toGraph, ConstrainGraph, FoldBinderTypeGraph, FoldTypeGraph, TypeContext, ToGraphicTypeErr (..), TypeContextTable, ConstrainBinderGraph)
 import Language.Core (Type, type (+>) (Free))
 import Graph.Extension.GraphicType
 import Graph.Core (CoreG, Hole, HasOrderEdge, Graph (..), overlays, (-<<), (>>-))
@@ -47,11 +47,11 @@ newtype ToGraphicType name nodes edges m a = TypeToGraphM
 
 -- | actual driver to start the engine, and it allows monad transform
 toGraphicType
-  :: ( ConstrainGraph bind nodes edges Int (ToGraphicType name nodes edges m)
+  :: ( ConstrainBinderGraph bind name nodes edges Int (ToGraphicType name nodes edges m)
      , ConstrainGraph rep nodes edges Int (ToGraphicType name nodes edges m)
-     , FoldBinderTypeGraph bind Int, FoldTypeGraph rep Int
+     , FoldBinderTypeGraph bind name Int, FoldTypeGraph rep Int
      , HasOrderEdge edges
-     , Functor bind, Functor rep
+     , Functor (bind name), Functor rep
      , T NodeBot :<: nodes
      , T NodeApp :<: nodes, T Sub :<: edges
      , Eq name, Monad m
@@ -64,11 +64,11 @@ toGraphicType lookupGlobal r seed t = runExceptT $ runStateT (runReaderT (runTyp
 
 -- | `toGraphicType` with mocked global type definition
 toGraphicTypeConstraintMock
-  :: ( ConstrainGraph bind nodes edges Int (ToGraphicType name nodes edges m)
+  :: ( ConstrainBinderGraph bind name nodes edges Int (ToGraphicType name nodes edges m)
      , ConstrainGraph rep nodes edges Int (ToGraphicType name nodes edges m)
-     , FoldBinderTypeGraph bind Int, FoldTypeGraph rep Int
+     , FoldBinderTypeGraph bind name Int, FoldTypeGraph rep Int
      , HasOrderEdge edges
-     , Functor bind, Functor rep
+     , Functor (bind name), Functor rep
      , nodes :>+: '[T NodeBot, T NodeApp, T NodeArr, T (NodeRef name), G]
      , edges :>+: '[T Sub, T (Binding name)]
      , Eq name, IsString name, Monad m
@@ -79,11 +79,11 @@ toGraphicTypeConstraintMock
 toGraphicTypeConstraintMock = toGraphicType mockGlobalConstraint
 
 toGraphicTypeMock
-  :: ( ConstrainGraph bind nodes edges Int (ToGraphicType name nodes edges m)
+  :: ( ConstrainBinderGraph bind name nodes edges Int (ToGraphicType name nodes edges m)
      , ConstrainGraph rep nodes edges Int (ToGraphicType name nodes edges m)
-     , FoldBinderTypeGraph bind Int, FoldTypeGraph rep Int
+     , FoldBinderTypeGraph bind name Int, FoldTypeGraph rep Int
      , HasOrderEdge edges
-     , Functor bind, Functor rep
+     , Functor (bind name), Functor rep
      , nodes :>+: '[T NodeBot, T NodeApp, T NodeArr, T (NodeRef name)]
      , T Sub :<: edges
      , Eq name, IsString name, Monad m

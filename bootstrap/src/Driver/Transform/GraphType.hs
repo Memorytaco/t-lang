@@ -14,7 +14,7 @@ where
 import Transform.GraphType
 import Language.Core (Type, Label)
 import Language.Core.Extension
-import Language.Generic ((:>+:))
+import Language.Generic ((:>+:), (:>>+:))
 import Language.Core.Constraint
 import Language.Setting
 import Graph.Extension.GraphicType
@@ -76,8 +76,8 @@ syntacticType
      , nodes :>+: '[T (NodeHas Label), T NodeRec, T NodeSum, T NodeApp, NodePht, T NodeBot]
      , edges :>+: '[T Sub, T (Binding name)]
      , rep :>+: '[Tuple, Literal Integer, Literal Text, Record Label, Variant Label]
-     , bind :>+: '[Forall (Prefix name)]
-     , Functor rep, Functor bind
+     , bind :>>+: '[Forall Prefix]
+     , Functor rep, Functor (bind name)
      , HasOrderGraph nodes edges Int, Ord name, IsString name
      , Monad m
      )

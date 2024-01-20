@@ -1,6 +1,6 @@
-name:                t-lang
+name:                bootstrap
 version:             0.1.0.0
-github:              "memorytaco/t-lang"
+github:              "memorytaco/yo/bootstrap"
 license:             BSD3
 author:              "dunor"
 maintainer:          "dunor@dunor.dev"
@@ -11,9 +11,9 @@ extra-source-files:
 - CHANGELOG.md
 
 # Metadata used when publishing your package
-synopsis:            Compiler implementation of t-lang in Haskell.
+synopsis:            Compiler implementation of bootstrap compiler in Haskell.
 category:            Programming Language (PL)
-description:         Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
+description:         Please see the README on GitHub at <https://github.com/memorytaco/yo/bootstrap#readme>
 
 dependencies:
 - base >= 4.9 && < 5
@@ -94,7 +94,7 @@ library:
   source-dirs: src
 
 executables:
-  t-lang-exe:
+  yo:
     main:                Main.hs
     source-dirs:         app
     ghc-options:
@@ -102,10 +102,10 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - t-lang
+    - bootstrap
 
 tests:
-  t-lang-test:
+  bootstrap-test:
     main:                Spec.hs
     source-dirs:         test
     ghc-options:
@@ -113,4 +113,4 @@ tests:
     - -rtsopts
     - -with-rtsopts=-N
     dependencies:
-    - t-lang
+    - bootstrap

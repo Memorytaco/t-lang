@@ -64,14 +64,14 @@ instance LowerType (Variant label) (Rep a) where
   type LowerTypeContext (Variant label) (Rep a) m = Monad m
   lowerType (Variant _ms) = error "Lowering variant types is not implemented"
 
-instance (Functor rep, Functor bind, LowerType rep (Rep a)) => LowerType (AST.Type bind rep name) (Rep a) where
-  type LowerTypeContext (AST.Type bind rep name) (Rep a) m = (LowerTypeContext rep (Rep a) m, MonadFail m)
+instance (Functor rep, Functor (bind name), LowerType (bind name) (Rep a), LowerType rep (Rep a)) => LowerType (AST.Type bind rep name) (Rep a) where
+  type LowerTypeContext (AST.Type bind rep name) (Rep a) m = (LowerTypeContext rep (Rep a) m, LowerTypeContext (bind name) (Rep a) m, MonadFail m)
   lowerType = cata go
     where
       go TypPhtF = fail "Invalid Bottom ecountered during lowering type"
       go (TypVarF ma) = ma
       go (TypConF _ _) = fail "Invalid Type Application ecountered during lowering type"
-      go (TypBndF _ _) = fail "Invalid Type Bounds ecountered during lowering type"
+      go (TypBndF ma) = lowerType ma
       go (TypeF rma) = lowerType rma
 
 instance (LowerType f (Rep a), LowerType g (Rep a)) => LowerType (f :+: g) (Rep a) where
@@ -179,7 +179,7 @@ instance LowerType SeqT LLVM.Type where
 
 -- | partially lowering type
 lowerTypeRepPartial
-  :: (f :<: rep, Traversable bind, Traversable rep, Monad m)
+  :: (f :<: rep, Traversable (bind name), Traversable rep, Monad m)
   => (forall x. f (m (AST.Type bind rep name x)) -> m (AST.Type bind rep name x))
   -> AST.Type bind rep name a -> m (AST.Type bind rep name a)
 lowerTypeRepPartial handle = cata go
@@ -187,18 +187,14 @@ lowerTypeRepPartial handle = cata go
     go TypPhtF = return TypPht
     go (TypVarF a) = return $ TypVar a
     go (TypConF m ms) = TypCon <$> m <*> sequence ms
-    go (TypBndF fbind f) = do
-      bodym <- lowerTypeRepPartial handle f
-      body <- sequence $ bodym <&> sequence
-      bind <- sequence fbind
-      return $ TypBnd bind body
+    go (TypBndF fbind) = TypBnd <$> sequence fbind
     go (TypeF rma) =
       case prj rma of
         Just v -> handle v
         Nothing -> AST.Type . inj <$> sequence rma
 
 lowerTypeRep
-  :: (f :~: (h :+: g), Rep :<: g, Traversable g, Functor f, Traversable bind, Monad m)
+  :: (f :~: (h :+: g), Traversable g, Functor f, Traversable (bind name), Monad m)
   => (forall x. h (m (AST.Type bind g name x)) -> m (AST.Type bind g name x))
   -> AST.Type bind f name a -> m (AST.Type bind g name a)
 lowerTypeRep handle = cata go
@@ -206,19 +202,15 @@ lowerTypeRep handle = cata go
     go TypPhtF = return TypPht
     go (TypVarF a) = return $ TypVar a
     go (TypConF m ms) = TypCon <$> m <*> sequence ms
-    go (TypBndF fbind f) = do
-      bodym <- lowerTypeRep handle f
-      body <- sequence $ bodym <&> sequence
-      bind <- sequence fbind
-      return $ TypBnd bind body
-    go (TypeF rma) = match2 handle (fmap AST.Type . sequence) rma
+    go (TypBndF fbind) = TypBnd <$> sequence fbind
+    go (TypeF rma) = split handle (fmap AST.Type . sequence) rma
 
-lowerTuple :: (f :~: (Tuple :+: g), Rep :<: g, Traversable g, Functor f, Traversable bind, Monad m)
+lowerTuple :: (f :~: (Tuple :+: g), Rep :<: g, Traversable g, Functor f, Traversable (bind name), Monad m)
            => AST.Type bind f name a -> m (AST.Type bind g name a)
 lowerTuple = lowerTypeRep \(Tuple ms) -> forM ms (Embed . DataRep <$>) <&> AST.Type . inj . Rep . RepLift . struct False
 
 lowerRecord
-  :: (f :~: (Record Label :+: g), Rep :<: g, Traversable g, Functor f, Traversable bind, Monad m)
+  :: (f :~: (Record Label :+: g), Rep :<: g, Traversable g, Functor f, Traversable (bind name), Monad m)
   => AST.Type bind f name a -> m (AST.Type bind g name a)
 lowerRecord = lowerTypeRep \(Record (ms :: [(Label, m (AST.Type bind g name a))])) ->
   forM (fmap sequence ms) (Embed . DataRep . snd <$>) <&> AST.Type . inj . Rep . RepLift . struct False

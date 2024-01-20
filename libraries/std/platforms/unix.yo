@@ -1,0 +1,25 @@
+/*
+    # unix related system definition.
+
+    Date: 2024/01/11
+*/
+module std/platforms/unix
+;;
+
+use root:std { ctype, type };;
+use module ctype (cstr, cptr, cint);;
+use module type (str);;
+
+/*
+    # file descriptor
+    
+    a file descriptor is a standard cint.
+*/
+data fd = cint
+;;
+
+type handle = fd
+;;
+
+foreign [name "open"] open: str -> handle
+;;

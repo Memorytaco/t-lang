@@ -7,16 +7,19 @@ module Language.Generic.Subsume
   (
 
   -- ** operators
-    inj, prj, match2
+    inj, prj, split
+  , injj, prjj, bisplit
 
   -- ** type constraint
   , (:<:), (:~:)
   , (:>+:)
 
+  , (:<<:), (:~~:)
+  , (:>>+:)
   )
 where
 
-import Language.Generic.Data ( type (:+:)(..) )
+import Language.Generic.Data ( type (:+:) (..), type (:++:) (..) )
 import GHC.TypeLits (ErrorMessage (..), TypeError)
 
 import Data.Kind (Type, Constraint)
@@ -123,10 +126,77 @@ inj = inj' (Proxy @(Elem f g))
 -- | projector
 prj :: forall f g a. (f :<: g) => g a -> Maybe (f a)
 prj = prj' (Proxy @(Elem f g))
+
 -- | matcher
-match2 :: (f :~: (l :+: r)) => (l a -> b) -> (r a -> b) -> f a -> b
-match2 l r x =
+split :: (f :~: (l :+: r)) => (l a -> b) -> (r a -> b) -> f a -> b
+split l r x =
   case inj x of
     Inl y -> l y
     Inr y -> r y
 
+-- | * Bisubsume definition
+
+type family Elem2 (f :: Type -> Type -> Type) (g :: Type -> Type -> Type) :: Result where
+  Elem2 f f = 'Found 'Here
+  Elem2 (l :++: r) g = Dive (Elem2 l g) (Elem2 r g)
+  Elem2 f (l :++: r) = Choose (Elem2 f l) (Elem2 f r)
+  Elem2 f g = 'NotFound
+
+class Subsume2 (evi :: Result) (f :: Type -> Type -> Type) (g :: Type -> Type -> Type) where
+  injj' :: Proxy evi -> f b a -> g b a
+  prjj' :: Proxy evi -> g b a -> Maybe (f b a)
+instance Subsume2 ('Found 'Here) f f where
+  injj' _ = id
+  prjj' _ = Just
+instance Subsume2 ('Found p) f l => Subsume2 ('Found ('TurnLeft p)) f (l :++: r) where
+  injj' _ = Inll . injj' (Proxy @('Found p))
+  prjj' _ (Inll x) = prjj' (Proxy @('Found p)) x
+  prjj' _ _ = Nothing
+instance Subsume2 ('Found p) f r => Subsume2 ('Found ('TurnRight p)) f (l :++: r) where
+  injj' _ = Inrr . injj' (Proxy @('Found p))
+  prjj' _ (Inrr x) = prjj' (Proxy @('Found p)) x
+  prjj' _ _ = Nothing
+instance (Subsume2 ('Found tol) l g, Subsume2 ('Found tor) r g)
+  => Subsume2 ('Found ('Structure tol tor)) (l :++: r) g where
+    injj' _ (Inll x) = injj' (Proxy @('Found tol)) x
+    injj' _ (Inrr x) = injj' (Proxy @('Found tor)) x
+    prjj' _ x = Inll <$> prjj' (Proxy @('Found tol)) x
+           <|> Inrr <$> prjj' (Proxy @('Found tor)) x
+
+type family Dup2 (f :: Type -> Type -> Type) (l :: [Type -> Type -> Type]) :: Bool where
+  Dup2 (f :++: g) l = Dup2 f (g ': l)
+  Dup2 f l = Or (Find2 f l) (Dup2' l)
+type family Dup2' (l :: [Type -> Type -> Type]) :: Bool where
+  Dup2' (f ': l) = Or (Dup2 f l) (Dup2' l)
+  Dup2' '[] = 'False
+type family Find2 (f :: Type -> Type -> Type) (l :: [Type -> Type -> Type]) :: Bool where
+  Find2 f (g ': l) = Or (Find2' f g) (Find2 f l)
+  Find2 f '[] = 'False
+type family Find2' (f :: Type -> Type -> Type) (g :: Type -> Type -> Type) :: Bool where
+  Find2' f (l :++: r) = Or (Find2' f l) (Find2' f r)
+  Find2' f f = 'True
+  Find2' f g = 'False
+
+class NoDup2 (f :: Type -> Type -> Type) (a :: Bool)
+instance (TypeError ('Text "The Following Type:" ':$$: ('Text "  " ':<>: 'ShowType f) ':$$: 'Text "Contains duplication"))
+  => NoDup2 f 'True
+instance NoDup2 f 'False
+
+type f :<<: g = (Subsume2 (Elem2 f g) f g, NoDup2 f (Dup2 f '[]), NoDup2 g (Dup2 g '[]))
+type f :~~: g = (f :<<: g, g :<<: f)
+type family (:>>+:) (sup :: Type -> Type -> Type) (subs :: [Type -> Type -> Type]) :: Constraint where
+  sup :>>+: (a ': as) = (a :<<: sup, sup :>>+: as)
+  sup :>>+: '[] = ()
+
+-- | injector
+injj :: forall f g b a. (f :<<: g) => f b a -> g b a
+injj = injj' (Proxy @(Elem2 f g))
+-- | projector
+prjj :: forall f g b a. (f :<<: g) => g b a -> Maybe (f b a)
+prjj = prjj' (Proxy @(Elem2 f g))
+-- | matcher
+bisplit :: (f :~~: (l :++: r)) => (l b a -> c) -> (r b a -> c) -> f b a -> c
+bisplit l r x =
+  case injj x of
+    Inll y -> l y
+    Inrr y -> r y

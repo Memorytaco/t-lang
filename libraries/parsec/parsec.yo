@@ -1,5 +1,5 @@
 // parser combinator
 
-module parsec
+module std/parsec
 ;;
 

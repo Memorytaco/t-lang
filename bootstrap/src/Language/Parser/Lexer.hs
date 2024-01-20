@@ -21,6 +21,9 @@ import Data.Text (Text, pack)
 
 type TextParser e m = (ShowErrorComponent e, MonadParsec e Text m)
 
+reservedNames :: [Text]
+reservedNames = ["let", "in", "data", "module", "use", "foreign"]
+
 whiteSpace :: TextParser e m => m ()
 whiteSpace = Lex.space space1 (Lex.skipLineComment "//") (Lex.skipBlockCommentNested "/*" "*/")
 
@@ -52,7 +55,6 @@ identifier' = do
     c <- char '_' <|> letterChar <?> "identifier prefix"
     cs <- many (char '_' <|> alphaNumChar) <?> "identifier suffix"
     return $ pack (c : cs)
-  let reservedNames = ["let", "in", "data", "module"]
   if name `notElem` reservedNames
      then return name
      else fail $ "unexpected reserved name " <> show name

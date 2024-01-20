@@ -4,13 +4,13 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 
-name:           t-lang
+name:           bootstrap
 version:        0.1.0.0
-synopsis:       Compiler implementation of t-lang in Haskell.
-description:    Please see the README on GitHub at <https://github.com/memorytaco/t-lang#readme>
+synopsis:       Compiler implementation of bootstrap compiler in Haskell.
+description:    Please see the README on GitHub at <https://github.com/memorytaco/yo/bootstrap#readme>
 category:       Programming Language (PL)
-homepage:       https://github.com/memorytaco/t-lang#readme
-bug-reports:    https://github.com/memorytaco/t-lang/issues
+homepage:       https://github.com/memorytaco/yo#readme
+bug-reports:    https://github.com/memorytaco/yo/issues
 author:         dunor
 maintainer:     dunor@dunor.dev
 copyright:      2024 dunor
@@ -23,7 +23,8 @@ extra-source-files:
 
 source-repository head
   type: git
-  location: https://github.com/memorytaco/t-lang
+  location: https://github.com/memorytaco/yo
+  subdir: bootstrap
 
 library
   exposed-modules:
@@ -54,6 +55,7 @@ library
       EvalLoop.Store.Compiler
       Example
       Graph.Core
+      Graph.Data
       Graph.Extension.GraphicType
       Graph.GraphParser
       JIT.FFI
@@ -105,7 +107,7 @@ library
       Transform.Pass
       Transform.TypeGraph
   other-modules:
-      Paths_t_lang
+      Paths_bootstrap
   hs-source-dirs:
       src
   default-extensions:
@@ -167,10 +169,10 @@ library
     , type-errors
   default-language: Haskell2010
 
-executable t-lang-exe
+executable yo
   main-is: Main.hs
   other-modules:
-      Paths_t_lang
+      Paths_bootstrap
   hs-source-dirs:
       app
   default-extensions:
@@ -208,6 +210,7 @@ executable t-lang-exe
       algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
+    , bootstrap
     , bytestring
     , capability
     , containers
@@ -224,7 +227,6 @@ executable t-lang-exe
     , prettyprinter
     , random
     , recursion-schemes
-    , t-lang
     , tasty
     , tasty-hunit
     , template-haskell
@@ -233,7 +235,7 @@ executable t-lang-exe
     , type-errors
   default-language: Haskell2010
 
-test-suite t-lang-test
+test-suite bootstrap-test
   type: exitcode-stdio-1.0
   main-is: Spec.hs
   other-modules:
@@ -241,7 +243,7 @@ test-suite t-lang-test
       Test.Driver.Unification
       Test.Inference
       Test.Language.Constraint.Graphic
-      Paths_t_lang
+      Paths_bootstrap
   hs-source-dirs:
       test
   default-extensions:
@@ -279,6 +281,7 @@ test-suite t-lang-test
       algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
+    , bootstrap
     , bytestring
     , capability
     , containers
@@ -295,7 +298,6 @@ test-suite t-lang-test
     , prettyprinter
     , random
     , recursion-schemes
-    , t-lang
     , tasty
     , tasty-hunit
     , template-haskell
