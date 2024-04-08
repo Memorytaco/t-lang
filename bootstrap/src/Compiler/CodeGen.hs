@@ -1,6 +1,5 @@
 module Compiler.CodeGen
   (
-
     module LLVMGen
   )
 where

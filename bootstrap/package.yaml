@@ -1,5 +1,5 @@
 name:                bootstrap
-version:             0.1.0.0
+version:             0.2.0.0
 github:              "memorytaco/yo/bootstrap"
 license:             BSD3
 author:              "dunor"
@@ -36,11 +36,14 @@ dependencies:
 - template-haskell
 - tasty
 - tasty-hunit
+- QuickCheck
+- tasty-quickcheck
 - capability
 - algebraic-graphs == 0.7
 - prettyprinter
 - lens
 - random
+- comonad
 
 ghc-options:
 - -Wall

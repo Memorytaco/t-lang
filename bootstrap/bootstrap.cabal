@@ -5,7 +5,7 @@ cabal-version: 1.12
 -- see: https://github.com/sol/hpack
 
 name:           bootstrap
-version:        0.1.0.0
+version:        0.2.0.0
 synopsis:       Compiler implementation of bootstrap compiler in Haskell.
 description:    Please see the README on GitHub at <https://github.com/memorytaco/yo/bootstrap#readme>
 category:       Programming Language (PL)
@@ -54,6 +54,7 @@ library
       EvalLoop.Store
       EvalLoop.Store.Compiler
       Example
+      Graph.Algorithm
       Graph.Core
       Graph.Data
       Graph.Extension.GraphicType
@@ -93,6 +94,7 @@ library
       Language.Parser.Pattern
       Language.Parser.Type
       Language.Setting
+      Recursion.Morphism
       Tlang.Codegen
       Tlang.Inference.Kind
       Tlang.Rep
@@ -106,6 +108,7 @@ library
       Transform.LowerType
       Transform.Pass
       Transform.TypeGraph
+      Utility.Operator
   other-modules:
       Paths_bootstrap
   hs-source-dirs:
@@ -142,11 +145,13 @@ library
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
-      algebraic-graphs ==0.7
+      QuickCheck
+    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bytestring
     , capability
+    , comonad
     , containers
     , exceptions
     , free
@@ -163,6 +168,7 @@ library
     , recursion-schemes
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
     , template-haskell
     , text
     , transformers
@@ -207,12 +213,14 @@ executable yo
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      algebraic-graphs ==0.7
+      QuickCheck
+    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bootstrap
     , bytestring
     , capability
+    , comonad
     , containers
     , exceptions
     , free
@@ -229,6 +237,7 @@ executable yo
     , recursion-schemes
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
     , template-haskell
     , text
     , transformers
@@ -241,6 +250,7 @@ test-suite bootstrap-test
   other-modules:
       Test.Driver.Transform.GraphAndType
       Test.Driver.Unification
+      Test.Graph.Data
       Test.Inference
       Test.Language.Constraint.Graphic
       Paths_bootstrap
@@ -278,12 +288,14 @@ test-suite bootstrap-test
       TemplateHaskell
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
-      algebraic-graphs ==0.7
+      QuickCheck
+    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bootstrap
     , bytestring
     , capability
+    , comonad
     , containers
     , exceptions
     , free
@@ -300,6 +312,7 @@ test-suite bootstrap-test
     , recursion-schemes
     , tasty
     , tasty-hunit
+    , tasty-quickcheck
     , template-haskell
     , text
     , transformers

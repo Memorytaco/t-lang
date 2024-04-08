@@ -51,8 +51,6 @@ import Control.Monad ((<=<))
 
 import Language.Generic ((:<:), inj, prj)
 import Data.Maybe (maybeToList)
-import Data.Bifunctor.TH (deriveBifunctor)
-import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Control.Lens ( (^..), _1 )
 
 -- | algebraic edge for graph

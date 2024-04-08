@@ -1,7 +1,7 @@
 " Vim syntax
-" Language: tlang
+" Language: yo
 " Maintainer: memroytoco@gmail.com
-" Latest Revision: 23 Jan 2023
+" Latest Revision: 7 Apr 2024
 "
 
 if exists("b:current_syntax")
@@ -19,7 +19,7 @@ endif
 syn keyword SyntaxTodo contained TODO FIXME XXX NOTE WARN
 syn match Comment "//.*$" contains=SyntaxTodo
 syn keyword Keyword data type unsafe safe let module use foreign module in operator
-syn match Keyword '\(->\|=>\|=\|:\|,\)'
+syn match Keyword '\(->\|=>\|\~\|=\|:\|,\)'
 
 syn match Number '\d\+'
 syn match Number '\d\+\.\d*'
@@ -31,7 +31,7 @@ syn region Bracket start="\[" end="\]" fold transparent
 
 syn region String start='"' end='"'
 
-let b:current_syntax = "tlang"
+let b:current_syntax = "yo"
 
 hi def link SyntaxTodo Todo
 hi def link Comment Comment
