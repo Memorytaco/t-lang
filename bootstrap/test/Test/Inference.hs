@@ -57,6 +57,7 @@ inferringExpressionWithNoError = testGroup "Inferring Expression With No Error" 
   , "(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)"
   , "let ?a = 3 in a"
   , "let ?a = 3 in 3"
+  , "[ ?a = a ]"
   ]
 
 inferringExpressionWithError :: TestTree

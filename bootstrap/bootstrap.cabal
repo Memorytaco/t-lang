@@ -58,7 +58,7 @@ library
       Graph.Core
       Graph.Data
       Graph.Extension.GraphicType
-      Graph.GraphParser
+      Graph.Syntax
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic

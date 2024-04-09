@@ -11,14 +11,15 @@ module Graph.Data
   , depth, size
   , prune
   , collapse
+  , decompose
   , balance
 
     -- ** A helpful definition of 'order' to help us sort out necessary information
   , order
 
     -- ** connects
-  , overlays
-  , connects
+  , overlay, overlays
+  , connect, connects
 
     -- ** transformation between graphs
   , toUndirected
@@ -27,12 +28,13 @@ module Graph.Data
   , toVertices
   , fromVertices
   , toEdges
+  , fromEdge
   , fromEdges
 
   , outFrom
   , inTo
 
-  , removeEdge
+  , removeEdge, removeEdges
   , einduce
   )
 where
@@ -51,7 +53,29 @@ import Test.QuickCheck.Arbitrary (Arbitrary)
 
 -- ** core structure and method for graph unification
 
--- | TODO: use this implementation as default algebraic graph
+-- | ** One implementation of algebraic.
+--
+-- ** Axiom laws
+--
+-- we use @+@ for @Overlay@ and @e=> a b@ for @Connect e a b@.
+-- They are interchangable for simplicity.
+--
+-- 1. Overlay a b == Overlay b a
+-- 2. Overlay (Overlay a b) c == Overlay a (Overlay b c)
+-- 3. Connect _ a None == a
+-- 4. Connect _ None b == b
+-- 5. Connect e a (Connect e b c) == Connect e (Connect e a b) c
+-- 6. Connect e (a + b) c == (Connect e a c) + (Connect e b c)
+-- 7. Connect e a (b + c) == (Connect e a b) + (Connect e a c)
+-- 8. Connect e1 a (Connect e2 b c) == (e1=> a b) + (e1=> a c) + (e2=> b c)
+-- 9. Connect e1 (Connect e2 a b) c == (e1=> a c) + (e1=> b c) + (e2=> a b)
+--
+-- ** derivative Laws
+--
+-- 1. Overlay a b == Overlay b a
+-- 2. Overlay a a == a
+-- 3. Overlay a (Overlay b (Connect e a b)) == Connect e a b
+-- 4. Connect e a (Connect e a a) == Connect e a a
 data Graph e a
   = None
   | Vertex a
@@ -122,6 +146,28 @@ newtype MGraph e a = MGraph (Graph (Many e) a)
 order :: Ord a => [a] -> [a]
 order = Set.toAscList . Set.fromList
 
+-- | Use algebraic law to decompose graph in one layer.
+--
+-- After decomposition, Graph should end in only five forms:
+--
+-- 1. @None@ "atom"
+-- 2. @Vertex _@ "atom"
+-- 3. @Overlay _ _@
+-- 4. @Connect _ "atom" _@
+-- 5. @Connect _ _ "atom"@
+decompose :: Graph e a -> Graph e a
+decompose (Connect e (Overlay a b) c) =
+  Overlay (Connect e a c) (Connect e b c)
+decompose (Connect e c (Overlay a b)) =
+  Overlay (Connect e c a) (Connect e c b)
+decompose (Connect e1 g@(Connect _ a b) c) =
+  Connect e1 a c `Overlay` Connect e1 b c `Overlay` g
+decompose (Connect e1 a g@(Connect _ b c)) =
+  Connect e1 a b `Overlay` Connect e1 a c `Overlay` g
+decompose g = g
+
+-- TODO: Add tear operation which make a graph in canonical form.
+
 -- | calculate depth of graph implementation with complexity of O(size(tree))
 --
 -- e.g.
@@ -138,12 +184,8 @@ depth :: (Ord n, Num n) => Graph e a -> n
 depth = cata alg
   where alg NoneF = 0
         alg (VertexF _) = 0
-        alg (OverlayF a b)
-          | a > b = a + 1
-          | otherwise = b + 1
-        alg (ConnectF _ a b)
-          | a > b = a + 1
-          | otherwise = b + 1
+        alg (OverlayF a b) = 1 + max a b
+        alg (ConnectF _ a b) = 1 + max a b
 
 -- | number of vertices. A metric for measuring implementation performance.
 size :: Num n => Graph e a -> n
@@ -164,11 +206,7 @@ prune = cata go
         go (ConnectF _ a None) = a
         go (ConnectF e a b) = Connect e a b
 
--- | TODO: Optimization
-overlays :: [Graph e a] -> Graph e a
-overlays = foldr Overlay None
-
--- | TODO optimise usage of memory
+-- | TODO optimise size of underlying structure.
 balance :: (Eq a, Eq e) => Graph e a -> Graph e a
 balance = cata alg
   where alg NoneF = None
@@ -177,6 +215,20 @@ balance = cata alg
           | a == b = a
           | otherwise = Overlay a b
         alg (ConnectF e a b) = Connect e a b
+
+-- | An abbreviation of `Overlay`.
+overlay :: Graph e a -> Graph e a -> Graph e a
+overlay = Overlay
+{-# INLINE overlay #-}
+
+-- | TODO: Optimization
+overlays :: [Graph e a] -> Graph e a
+overlays = foldr Overlay None
+
+-- | An abbreviation of `Connect`.
+connect :: e -> Graph e a -> Graph e a -> Graph e a
+connect = Connect
+{-# INLINE connect #-}
 
 -- | TODO: Optimization
 connects :: [(e, Graph e a, Graph e a)] -> Graph e a
@@ -224,9 +276,13 @@ toEdges = snd . cata go
     go (OverlayF (ns1, es1) (ns2, es2)) = (ns1 <> ns2, es1 <> es2)
     go (ConnectF e (ns1, es1) (ns2, es2)) = (ns1 <> ns2, [(e, a, b)| a <- ns1, b <- ns2] <> es1 <> es2)
 
+-- | build a graph from an edge definition.
+fromEdge :: e -> a -> a -> Graph e a
+fromEdge e a b = Connect e (Vertex a) (Vertex b)
+
 -- | TODO: optimization
 fromEdges :: [(e, a, a)] -> Graph e a
-fromEdges = overlays . fmap \(e, a, b) -> Connect e (Vertex a) (Vertex b)
+fromEdges = overlays . fmap \(e, a, b) -> fromEdge e a b
 
 -- | Pick up a single node (or a collection of nodes), and gets edges out of it.
 --
@@ -248,26 +304,37 @@ inTo is = fst . cata go
         go (VertexF a) = ([], [a])
         go (OverlayF (es1, as) (es2, bs)) = (es1 <> es2, as <> bs)
         go (ConnectF e (es1, as) (es2, bs)) =
-          (es1 <> es2 <> if any is bs then (,e) <$> bs else [], as <> bs)
+          (es1 <> es2 <> if any is bs then (,e) <$> as else [], as <> bs)
 
 -- | removes edges between two vertices and this is expensive. @removeEdge@ can actually
 -- be applied to any edges between arbitrary nodes if there is any.
 --
 -- The algorithm is from this paper "https://dl.acm.org/doi/10.1145/3122955.3122956".
-removeEdge :: Eq a => (e -> (a, a) -> Bool) -> Graph e a -> Graph e a
-removeEdge pick = snd . para go
+--
+-- It holds following property:
+--
+-- 1. All vertices are preserved.
+-- 2. Target edge should be gone.
+--
+-- The algorithm is sound with labelled edge.
+removeEdge :: Eq a => (e -> a -> a -> Bool) -> Graph e a -> Graph e a
+removeEdge define = snd . para go
   where go NoneF = ([], None)
         go (VertexF a) = ([a], Vertex a)
         go (OverlayF (_, (as, a)) (_, (bs, b))) = (nub (as <> bs), Overlay a b)
-        go (ConnectF e (a', (as, a)) (b', (bs, b))) =
-            ( nub (as <> bs)
-            , if null removes then Connect e a b else
-              Connect e a (tos /\ b') `Overlay`
-              Connect e (froms /\ a') b
-            )
-          where removes = [(x, y)| x <- as, y <- bs, pick e (x, y)]
+        go (ConnectF e (ga', (as, ga)) (gb', (bs, gb))) = (nub (as <> bs),)
+          if null removes then Connect e ga gb else
+          Connect e ga (tos // gb') `Overlay`
+          Connect e (froms // ga') gb
+          where removes = [(x, y)| x <- as, y <- bs, define e x y]
                 (froms, tos) = unzip removes
-                ns /\ g = g >>= \n -> if n `elem` ns then None else return n
+                -- remove nodes from graph
+                ns // g = g >>= \n -> if n `elem` ns then None else Vertex n
+
+-- | wrapper for `removeEdge` with simplicity.
+removeEdges :: (Eq a, Eq e) => [(e, a, a)] -> Graph e a -> Graph e a
+removeEdges collection = removeEdge \e a b -> (e, a, b) `elem` collection
+{-# INLINE removeEdges #-}
 
 -- | remove all edges and collapse a graph to simple vertices (with redundancy).
 --
@@ -289,19 +356,21 @@ collapse = cata alg
         alg (ConnectF _ a None) = a
         alg (ConnectF _ a b) = Overlay a b
 
--- | `einduce` doesn't maintain underlying structure and can perform almost any graph transform.
+-- | ** `einduce` doesn't maintain underlying structure and can perform almost any graph transform.
 --
 -- `einduce` is expensive.
 --
 -- you can roughly take the following equation in mind although it is not necessarily same
 -- as actual implementation.
 --
--- @emap@ is a conditional edge transformation and can be used as 'replaceEdge' and @f@ is
+-- @emap@ is a conditional edge transformation and is same as 'replaceEdge' and @f@ is
 -- user provided operator to pick up which edge is to be replaced or removed based on
--- its application context.
+-- its application context. Once @Nothing@ is returned in f, passed edges between two
+-- are removed. And a @Maybe (e, a, a)@ is meant to replace origin with the
+-- new one (if not to replace the edge, return something like @Just . id@ returns).
 --
 -- @
--- einduce f = removeEdge f . emap f
+-- einduce f = emap f . removeEdge f
 -- @
 --
 -- let's say we have @let g = Connect 0 (pure 1) $ Connect 0 (pure 2) (pure 3)@, we have:
@@ -309,7 +378,20 @@ collapse = cata alg
 -- @
 -- sort (toEdges $ einduce (\e (a, b) -> if e == 0 then Just (e, a, b) else Nothing) g) = [(0, 1, 2), (0, 1, 3)]
 -- @
-einduce :: (Eq a, Eq e) => (e -> (a, a) -> Maybe (e, a, a)) -> Graph e a -> Graph e a
+--
+-- ** definition and property
+--
+-- *** Definition
+--
+-- 1. `einduce` can operate addition and deletion simutaneously. By simultaneity, the operation
+-- are targeted at original graph and so it means "delete" first and "add" later.
+--
+-- *** Property
+--
+-- 1. Vertices are preserved if deletion only.
+-- 2. Added new edge is not removed, even if you removed it at the same time.
+--
+einduce :: (Eq a, Eq e) => (e -> a -> a -> Maybe (e, a, a)) -> Graph e a -> Graph e a
 einduce mapEdge = combine . cata go
   -- we maintain two copies of graph, one with graphs removing edges and one
   -- with graphs adding edges.
@@ -319,8 +401,8 @@ einduce mapEdge = combine . cata go
         go (OverlayF ((as, m), a) ((bs, n), b)) = ((nub $ as <> bs, Overlay m n), Overlay a b)
         go (ConnectF e ((as, m), a) ((bs, n), b)) =
           ((nub $ as <> bs, fromEdges adds `Overlay` Overlay m n),) $
-          removeEdge (\e' (a', b') -> (e', a', b') `elem` removes) (Connect e a b)
-          where newEdges = nub [z| x <- as, y <- bs, z <- Fold.toList $ mapEdge e (x, y)]
+          removeEdges removes (Connect e a b)
+          where newEdges = nub [z| x <- as, y <- bs, z <- Fold.toList $ mapEdge e x y]
                 oldEdges = nub [(e, x, y)| x <- as, y <- bs]
                 removes = oldEdges \\ newEdges
                 adds = newEdges \\ oldEdges
