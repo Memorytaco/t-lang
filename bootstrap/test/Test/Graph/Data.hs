@@ -189,7 +189,7 @@ test'outFrom :: TestTree
 test'outFrom = testGroup "outFrom" $ load <$> case'outFrom
   where
     load (name, (n, res), g) = testCase name do
-      assertBool name $ order (outFrom (`elem` n) g) == res
+      assertBool name $ order (snd <$> outFrom (`elem` n) g) == res
 
 case'inTo :: [(String, ([Int], [(Int, Int)]), TestGraph)]
 case'inTo =
@@ -211,7 +211,7 @@ case'inTo =
 test'inTo :: TestTree
 test'inTo = testGroup "inTo" $ load <$> case'inTo
   where load (name, (n, res), g) = testCase name do
-          assertBool name $ order (inTo (`elem` n) g) == res
+          assertBool name $ order (fst <$> inTo (`elem` n) g) == res
 
 -- | collapse should be equal to a combination of 'removeEdge' and 'prune'
 prop'collapse :: Property

@@ -1,8 +1,10 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {- | Transformation module for graphic type
-
-    This module transform syntactic type into relevent graphic representation
-
+--
+--  This module transform syntactic type into relevent graphic representation
+--
+--  TODO: fully check this module, add more unit tests
+-- 
 -}
 module Transform.TypeGraph
   (
@@ -38,6 +40,7 @@ import Control.Monad (forM, foldM)
 
 import Data.Functor.Foldable (cata)
 import Data.Functor ((<&>))
+import Data.Tuple (swap)
 
 -- ** for type
 import qualified Language.Core as Type
@@ -91,11 +94,10 @@ type TypeContextTable name nodes edges info
   = [(name +> name, (Hole nodes info, CoreG nodes edges info))]
 
 lookupLocalName
-  :: (Eq name, HasTypeContext name nodes edges info m, HasToGraphicTypeErr name m)
-  => name -> m (Hole nodes info, CoreG nodes edges info)
+  :: (Eq name, HasTypeContext name nodes edges info m)
+  => name -> m (Maybe (Hole nodes info, CoreG nodes edges info))
 lookupLocalName name
   = asks @TypeContext (lookup $ Bind name)
-  >>= maybe (failToGraphicTypeErr (TGMissLocalBind name)) return
 
 -- | with free name, we first lookup it in a predefined environment and if
 -- failed, we invoke a dynamic function to fetch its name.
@@ -104,9 +106,11 @@ lookupFreeName
   => (name -> m (Maybe (Hole nodes info, CoreG nodes edges info)))
   -> name -> m (Hole nodes info, CoreG nodes edges info)
 lookupFreeName lookupGlobal name
-  = asks @TypeContext (lookup $ Free name)
-  >>= maybe (lookupGlobal name) (return . Just)
-  >>= maybe (failToGraphicTypeErr (TGMissFreeBind name)) return
+  = lookupLocalName name >>= \case
+    Just a -> return a
+    Nothing -> asks @TypeContext (lookup $ Free name)
+      >>= maybe (lookupGlobal name) (return . Just)
+      >>= maybe (failToGraphicTypeErr (TGMissBind name)) return
 
 -- | internal use only, it is useful when you want to add local type binding to type context
 appendContext
@@ -116,11 +120,9 @@ appendContext
 appendContext tbl = local @TypeContext (tbl <>)
 
 -- | error used for transforming type into graphic type
-data ToGraphicTypeErr name
-  -- | variables that freely bound
-  = TGMissFreeBind name
-  -- | local variables
-  | TGMissLocalBind name
+newtype ToGraphicTypeErr name
+  -- | variables that is locally or globally bound
+  = TGMissBind name
   deriving (Show, Eq, Ord)
 
 type HasToGraphicTypeErr name m
@@ -141,24 +143,24 @@ failToGraphicTypeErr = throw @ToGraphicTypeErr
 --           1 2 3 4 5 6
 shiftBindingEdge
   :: forall name nodes edges info
-   . (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+   . (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-shiftBindingEdge root g = foldl shiftup g $ lTo @(T (Binding name)) (== root) g
+shiftBindingEdge root g = foldl shiftup g $ swap <$> lTo @(T (Binding name)) root g
   where shiftup gr (e@(T (Binding flag i name)), n) = overlays
           [ n -<< T (Binding flag (i+1) name) >>- root
-          , filterLink (/= link' e) n root gr
+          , filterLink (/= link e) n root gr
           ]
 {-# INLINE shiftBindingEdge #-}
 
 -- | move bound site from `from` to `to`
 moveBindingEdge
   :: forall name nodes edges info
-   . ( T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+   . (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-moveBindingEdge from to g = foldl move g $ lTo @(T (Binding name)) (== from) g
+moveBindingEdge from to g = foldl move g $ swap <$> lTo @(T (Binding name)) from g
   where move gr (e@(T (Binding flag i name)), n) = overlays
           [ n -<< T (Binding flag i name) >>- to
-          , filterLink (/= link' e) n from gr
+          , filterLink (/= link e) n from gr
           ]
 {-# INLINE moveBindingEdge #-}
 
@@ -216,6 +218,7 @@ toGraph lookupGlobal = foldTypeGraph . fmap (lookupFreeName lookupGlobal)
 type instance ConstrainBinderGraph Prefix name nodes edges info m
   = ( HasOrderGraph nodes edges info
     , T (Binding name) :<: edges, T Sub :<: edges
+    , Ord name
     , NodePht :<: nodes
     , HasNodeCreator m
     , HasTypeContext name nodes edges info m
@@ -260,7 +263,7 @@ instance FoldTypeGraph Tuple Int where
     gs <- sequence ms
     let len = toInteger $ length gs
     root <- node (T $ NodeTup len)
-    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< T (Sub i) >>- a) Empty $ zip [1..len] gs
+    g <- foldM (\g (i, (a, g')) -> return $ overlay (g <> g') $ root -<< T (Sub i) >>- a) None $ zip [1..len] gs
     return (root, g)
 
 
@@ -275,7 +278,7 @@ instance FoldTypeGraph (Record label) Int where
     gs <- forM ms sequence
     let len = toInteger $ length gs
     root <- node (T $ NodeRec len)
-    g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, (a, g'))) -> do
+    g <- (\f -> foldM f None $ zip [1..len] gs) \g (i, (l, (a, g'))) -> do
       label <- node (T $ NodeHas True l)
       return $ overlays [root -<< T (Sub i) >>- label, label -<< T (Sub 1) >>- a, g', g]
     return (root, g)
@@ -293,11 +296,11 @@ instance FoldTypeGraph (Variant label) Int where
     gs <- mapM (mapM sequence) ms
     let len = toInteger $ length gs
     root <- node (T $ NodeSum len)
-    g <- (\f -> foldM f Empty $ zip [1..len] gs) \g (i, (l, val)) -> do
+    g <- (\f -> foldM f None $ zip [1..len] gs) \g (i, (l, val)) -> do
       label <- node (T $ NodeHas True l)
       return . overlays $
         [ overlays [root -<< T (Sub i) >>- label, g]
-        , maybe Empty (\(a, g') -> overlays [label -<< T (Sub 1) >>- a, g']) val
+        , maybe None (\(a, g') -> overlays [label -<< T (Sub 1) >>- a, g']) val
         ]
     return (root, g)
 

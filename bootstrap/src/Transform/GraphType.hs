@@ -44,7 +44,6 @@ import Control.Monad (forM)
 
 import Data.Function (fix)
 import Data.String (IsString (..))
-
 import Capability.Error
 
 -- | Conversion error
@@ -104,7 +103,7 @@ treeConversion = foldr foldT (Conversion $ Recursion \_ n -> unmatch n)
 -- | structure link from, sort by sub edge
 sFrom :: (HasGraphReader nodes edges info m, HasOrderGraph nodes edges info, T Sub :<: edges)
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
-sFrom root = asksGraph $ lFrom @(T Sub) (== root)
+sFrom root = asksGraph $ lFrom @(T Sub) root
 
 -- | query whether one node has been translated into syntactic form, if so return the name
 lookupName :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, name)] m)
@@ -138,9 +137,9 @@ withBinding
   :: forall m nodes edges info bind rep name a. (WithBindingEnv m nodes edges info bind rep name a)
   => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- asksGraph $ lTo @(T (Binding a)) (== root)
+  preBinds <- asksGraph $ lTo @(T (Binding a)) root
   scheme <- ask @"scheme"
-  localBinds {- (flag, (node, name)) -} <- forM preBinds \(T (Binding flag _ name), a) -> fmap (flag,) $ (a,) <$> scheme name
+  localBinds {- (flag, (node, name)) -} <- forM preBinds \(a, T (Binding flag _ name)) -> fmap (flag,) $ (a,) <$> scheme name
   body <- local @"local" ((snd <$> localBinds) <>) m
   bindings <- forM localBinds \(flag, (node, name)) -> do
     typ <- restore node
@@ -161,7 +160,7 @@ literal01
   => Conversion nodes edges info bind rep name m a
 literal01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeTup _)) _ ->
   withLocal root $ withBinding restore root do
-    subLinks <- asksGraph $ lFrom @(T Sub) (== root)
+    subLinks <- asksGraph $ lFrom @(T Sub) root
     Type . inj . Tuple <$> mapM restore (snd <$> subLinks)
 
 -- | RULE: T (NodeRef name)
@@ -262,7 +261,7 @@ special01
   => Conversion nodes edges info bind rep name m a
 special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _ ->
   withLocal root $ withBinding restore root do
-    subLinks <- asksGraph $ lFrom @(T Sub) (== root)
+    subLinks <- asksGraph $ lFrom @(T Sub) root
     typs <- mapM restore (snd <$> subLinks)
     case typs of
       [typ] -> return typ
@@ -283,7 +282,6 @@ special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBo
 unfoldLabel
   :: forall label m nodes edges info bind rep name a
   . ( HasGraphReader nodes edges info m
-    , Eq (Hole nodes info)
     , T Sub :<: edges
     , T (NodeHas label) :<: nodes
     , HasOrderGraph nodes edges info
@@ -297,7 +295,7 @@ unfoldLabel restore root@(Hole tag _) = do
     Just (T (NodeHas _ label)) -> return label
     Nothing -> unexpect "Expect Tag Node but it is not"
   -- extract type node, a label may or may not have a type field
-  fields <- asksGraph $ lFrom @(T Sub) (== root)
+  fields <- asksGraph $ lFrom @(T Sub) root
   case fields of
     [snd -> n] -> (label,) . Just <$> restore n
     [] -> return (label, Nothing)

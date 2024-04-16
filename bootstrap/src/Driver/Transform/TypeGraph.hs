@@ -78,6 +78,7 @@ toGraphicTypeConstraintMock
   -> m (Either (ToGraphicTypeErr name) ((Hole nodes Int, CoreG nodes edges Int), Int))
 toGraphicTypeConstraintMock = toGraphicType mockGlobalConstraint
 
+-- | transform syntactic type into graphic type in an virtual environment.
 toGraphicTypeMock
   :: ( ConstrainBinderGraph bind name nodes edges Int (ToGraphicType name nodes edges m)
      , ConstrainGraph rep nodes edges Int (ToGraphicType name nodes edges m)
@@ -103,7 +104,7 @@ mockGlobalConstraint
   . ( IsString name, Monad m
     , nodes :>+: '[T NodeArr, T (NodeRef name), G]
     , edges :>+: '[T Sub, T (Binding name)]
-    , Eq name, HasOrderEdge edges
+    , Eq name
     )
   => name -> ToGraphicType name nodes edges m (Maybe (Hole nodes Int, CoreG nodes edges Int))
 mockGlobalConstraint name = do
@@ -116,6 +117,7 @@ mockGlobalConstraint name = do
     , g -<< T (Sub 1) >>- r
     ]
 
+-- | TODO: Refine this utility for helping testing.
 mockGlobal
   :: forall name nodes edges m
   . ( IsString name, Monad m
@@ -125,6 +127,6 @@ mockGlobal
   => name -> ToGraphicType name nodes edges m (Maybe (Hole nodes Int, CoreG nodes edges Int))
 mockGlobal name = do
   r <- if fromString "->" == name
-  then node (T NodeArr)
-  else node (T $ NodeRef False name)
+    then node (T NodeArr)
+    else node (T $ NodeRef False name)
   return $ Just (r, Vertex r)

@@ -13,7 +13,6 @@ import Data.Void (Void)
 import Language.Core ( builtinStore, Name)
 
 import Data.Text (Text)
-import Algebra.Graph.Export.Dot (exportViaShow)
 
 import Driver.Transform
 import Graph.Core (induceLink, isLinkOf)
@@ -40,6 +39,9 @@ parseTypeGrpah typ = do
         return g
      Left (err :: ParseErrorBundle Text Void) -> putStrLn (errorBundlePretty err) >> fail "see previous message"
 
+-- | TODO
+exportViaShow :: a
+exportViaShow = undefined
 
 dumpTypegraph :: Maybe Integer -> SurfaceG -> IO ()
 dumpTypegraph suffix g = do

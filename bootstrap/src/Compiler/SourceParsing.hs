@@ -15,12 +15,17 @@ module Compiler.SourceParsing
   , loadModuleFromText
 
   -- ** parsing items from text
+  -- *** parsing language type and expression
   , getSurfaceExpr
   , getSurfaceType
   , mapSurfaceDecl
 
+  -- *** parsing declaration item
   , getSurfaceDecl
   , getSurfaceDeclEof
+
+  -- *** parsing graph type
+  , getGraphicType 
 
   -- ** querying item
   , lookupSurfaceModule
@@ -33,7 +38,11 @@ module Compiler.SourceParsing
   )
 where
 
-import Language.Core ( ModuleSurface, TypSurface, ExprSurface, DeclSurface, OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, Decls (getDecls))
+import Language.Core
+  ( ModuleSurface, TypSurface, ExprSurface, DeclSurface
+  , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, Decls (getDecls)
+  , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface
+  )
 import Compiler.Store ( HasCompilerStore, UseCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
 import Data.Text (Text)
 import Data.List (intercalate)
@@ -52,6 +61,9 @@ import Capability.Reader (asks)
 
 import Control.Monad.Except (runExceptT, MonadError (throwError))
 import Control.Monad.Trans (MonadTrans(..))
+import Driver.Transform.TypeGraph (toGraphicTypeMock)
+import Transform.TypeGraph (TypeContextTable)
+import Graph.Core (Hole)
 
 -- ** general methods for surface module
 
@@ -101,6 +113,18 @@ getSurfaceType :: Monad m
 getSurfaceType ops prompt content =
   driveParser ops (surfaceType eof) prompt content
   <&> fst
+
+-- | FIXME: refine this interface
+getGraphicType
+  :: MonadFail m
+  => TypeContextTable Name GraphicNodesSurface GraphicEdgesSurface Int -> Int
+  -> OperatorStore -> String -> Text -> m ((Hole GraphicNodesSurface Int, GraphicTypeSurface), Int)
+getGraphicType env counter ops prompt content = getSurfaceType ops prompt content >>= \case
+  -- TODO: replace mock typing environment
+  Right typ -> toGraphicTypeMock env counter typ >>= \case
+    Right res -> return res
+    Left err -> fail $ show err
+  Left bundle -> fail $ errorBundlePretty bundle
 
 -- | consume input till `end` and parse declaration.
 getSurfaceDecl :: Monad m

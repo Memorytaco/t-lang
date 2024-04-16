@@ -25,6 +25,7 @@ module Language.Constraint.Graphic
   -- ** common environment
   --
   -- this is crucial and used to regulate definition of driver
+
   , HasBinding
   , BindingTable
   , BindingType
@@ -65,6 +66,7 @@ import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Generic ((:<:), (:>+:), inj, prj, (:+:) (..), type (|:) (..), strip, fromX)
 import Language.Setting ( newNodeCounter, node, HasNodeCreator )
+import Graph.Data (order)
 
 import Capability.Reader (HasReader, asks, ask, local)
 import Capability.Error (HasThrow, throw)
@@ -145,7 +147,7 @@ getInstance :: (G :<: ns, T Sub :<: es, HasConstraintGenErr name m, HasOrderGrap
 getInstance ix n@(Hole v _) gr =
   case prj @G v of
     Just (G i) ->
-      case lookup (T (Sub ix)) $ lFrom @(T Sub) (== n) gr of
+      case lookup (T (Sub ix)) $ lFrom @(T Sub) n gr of
         Just n' -> return n'
         Nothing -> if i < ix then failCGenMsg "Internal Error, G node doesn't have sufficient instance"
                              else failCGenMsg "Internal Error, G node doesn't have that instance"
@@ -176,7 +178,7 @@ genConstraint
          '[ T Sub, T (Binding name), T Unify
           , T Instance, Pht NDOrderLink, Pht Sub]
       , nodes :>+: '[T NodeBot, G, NDOrder]
-      , Traversable f, HasOrderEdge edges
+      , Traversable f
       , Eq name
       , HasConstraintGenErr name m
       , HasNodeCreator m
@@ -318,7 +320,7 @@ instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF 
             ]
     -- unify every branch with bottom node and need to bind
     -- every sub G to top G
-    (us, gr) <- foldM collect ([], Empty) (zip [1..] $ br'c: br'cs)
+    (us, gr) <- foldM collect ([], None) (zip [1..] $ br'c: br'cs)
     -- since we duplicate graph many times, we need to compress
     -- the graph to get a minimal representation
     return $ StageConstraint val g (us, depR) $ compress $ overlays
@@ -898,7 +900,7 @@ failSolvProp gr = throw @ConstraintSolvErr . FailSolvProperty gr
 -- | get constraint interior nodes, no duplication
 interiorC :: forall name ns es info. (T (Binding name) :<: es, HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
-interiorC !gr = nub . dfs (isLinkOf @(T (Binding name))) (transpose gr)
+interiorC gr = nub . dfs (isLinkOf @(T (Binding name))) (transpose gr)
 
 -- | get structure interior nodes, no duplication
 interiorS :: (T Sub :<: es, HasOrderGraph ns es info) =>
@@ -908,12 +910,13 @@ interiorS = fmap nub . dfs (isLinkOf @(T Sub))
 -- | get interior nodes, no duplication
 interiorI :: forall name ns es info. (T (Binding name) :<: es, T Sub :<: es, HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
-interiorI !gr root = interiorC @name gr root `intersect` interiorS gr root
+interiorI gr root = interiorC @name gr root `intersect` interiorS gr root
 
 -- | frontier nodes, no duplication
 frontierS :: forall name ns es info. (es :>+: '[T (Binding name), T Sub], HasOrderGraph ns es info) =>
   CoreG ns es info -> Hole ns info -> [Hole ns info]
-frontierS gr root = nub . filter (`notElem` interiors) $ lFrom @(T Sub) (`elem` interiors) gr <&> snd
+frontierS gr root = order do
+  [a | (_, (Link tag, a)) <- linkFrom (`elem` interiors) gr, a `notElem` interiors, Just (T (Sub _)) <- [prj tag]]
   where interiors = interiorI @name gr root
 
 -- | copy instance of a type scheme, return the copied graphic type
@@ -921,6 +924,7 @@ copy
   :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Instance, T Sub]
     , nodes :>+: '[T NodeBot, G]
+    , Ord name
     , HasOrderGraph nodes edges Int
     , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
   => (Hole nodes Int, Instance) -> CoreG nodes edges Int
@@ -932,7 +936,7 @@ copy (scheme, Instance i) !gr = do
       !interiors = allInteriors `intersect` structureI
       !frontiers = allFrontiers `intersect` structureI
       -- all interiorCs bound to scheme
-      interiorCBinds = lTo @(T (Binding name)) (== scheme) gr & traverse %~ \(a, b) -> (b, a)
+      interiorCBinds = lTo @(T (Binding name)) scheme gr
   -- we generate copies of nodes
   freshInteriors <- forM interiors \n@(Hole tag _) -> newNodeCounter <&> (n,) . Hole tag
   freshFrontiers <- forM frontiers \n -> node (T NodeBot) <&> (n,)
@@ -950,7 +954,7 @@ copy (scheme, Instance i) !gr = do
             -- and we don't need to reset binding edge of frontier nodes since
             -- those edges are not included in the copied gType.
             resetInterior (old, new) gType =
-              if null (lFrom @(T (Binding name)) (== new) gType) && new /= sc
+              if null (lFrom @(T (Binding name)) new gType) && new /= sc
               then case lookup old interiorCBinds of
                      Just e -> overlays [gType, new -<< e >>- sc]
                      Nothing -> gType
@@ -968,6 +972,7 @@ copy (scheme, Instance i) !gr = do
 -- | expand a type scheme at another node and return root of new gType copied
 expand :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
+    , Ord name
     , T NodeBot :<: nodes, G :<: nodes
     , HasOrderGraph nodes edges Int
     , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
@@ -989,13 +994,14 @@ expand source target !gr = do
 propagate :: forall name edges nodes err m
   . ( edges :>+: '[T Unify, T Instance, T (Binding name), T Sub]
     , T NodeBot :<: nodes, G :<: nodes
+    , Ord name
     , HasOrderGraph nodes edges Int
     , HasNodeCreator m, HasConstraintGenErr name m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m)
   => Hole nodes Int -> CoreG nodes edges Int
   -> m ([Hole nodes Int], CoreG nodes edges Int)
 propagate scheme (compress -> gr) = do
   instances <- forM constraints \(source, t) -> do
-    binder <- case lFrom @(T (Binding name)) (== t) gr of
+    binder <- case lFrom @(T (Binding name)) t gr of
       [(_, binder)] -> return binder
       [] -> failSolvProp gr $ CSPropMultipleBinder t [] "A node has no binders during propagation"
       binders -> failSolvProp gr $ CSPropMultipleBinder t (snd <$> binders) "A node has multiple binders during propagation"
@@ -1006,7 +1012,7 @@ propagate scheme (compress -> gr) = do
           [ gType, ogr, root -++ T Unify ++- t ]
   foldM folder ([], gr) instances
   where
-    constraints = lFrom (== scheme) gr <&> \(T (Instance i), t) ->
+    constraints = lFrom scheme gr <&> \(T (Instance i), t) ->
       ((scheme, Instance i), t)
 
 type HasUnifier err nodes edges info m =
@@ -1031,7 +1037,7 @@ recurUnify
   => CoreG nodes edges info -> Hole nodes info -> m (CoreG nodes edges info)
 recurUnify graph start = do
   unify <- ask @"Unifier"
-  case nub $ snd <$> lFrom @(T Unify) (== start) graph of
+  case nub $ snd <$> lFrom @(T Unify) start graph of
     [] -> return graph
     ls@(_:_) ->
       case filter (/= start) ls of
@@ -1056,6 +1062,7 @@ solvUnify (StageConstraint info root (nub -> unifications, dep) graph) = do
 solvInst
   :: forall name nodes edges m err a
   . ( HasUnifier err nodes edges Int m, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m, HasConstraintGenErr name m
+    , Ord name
     , HasNodeCreator m
     , nodes :>+: '[NDOrder, G, T NodeBot]
     , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
@@ -1072,7 +1079,7 @@ solvInst sc@(StageConstraint _ _ (unifications, dep) (compress -> graph)) = do
   where
     go c [] = return c
     go c@(StageConstraint _ _ _ gr) (n:ns) = do
-      inst <- case lFrom @(Pht NDOrderLink) (== n) gr of
+      inst <- case lFrom @(Pht NDOrderLink) n gr of
         [] -> failSolvMsg "Internal error: misplaced tracker order node, no G node available"
         [(_, n')] ->
           if isHoleOf @G n'
@@ -1088,6 +1095,7 @@ solveConstraint
   :: forall name nodes edges m err a
   . ( HasUnifier err nodes edges Int m
     , HasNodeCreator m, HasConstraintGenErr name m
+    , Ord name
     , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
     , nodes :>+: '[NDOrder, G, T NodeBot]
     , HasOrderGraph nodes edges Int, HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m )
@@ -1100,6 +1108,7 @@ getSolution
   :: ( HasNodeCreator m
      , HasConstraintGenErr name m, HasUnifier err nodes edges Int m
      , HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m
+     , Ord name
      , nodes :>+: '[NodePht, T NodeBot, G]
      , edges :>+: '[T (Binding name), T Unify, T Instance, T Sub]
      , HasOrderGraph nodes edges Int
@@ -1115,6 +1124,7 @@ getSolution source !graph = do
 -- | get a solution from a constraint presolution
 getSolutionFromConstraint
   :: ( HasNodeCreator m
+     , Ord name
      , HasConstraintGenErr name m, HasUnifier err nodes edges Int m
      , HasSolvErr (Hole nodes Int) (CoreG nodes edges Int) err m
      , nodes :>+: '[NodePht, T NodeBot, G]

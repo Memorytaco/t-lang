@@ -16,6 +16,7 @@ module Graph.Data
 
     -- ** A helpful definition of 'order' to help us sort out necessary information
   , order
+  , orderBy
 
     -- ** connects
   , overlay, overlays
@@ -34,7 +35,11 @@ module Graph.Data
   , outFrom
   , inTo
 
+  , transpose
+
   , removeEdge, removeEdges
+
+  , induce
   , einduce
   )
 where
@@ -42,11 +47,13 @@ where
 import Data.Bifunctor.TH (deriveBifunctor)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Functor.Foldable
+    ( Corecursive(ana), Recursive(cata, para) )
 import Control.Comonad.Cofree ( Cofree(..) )
 import Data.List (nub, (\\))
 import qualified Data.Foldable as Fold (Foldable (toList))
 import qualified Data.Set as Set (toAscList, fromList)
 import Utility.Operator ((<!>))
+import Utility.Data (Snd (..))
 
 import qualified Test.QuickCheck as QC
 import Test.QuickCheck.Arbitrary (Arbitrary)
@@ -100,6 +107,12 @@ instance Monad (Graph e) where
   (Overlay ma mb) >>= f = Overlay (ma >>= f) (mb >>= f)
   (Connect e ma mb) >>= f = Connect e (ma >>= f) (mb >>= f)
 
+instance Semigroup (Graph e a) where
+  (<>) = Overlay
+
+instance Monoid (Graph e a) where
+  mempty = None
+
 -- For generating property check, instance of Arbitrary
 instance (Arbitrary e, Arbitrary a) => Arbitrary (Graph e a) where
   arbitrary = QC.sized gen
@@ -140,11 +153,23 @@ toUndirected = UGraph . cata alg
 newtype MGraph e a = MGraph (Graph (Many e) a)
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
--- | strong order of the list with no duplication and is sorted.
+-- | strong order of the list with no duplication and is __well sorted__ in __ascendence order__.
 --
 -- it has complexity of O(n*log(n))
 order :: Ord a => [a] -> [a]
 order = Set.toAscList . Set.fromList
+
+-- | strong order of the list with no duplication and is well sorted in ascendence order.
+--
+-- This is a semantic version of `order` which allows you to define different properties
+-- of the structure via a mapped data structure.
+--
+-- NOTE: properties of "a" are fully determined by "b", and `orderBy` will clear
+-- duplicated items and sort items simply based on "b".
+--
+-- it has complexity of O(n*log(n)).
+orderBy :: Ord b => (a -> b) -> [a] -> [a]
+orderBy smap = fmap (\(Snd (a, _)) -> a) . order . fmap (Snd . ((,) <!> smap))
 
 -- | Use algebraic law to decompose graph in one layer.
 --
@@ -274,7 +299,7 @@ toEdges = snd . cata go
     go NoneF = ([], [])
     go (VertexF a) = ([a], [])
     go (OverlayF (ns1, es1) (ns2, es2)) = (ns1 <> ns2, es1 <> es2)
-    go (ConnectF e (ns1, es1) (ns2, es2)) = (ns1 <> ns2, [(e, a, b)| a <- ns1, b <- ns2] <> es1 <> es2)
+    go (ConnectF e (ns1, es1) (ns2, es2)) = (ns1 <> ns2, [(e, a, b) | a <- ns1, b <- ns2] <> es1 <> es2)
 
 -- | build a graph from an edge definition.
 fromEdge :: e -> a -> a -> Graph e a
@@ -287,24 +312,32 @@ fromEdges = overlays . fmap \(e, a, b) -> fromEdge e a b
 -- | Pick up a single node (or a collection of nodes), and gets edges out of it.
 --
 -- With duplication and no order.
-outFrom :: (a -> Bool) -> Graph e a -> [(e, a)]
+outFrom :: (a -> Bool) -> Graph e a -> [(a, (e, a))]
 outFrom is = snd . cata go
   where go NoneF = ([], [])
         go (VertexF a) = ([a], [])
         go (OverlayF (as, es1) (bs, es2)) = (as <> bs, es1 <> es2)
         go (ConnectF e (as, es1) (bs, es2)) =
-          (as <> bs, es1 <> es2 <> if any is as then (e,) <$> bs else [])
+          (as <> bs, es1 <> es2 <> [(a, (e, b))| a <- as, is a, b <- bs])
 
 -- | Pick up a single node (or a collection of nodes), and gets edges into it.
 --
 -- With duplication and no order.
-inTo :: (a -> Bool) -> Graph e a -> [(a, e)]
+inTo :: (a -> Bool) -> Graph e a -> [((a, e), a)]
 inTo is = fst . cata go
   where go NoneF = ([], [])
         go (VertexF a) = ([], [a])
         go (OverlayF (es1, as) (es2, bs)) = (es1 <> es2, as <> bs)
         go (ConnectF e (es1, as) (es2, bs)) =
-          (es1 <> es2 <> if any is bs then (,e) <$> as else [], as <> bs)
+          (es1 <> es2 <> [((a, e), b)| b <- bs, is b, a <- as], as <> bs)
+
+-- | Simple implementation of `transpose`.
+transpose :: Graph e a -> Graph e a
+transpose = cata alg
+  where alg NoneF = None
+        alg (VertexF a) = Vertex a
+        alg (ConnectF e a b) = Connect e b a
+        alg (OverlayF a b) = Overlay a b
 
 -- | removes edges between two vertices and this is expensive. @removeEdge@ can actually
 -- be applied to any edges between arbitrary nodes if there is any.
@@ -356,6 +389,10 @@ collapse = cata alg
         alg (ConnectF _ a None) = a
         alg (ConnectF _ a b) = Overlay a b
 
+-- | handful shortcuts for filter nodes on graph structure.
+induce :: (a -> Bool) -> Graph e a -> Graph e a
+induce is = (>>= \a -> if is a then return a else None)
+
 -- | ** `einduce` doesn't maintain underlying structure and can perform almost any graph transform.
 --
 -- `einduce` is expensive.
@@ -390,7 +427,6 @@ collapse = cata alg
 --
 -- 1. Vertices are preserved if deletion only.
 -- 2. Added new edge is not removed, even if you removed it at the same time.
---
 einduce :: (Eq a, Eq e) => (e -> a -> a -> Maybe (e, a, a)) -> Graph e a -> Graph e a
 einduce mapEdge = combine . cata go
   -- we maintain two copies of graph, one with graphs removing edges and one
@@ -402,7 +438,7 @@ einduce mapEdge = combine . cata go
         go (ConnectF e ((as, m), a) ((bs, n), b)) =
           ((nub $ as <> bs, fromEdges adds `Overlay` Overlay m n),) $
           removeEdges removes (Connect e a b)
-          where newEdges = nub [z| x <- as, y <- bs, z <- Fold.toList $ mapEdge e x y]
-                oldEdges = nub [(e, x, y)| x <- as, y <- bs]
+          where newEdges = nub [z | x <- as, y <- bs, z <- Fold.toList $ mapEdge e x y]
+                oldEdges = nub [(e, x, y) | x <- as, y <- bs]
                 removes = oldEdges \\ newEdges
                 adds = newEdges \\ oldEdges

@@ -62,7 +62,7 @@ library
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic
-      Language.Constraint.Unification.GraphicType
+      Language.Constraint.Unification
       Language.Core
       Language.Core.Attribute
       Language.Core.Class
@@ -108,6 +108,7 @@ library
       Transform.LowerType
       Transform.Pass
       Transform.TypeGraph
+      Utility.Data
       Utility.Operator
   other-modules:
       Paths_bootstrap

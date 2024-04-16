@@ -33,31 +33,31 @@ Then you are free to try `stack run repl` command, which brings up an interprete
 This is something still under consideration, But here are some topics you may pick up at your interest:
 
 1. Type system
-   
+
    This language combines two systems:
-   
+
    - `SystemFC` for a running system (it lacks constraint support for now)
-   
+
    - `MLF` as core type language
-   
+
    These two systems are verified already, so what left to us are simply implementation details. (It may still need a formal presentation combining these two systems which will be done in future)
-   
+
    We do simple first order unification to infer kinds of types and use graph based unification for MLF types with some straightforward extensions from SystemFC. Type level abstraction are restricted to injective ones and this should not worry us in the near future.
-   
+
    This is the common setting and for now it is all we care about.
-   
+
    > For some reason, constraint system (type class) is not presented and this is our goal.
 
 2. The framework
-   
+
    After months' work, a very basic framework has been setup, using `tagless final style` and [*Data types a la carte*](https://www.cambridge.org/core/journals/journal-of-functional-programming/article/data-types-a-la-carte/14416CB20C4637164EA9F77097909409) . All operations are designed around two or three  extensible structures and all transformation will have a "fold"-like shape with arbitrary extensions to model effects.
-   
+
    We have concept as "pass" to do transformation between AST (this is not in active development right now) and this transformation is defined as "generic" fold using type class.
-   
+
    You need to be familiar with [recursion-scheme](https://hackage.haskell.org/package/recursion-schemes) to understand most cases, because recursion is everywhere. With help of monad and type class, this seems to be suprisingly powerful and yet flexible.
-   
+
    A general pipeline of compiler is:
-   
+
    ```dot
    pipeline {
      Program (Parser) -> AST -> Semantic AST (Inference) -> xMLF -> ANF -> LLVM IR -> MC
@@ -65,23 +65,23 @@ This is something still under consideration, But here are some topics you may pi
    ```
 
 3. The lowlevel part
-   
+
    This is something still under investigation. It relates to code generation and runtime model of this language. It now has nearly no progress but some open problems need to be solved:
-   
+
    1. How to design type directed closure conversion pass in ANF?
-      
+
       > potential solution: trampoline as saver
-   
+
    2. What runtime representation of recursive type should be
-      
+
       > potential solution: introduce linear type to do count and use boxed value
-   
+
    3. How to design type directed optimization procedure in ANF?
-   
+
    4. What is intermediate representation of a module?
-      
+
       > potential solution: mangled name for module definition for representing namespace and intermediate representation for analysed module with ability to be converted into object file
-   
+
    5. Is region inference a saver to generate cost free code?
 
 ## Code structure
@@ -91,11 +91,11 @@ Please read README in `bootstrap/src/Compiler` for a general introduction of com
 ## Roadmap
 
 - [ ] [2023.09.10] First release of a very basic prototype compiler.
-  
+
   - With JIT available for very limited functionality.
-  
+
   - Allow type inference for expression in REPL but with no compilation.
-  
+
   - Only MLF type system is provided, and it has no kinds.
 
 - [ ] [2023.12.10] Lift MLF to MLFω and add kind support.

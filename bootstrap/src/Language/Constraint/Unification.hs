@@ -1,10 +1,10 @@
 {- | * Graph unification module
 
-    implement core unification algorithm
+    implementation of core unification algorithm.
 -}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Language.Constraint.Unification.GraphicType
+module Language.Constraint.Unification
   (
 
   -- ** Core environment
@@ -58,7 +58,6 @@ import Capability.Error (HasThrow, HasCatch, throw, catch)
 import Data.Functor ((<&>), ($>))
 import Data.Bifunctor (bimap)
 import Data.List (nub, groupBy)
-import Data.Set (toList)
 import Data.Function (fix)
 import Control.Applicative ((<|>))
 
@@ -176,7 +175,7 @@ case10 = Unifier $ Recursion2 \unify ->
         since sub edge is tagged with a number, and result is sorted, it will be
         the second case. we group it by equivalence edge.
     -}
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
       [snd -> x, snd -> y] -> return (x, y)
       _ -> failMsg "Tuple nodes don't have same number of children"
@@ -194,7 +193,7 @@ case20 = Unifier $ Recursion2 \unify ->
     -- merge node, keep `a`
     b ==> a >> rebind @Name a
     -- unify subnodes
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     if toInteger (length children) == an + bn then do
       pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
         [snd -> x, snd -> y] -> return (x, y)
@@ -217,7 +216,7 @@ case21 = Unifier $ Recursion2 \unify ->
     -- merge node, keep `a`, and rebind binding edge
     b ==> a >> rebind @Name a
     -- unify subnodes
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     if toInteger (length children) == an + bn then do
       pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
         [snd -> x, snd -> y] -> return (x, y)
@@ -242,7 +241,7 @@ case25 = Unifier $ Recursion2 \unify ->
     -- merge node, keep `a`
     b ==> a >> rebind @Name a
     if af && bf then do
-      children <- getsGraph $ lFrom @(T Sub) (== a)
+      children <- getsGraph $ lFrom @(T Sub) a
       case snd <$> children of
         [x, y] -> unify x y $> a
         _ -> failMsg "Unexpected internal encoding error, label node should have exact one child but it doesn't"
@@ -263,7 +262,7 @@ case30 = Unifier $ Recursion2 \unify ->
     -- merge node, keep `a`
     b ==> a >> rebind @Name a
     -- unify subnodes
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     if toInteger (length children) == (an + bn) then do
       pairs <- forM (groupBy (\(fst -> x) (fst -> y) -> x == y) children) \case
         [snd -> x, snd -> y] -> return (x, y)
@@ -333,7 +332,7 @@ case50 = Unifier $ Recursion2 \unify ->
     -- we merge these two phantom nodes first
     b ==> a >> rebind @Name a
     -- then merge two subnodes
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     case snd <$> children of
       [x, y] -> unify x y $> a
       _ -> failMsg "NodePht node should have exactly one subnode but it is not"
@@ -344,7 +343,7 @@ case51
   => Unifier m ns info
 case51 = Unifier $ Recursion2 \unify ->
   match @NodePht unmatch \(a, NodePht, _) b -> do
-    children <- getsGraph $ lFrom @(T Sub) (== a)
+    children <- getsGraph $ lFrom @(T Sub) a
     case children of
       [snd -> x] -> unify x b
       _ -> failMsg "NodePht node should have exactly one subnode but it is not"
@@ -355,7 +354,7 @@ case52
   => Unifier m ns info
 case52 = Unifier $ Recursion2 \unify a ->
   match @NodePht (unmatch a) \(b, NodePht, _) -> do
-    children <- getsGraph $ lFrom @(T Sub) (== b)
+    children <- getsGraph $ lFrom @(T Sub) b
     case children of
       [snd -> x] -> unify x a
       _ -> failMsg "NodePht node should have exactly one subnode but it is not"
@@ -463,9 +462,9 @@ sequel unify ((a,b): xs) = do
   return $ val : vals
 
 -- | get node's binder and flag
-binderInfo :: (HasOrderGraph ns es info, T (Binding name) :<: es)
+binderInfo :: (HasOrderGraph ns es info, Ord name, T (Binding name) :<: es)
            => Hole ns info -> CoreG ns es info -> [(Flag, Integer, Maybe name, Hole ns info)]
-binderInfo node g = lFrom (== node) g >>= \(T (Binding flag i name), binder) -> return (flag, i, name, binder)
+binderInfo node g = lFrom node g >>= \(T (Binding flag i name), binder) -> return (flag, i, name, binder)
 
 -- | rebind binding edge for node n, this should happen after `==>`.
 rebind :: forall name ns es info m
@@ -473,7 +472,7 @@ rebind :: forall name ns es info m
           , HasGraphUnifyError (Hole ns info) m
           , HasOrderGraph ns es info
           , T (Binding name) :<: es, T NodeBot :<: ns, T Sub :<: es
-          , Eq name
+          , Ord name
           , Histo :<: ns, Pht O :<: es
           )
        => Hole ns info -> m ()
@@ -494,7 +493,7 @@ rebind n = do
     -- | return direct ancestors of node n, if it is partially grafted node.
     -- if this is used during unification, '==>' should be used first.
     partial = do
-      candidates <- getsGraph transpose <&> \g -> toList $ reachable (isLinkOf @(T Sub)) g n
+      candidates <- getsGraph transpose <&> \g -> reachable (isLinkOf @(T Sub)) g n
       -- a partially grafted node only requires that a bottom node exists among
       -- its merged ancestors.
       --
@@ -504,18 +503,18 @@ rebind n = do
       --
       -- results are merged using "or".
       bools <- forM candidates \node -> do
-        merged <- getsGraph (lFrom @(Pht O) (== node))
-          <&> fmap snd -- get nodes
-          <&> (>>= maybeHole (const []) (\_ (Histo as) _ -> as)) -- unroll Histo nodes
-        return . or $ maybeHole @(T NodeBot) (const False) (\_ _ _ -> True) <$> merged
+        merged <- getsGraph (lFrom @(Pht O) node)
+              <&> fmap snd -- get nodes
+              <&> (>>= maybeHole (const []) (\_ (Histo as) _ -> as)) -- unroll Histo nodes
+        return (any (maybeHole @(T NodeBot) (const False) (\_ _ _ -> True)) merged)
       if or bools
-         then getsGraph $ nub . fmap snd . lTo @(T Sub) (== n)
+         then getsGraph $ nub . fmap fst . lTo @(T Sub) n
          else return []
     -- | least common binder of two nodes
     lcb n1 n2 = do
       ns1 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n1
       ns2 <- getsGraph \g -> dfs (isLinkOf @(T (Binding name))) g n2
-      
+
       -- case zip (reverse ns1) (reverse ns2) >>= \(a, b) -> if a == b then pure a else [] of
       case foldl (<|>) Nothing $ ns1 <&> \a -> if a `elem` ns2 then Just a else Nothing of
         Nothing -> failProp $ NodeNoLeastCommonBinder n1 ns1 n2 ns2
@@ -531,7 +530,7 @@ rebind n = do
 --
 -- `Histo` is not a concrete node, and it should not appear in either constraint nodes
 -- or type nodes.
-(==>) :: (HasGraph ns es info m, HasEqNode ns info, HasOrderEdge es, Pht O :<: es, Histo :<: ns)
+(==>) :: (HasGraph ns es info m, HasEqGraph ns es info, Pht O :<: es, Histo :<: ns)
       => Hole ns info -> Hole ns info -> m (Hole ns info)
 (==>) from to@(Hole _ info) = do
 

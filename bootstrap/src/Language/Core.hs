@@ -39,6 +39,16 @@ module Language.Core
   , ModuleSurface
   , ModuleSurfaceExt
 
+  -- ** graphic type and type constraint
+
+  , GraphicTypeSurface
+  , GraphicNodesSurface
+  , GraphicEdgesSurface
+
+  , ConstraintSurface
+  , ConstraintNodesSurface
+  , ConstraintEdgesSurface
+
   -- * useful alias for internal language
 
   -- ** internal pattern
@@ -94,6 +104,8 @@ import Language.Core.Extension as Ext
 import Language.Generic
 import Tlang.Rep (Rep (..))
 import Data.Text (Text)
+import Graph.Extension.GraphicType
+import Graph.Core (CoreG)
 
 -----------------------------------------
 -----------------------------------------
@@ -164,6 +176,29 @@ type DeclSurfaceExt typ expr =
 type ModuleSurface = Module (ModuleSurfaceExt TypSurface (ExprSurface TypSurface)) Name
 type ModuleSurfaceExt typ expr = DeclSurfaceExt typ expr
 
+
+----------------------------------------------------------------------
+  --  ** Surface Graphic Type and Constraint definition
+----------------------------------------------------------------------
+
+-- | Graph representation of type
+type GraphicTypeSurface = CoreG GraphicNodesSurface GraphicEdgesSurface Int
+type GraphicNodesSurface = 
+      NodePht :+: T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
+  :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
+  :+: T NodeApp :+: T (NodeHas Label) :+: T NodeArr
+type GraphicEdgesSurface = T Sub :+: T (Binding Name)
+
+-- | Graph representation of constraint
+type ConstraintSurface = CoreG ConstraintNodesSurface ConstraintEdgesSurface Int
+type ConstraintNodesSurface = 
+  GraphicNodesSurface
+  :+: NDOrder :+: Histo :+: G
+type ConstraintEdgesSurface =
+  GraphicEdgesSurface
+  :+: Pht O :+: Pht Sub :+: Pht NDOrderLink
+  :+: T Unify :+: T Instance
+
 ------------------------------------------
 ------------------------------------------
 -- * Internal definition of core structure
@@ -205,8 +240,8 @@ type SugarLambdaType typ = Lambda (Binder (Prefix Name typ))
 -- ** Sugar term lambda, which may or may not include type annotation
 type SugarLambdaTerm typ = Lambda (Binder (Name @: Maybe typ))
 
--- Sugar recursive "Let" binding group, all allow optional type annotation
+-- ** Sugar recursive "Let" binding group, all allow optional type annotation
 type SugarLetRecur typ = Letrec (Binder (Name @: Maybe typ))
 
--- Sugar normal "Let" binding group
+-- ** Sugar normal "Let" binding group
 type SugarLetTerm typ = Let (Binder (Name @: Maybe typ))

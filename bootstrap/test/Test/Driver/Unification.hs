@@ -1,3 +1,7 @@
+{- | * Unification unit test module
+-- 
+-- Place test cases and mocked environment here.
+---}
 module Test.Driver.Unification
   ( unifyingOfUnifiableTypesShouldNotGoWrong
   )
@@ -6,7 +10,7 @@ where
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Driver.Transform
+import Driver.Transform hiding (graph)
 import Driver.Transform.Desugar (addBindingToType)
 import Driver.Unification
 
@@ -23,24 +27,20 @@ import Compiler.SourceParsing
 
 type CustomG = CoreG (G :+: Histo :+: SurfaceGNodes) (Pht O :+: SurfaceGEdges) Int
 
-assertType :: MonadFail m => Text -> m TypSurface
-assertType text = do
-  res'either <- getSurfaceType builtinStore "Under Testing" text
-  case res'either of
+-- | parse surface type from given string, this is a precondition.
+parseUserType :: MonadFail m => Text -> m TypSurface
+parseUserType text = getSurfaceType builtinStore "Type unification" text >>= \case
     Left err -> fail $ "Parser Error: " <> errorBundlePretty err
     Right t -> return t
 
-buildAssertionText :: Text -> Text -> (String -> IO ()) -> Assertion
-buildAssertionText ia ib output = do
-  ta <- assertType ia
-  tb <- assertType ib
-  ((r1, g1 :: CustomG), i) <- toGraphicTypeMock mempty 1 ta >>= \case
-    Right ((root, gr), i) -> (, i) . (root, ) <$> (snd <$> addBindingToType gr root)
-    Left err -> fail $ show err
-  ((r2, g2), j) <- toGraphicTypeMock mempty i tb >>= \case
-    Right ((root, gr), j) -> (, j) . (root, ) <$> (snd <$> addBindingToType gr root)
-    Left err -> fail $ show err
-  let root = hole (G 1) (j + 1)
+-- | runner for this unit testing.
+buildUnificationTest :: Text -> Text -> (String -> IO ()) -> Assertion
+buildUnificationTest left right output = do
+  ta <- parseUserType left
+  tb <- parseUserType right
+  ((r1, g1), i) <- buildConstraint 1 ta
+  ((r2, g2), j) <- buildConstraint i tb
+  let root = hole (G 10000) (j + 1)
       gr = overlays
            [ g1, g2
            , r1 -<< T (Binding Flexible 1 (Nothing @Name)) >>- root
@@ -52,9 +52,13 @@ buildAssertionText ia ib output = do
       runGraphType g [] ("@", 1) syntacticType r >>= \case
       Left err -> fail $ show err
       Right (t :: TypSurface, _) -> output $ show (pretty t)
-
-buildCase :: (String, String) -> TestTree
-buildCase v@(l, r) = testCaseSteps (show v) $ buildAssertionText (pack l) (pack r)
+  where
+    buildConstraint i typ = toGraphicTypeMock mempty i typ >>= \case
+      Right ((root, gr :: CustomG), j) -> do
+        -- convert graphic types to graphic constraints.
+        (_, graph) <- addBindingToType gr root
+        return ((root, graph), j)
+      Left err -> fail $ show err
 
 -- ** test cases
 
@@ -79,3 +83,6 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   --   )
   , ("forall x. maybe x", "forall f y. maybe (f y)")
   ]
+  where
+  buildCase :: (String, String) -> TestTree
+  buildCase v@(l, r) = testCaseSteps (show v) $ buildUnificationTest (pack l) (pack r)

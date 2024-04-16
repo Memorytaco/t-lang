@@ -129,6 +129,7 @@ solve
   :: forall name err nodes edges m a
   . ( edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
     , nodes :>+: '[NDOrder, G, T NodeBot]
+    , Ord name
     , HasOrderGraph nodes edges Int
     , Monad m
     )
@@ -147,7 +148,7 @@ preInfer
      , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
      , nodes :>+: '[NDOrder, G, T NodeBot]
      , HasOrderGraph nodes edges Int, Monad m
-     , Traversable f, Eq name
+     , Traversable f, Ord name
      )
   => Expr f name -> BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
@@ -167,7 +168,7 @@ infer
      , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
      , nodes :>+: '[NDOrder, G, T NodeBot, NodePht]
      , HasOrderGraph nodes edges Int, Monad m
-     , Traversable f, Eq name
+     , Traversable f, Ord name
      )
   => BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)

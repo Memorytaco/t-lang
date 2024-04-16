@@ -40,8 +40,8 @@ pruneForallType = cata go
     go (TypBndF bnd) =
       case prjj @(Forall Prefix) bnd of
         Just (Forall binding a) -> case binding of
-          (name :~ typ) -> pruneForallType @name a
-          (name :> typ) -> pruneForallType @name a
+          (_name :~ _typ) -> pruneForallType @name a
+          (_name :> _typ) -> pruneForallType @name a
         Nothing -> TypBnd bnd
     go (TypeF f) = Type f
 
@@ -52,18 +52,18 @@ data SugarRule nodes edges info m a
 -- | structure link from, sort by sub edge
 sFrom :: (HasGraph nodes edges info m, T Sub :<: edges, HasOrderGraph nodes edges info)
       => Hole nodes info -> m [(T Sub (Link edges), Hole nodes info)]
-sFrom root = getsGraph $ lFrom @(T Sub) (== root)
+sFrom = getsGraph . lFrom @(T Sub)
 
 hasBinding
-  :: forall name nodes edges info. (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+  :: forall name nodes edges info. (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> CoreG nodes edges info -> Bool
-hasBinding root = not . null . lFrom @(T (Binding name)) (== root)
+hasBinding root = not . null . lFrom @(T (Binding name)) root
 
 addBinding
-  :: forall name nodes edges info. (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+  :: forall name nodes edges info. (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => (Hole nodes info, Flag) -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
 addBinding (from, flag) to gr = overlay gr (from -<< T (Binding flag i $ Nothing @name) >>- to)
-  where i = toInteger . (+1) . length $ lTo @(T (Binding name)) (== to) gr
+  where i = toInteger . (+1) . length $ lTo @(T (Binding name)) to gr
 
 treeSugarRule :: HasGraph nodes edges info m => [SugarRule nodes edges info m Bool] -> SugarRule nodes edges info m Bool
 treeSugarRule = foldr foldT (SugarRule $ Recursion \_ _ -> return False)
@@ -83,6 +83,7 @@ case01
   :: forall name nodes edges info m
   . ( edges :>+: '[T Sub, T (Binding name)]
     , nodes :>+: '[T NodeApp]
+    , Ord name
     , HasGraph nodes edges info m
     , HasOrderGraph nodes edges info
     )
@@ -103,6 +104,7 @@ case10
   :: forall name nodes edges info m
   . ( edges :>+: '[T Sub, T (Binding name)]
     , nodes :>+: '[T NodeTup]
+    , Ord name
     , HasGraph nodes edges info m
     , HasOrderGraph nodes edges info
     )

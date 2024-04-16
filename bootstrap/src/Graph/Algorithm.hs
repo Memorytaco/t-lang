@@ -40,7 +40,7 @@ import Control.Monad.Identity (Identity (..))
 --
 -- Effects of duplications in the returned list is determined by algorithm
 -- using it.
-type RouteT m e a = Graph e a -> ([(e, a)], [(a, e)]) -> m [a]
+type RouteT m e a = Graph e a -> ([(a, (e, a))], [((a, e), a)]) -> m [a]
 -- | `RouteStartT` generates nodes where to start and with an order.
 --
 -- It can computes none or one or many nodes to start and in a list
@@ -50,8 +50,8 @@ type RouteT m e a = Graph e a -> ([(e, a)], [(a, e)]) -> m [a]
 -- using it.
 type RouteStartT m e a = Graph e a -> m [a]
 
-type Route e a = RouteT Identity e a
-type RouteStart e a = RouteStartT Identity e a
+type Route e a = Graph e a -> ([(a, (e, a))], [((a, e), a)]) -> [a]
+type RouteStart e a = Graph e a -> [a]
 
 -- | depth first traversal algorithm. with monad support.
 --
@@ -89,11 +89,11 @@ bfsm startWith next g = do
 
 -- | depth first traversal algorithm.
 dfs :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
-dfs startWith next = runIdentity . dfsm startWith next
+dfs startWith next = runIdentity . dfsm (return . startWith) (fmap return . next)
 
 -- | breadth first traversal algorithm
 bfs :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
-bfs startWith next = runIdentity . bfsm startWith next
+bfs startWith next = runIdentity . bfsm (return . startWith) (fmap return . next)
 
 -- | TODO: optimise its memory usage
 -- least matched sequence using brute force matching method
