@@ -32,7 +32,7 @@ import Graph.Core
 import Graph.Extension.GraphicType
 import Language.Core.Extension
 import Language.Generic ((:+:) (..), (:<:), (:++:))
-import Tlang.Rep (Rep (..))
+import Language.DataLayout (Rep (..))
 import Language.Setting (HasNodeCreator, node)
 
 import Capability.Reader (HasReader, asks, local)

@@ -7,15 +7,15 @@
 -}
 {-# LANGUAGE QuantifiedConstraints #-}
 
-module Tlang.Rep.DataRep
+module Language.DataLayout.DataRep
   ( DataRep (..)
   , DataRepF (..)
   , SeqT (..)
   )
 where
 
-import Tlang.Rep.Class (EncodeLLVMType (..), LLVMTypeClass (..), TypeClass (..))
-import Tlang.TH (fixQ)
+import Language.DataLayout.Class (EncodeLLVMType (..), LLVMTypeClass (..), TypeClass (..))
+import Language.TH (fixQ)
 import qualified LLVM.AST.Type as AST (Type (..))
 import Data.Maybe (fromMaybe)
 

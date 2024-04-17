@@ -12,7 +12,7 @@ where
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
-import Tlang.TH (fixQ)
+import Language.TH (fixQ)
 import Language.Core.Utility
 import Prettyprinter (Pretty (..), parens, hsep)
 

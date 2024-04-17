@@ -14,7 +14,7 @@ import Language.Parser.Lexer
 
 import Language.Core
 
-import qualified Tlang.Rep as Rep
+import qualified Language.DataLayout as Rep
 
 import Data.Text (Text)
 import Data.List (find)

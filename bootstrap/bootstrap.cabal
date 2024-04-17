@@ -41,8 +41,8 @@ library
       Compiler.TypeChecking
       Driver
       Driver.Compiler.CodeGen.LLVM
+      Driver.Constraint
       Driver.Graph
-      Driver.GraphicConstraint
       Driver.Parser
       Driver.Transform
       Driver.Transform.Desugar
@@ -82,6 +82,10 @@ library
       Language.Core.Term
       Language.Core.Type
       Language.Core.Utility
+      Language.DataLayout
+      Language.DataLayout.Class
+      Language.DataLayout.DataRep
+      Language.DataLayout.Primitive
       Language.Generic
       Language.Generic.Data
       Language.Generic.Subsume
@@ -94,14 +98,10 @@ library
       Language.Parser.Pattern
       Language.Parser.Type
       Language.Setting
+      Language.TH
       Recursion.Morphism
       Tlang.Codegen
       Tlang.Inference.Kind
-      Tlang.Rep
-      Tlang.Rep.Class
-      Tlang.Rep.DataRep
-      Tlang.Rep.Primitive
-      Tlang.TH
       Transform.CPSTransform
       Transform.Desugar
       Transform.GraphType

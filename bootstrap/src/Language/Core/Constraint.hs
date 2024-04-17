@@ -11,7 +11,7 @@ where
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
 import Data.Bifunctor.TH (deriveBifunctor)
-import Tlang.TH (fixQ)
+import Language.TH (fixQ)
 import Prettyprinter (Pretty (..), (<+>), hsep, parens)
 
 -- ** HM(X) constraint framework, both for term language and type language

@@ -1,4 +1,4 @@
-module Tlang.TH
+module Language.TH
   ( fixQ
   )
 where

@@ -1,4 +1,4 @@
-module Driver.GraphicConstraint
+module Driver.Constraint
   (
 
   -- ** monad for graphic constraint generator
@@ -76,7 +76,6 @@ genGC :: forall nodes edges name m f target.
   , edges :>+: '[T Sub, T (Binding name), T Unify, T Instance, Pht NDOrderLink, Pht Sub]
   , nodes :>+: '[T NodeBot, G, NDOrder]
   , Traversable f
-  , HasOrderEdge edges
   , Eq name
   , Monad m
   ) => Expr f name -> BindingTable name nodes -> Int

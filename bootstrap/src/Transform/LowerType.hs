@@ -22,7 +22,7 @@ import qualified Language.Core as AST (Type (..))
 import Language.Core hiding (Type, Constraint)
 import Language.Core.Extension
 
-import Tlang.Rep
+import Language.DataLayout
 import Language.Generic
 -- import Tlang.Constraint (Prefix (..))
 

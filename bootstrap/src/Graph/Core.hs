@@ -89,11 +89,13 @@ infixl 5 -<<, >>-, -++, ++-
 
 -- | helpers for constructing arbitrary edges and nodes
 
+-- | directed edge link.
 (-<<) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Link edges)
 (-<<) a e = (a, link e)
 (>>-) :: (Hole nodes info, Link edges) -> Hole nodes info -> CoreG nodes edges info
 (>>-) (a, e) = Algebra.fromEdge e a
 
+-- | undirected edge link.
 (-++) :: edge :<: edges => Hole nodes info -> edge (Link edges) -> (Hole nodes info, Link edges)
 (-++) a e = (a, link e)
 (++-) :: (Hole nodes info, Link edges) -> Hole nodes info -> CoreG nodes edges info

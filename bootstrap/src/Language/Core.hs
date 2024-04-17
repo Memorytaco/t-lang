@@ -102,7 +102,7 @@ import Language.Core.Utility as Utility
 -- ** required imports
 import Language.Core.Extension as Ext
 import Language.Generic
-import Tlang.Rep (Rep (..))
+import Language.DataLayout (Rep (..))
 import Data.Text (Text)
 import Graph.Extension.GraphicType
 import Graph.Core (CoreG)

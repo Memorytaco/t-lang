@@ -3,7 +3,7 @@
     it is the fundamental building blocks of native type.
 -}
 
-module Tlang.Rep.Primitive
+module Language.DataLayout.Primitive
   ( PrimitiveT (..)
   , PrimitiveTF (..)
 
@@ -18,8 +18,8 @@ module Tlang.Rep.Primitive
   )
 where
 
-import Tlang.Rep.Class (EncodeLLVMType (..), LLVMTypeClass (..), TypeClass (..))
-import Tlang.TH (fixQ)
+import Language.DataLayout.Class (EncodeLLVMType (..), LLVMTypeClass (..), TypeClass (..))
+import Language.TH (fixQ)
 
 import LLVM.AST.Type (Type (..), FloatingPointType (FloatFP, DoubleFP, FP128FP))
 import LLVM.AST.AddrSpace (AddrSpace (..))

@@ -2,7 +2,7 @@
 -}
 
 
-module Tlang.Rep
+module Language.DataLayout
   (
     -- ** runtime representation
     Rep (..)
@@ -15,9 +15,9 @@ module Tlang.Rep
   )
 where
 
-import Tlang.Rep.Class as Class
-import Tlang.Rep.Primitive as Prim
-import Tlang.Rep.DataRep as DataRep
+import Language.DataLayout.Class as Class
+import Language.DataLayout.Primitive as Prim
+import Language.DataLayout.DataRep as DataRep
 
 import Control.Lens
 import Prettyprinter (Pretty)

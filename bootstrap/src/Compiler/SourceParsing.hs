@@ -100,6 +100,7 @@ loadModuleFromText path content = runExceptT do
     modify @UseCompilerStore ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
   return m
 
+-- | try fetching expression ast from text.
 getSurfaceExpr
   :: Monad m
   => OperatorStore -> String -> Text
@@ -107,6 +108,7 @@ getSurfaceExpr
 getSurfaceExpr ops prompt content =
   driveParser ops (surfaceExpr eof) prompt content <&> fst
 
+-- | try fetching type ast from text.
 getSurfaceType :: Monad m
   => OperatorStore -> String -> Text
   -> m (Either (ParseErrorBundle Text Void) TypSurface)

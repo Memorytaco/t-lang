@@ -70,7 +70,14 @@ newtype ParserMonad e m a = ParserMonad
     deriving (HasReader "TypeOperator" [Operator Text], HasSource "TypeOperator" [Operator Text])
         via Rename 2 (Pos 2 () (MonadReader (ParserMonad' e m)))
 
--- | an all in one monad for language parser
+-- | an all in one monad for language parser.
+--
+-- this driver accepts an `OperatorStore` and a
+-- parser definition and then consumes provided text with a
+-- parsing environment hint text (for human reading only).
+--
+-- it updates `OperatorStore` and returns store. so `driveParser`
+-- has some sort of composibility.
 driveParser
   :: Monad m
   => OperatorStore
@@ -79,21 +86,18 @@ driveParser
   -> m (Either (ParseErrorBundle Text e) a, OperatorStore)
 driveParser store parser prompt text =
   let openv = mconcat $ store <&> \case
-        TypeOperator t -> ([], [t])
-        TermOperator t -> ([t], [])
+        TypeOperator op -> ([], [op])
+        TermOperator op -> ([op], [])
    in runStateT (runReaderT (runParserT (runParserMonad parser) prompt text) openv) store
 
--- | allow automatic failing for parser
+-- | allow automatic failure for parser. see `driveParser` for more info.
 driveParserFail :: (MonadFail m, ShowErrorComponent e)
   => OperatorStore
   -> ParserMonad e m a
   -> String -> Text
   -> m (a, OperatorStore)
 driveParserFail store parser prompt text = do
-  let openv = mconcat $ store <&> \case
-        TypeOperator t -> ([], [t])
-        TermOperator t -> ([t], [])
-  (res'either , s) <- runStateT (runReaderT (runParserT (runParserMonad parser) prompt text) openv) store
+  (res'either , s) <- driveParser store parser prompt text
   case res'either of
     Right a -> return (a, s)
     Left e -> fail $ errorBundlePretty e

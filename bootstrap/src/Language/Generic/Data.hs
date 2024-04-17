@@ -8,7 +8,7 @@ where
 
 import Data.Functor.Foldable (Recursive)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
-import Tlang.TH (fixQ)
+import Language.TH (fixQ)
 import Prettyprinter ( Pretty(pretty) )
 import Data.Bifunctor.TH (deriveBifunctor)
 

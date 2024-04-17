@@ -1,4 +1,4 @@
-module Tlang.Rep.Class
+module Language.DataLayout.Class
   ( TypeMangle (..)
   , EncodeLLVMType (..)
 

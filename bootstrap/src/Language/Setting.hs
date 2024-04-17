@@ -1,4 +1,7 @@
-{- | Common settings for projects
+{- | Common utilities and settings for project
+-- 
+-- this module enforces some rules on the project
+-- and has mostly monad setting.
 -}
 module Language.Setting
   (
@@ -8,7 +11,7 @@ module Language.Setting
   , NodeCreator
   , newNodeCounter
   , node
-  
+
   -- ** Allow read and modify graph
   , HasGraphReader
   , GraphReader
@@ -71,7 +74,7 @@ localGraph = local @GraphReader
 modifyGraph :: HasGraph nodes edges info m => (CoreG nodes edges info -> CoreG nodes edges info) -> m ()
 modifyGraph = modify @GraphState
 
-putGraph :: HasGraph nodes edges info m => (CoreG nodes edges info) -> m ()
+putGraph :: HasGraph nodes edges info m => CoreG nodes edges info -> m ()
 putGraph = put @GraphState
 
 getGraph :: HasGraph nodes edges info m => m (CoreG nodes edges info)

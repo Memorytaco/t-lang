@@ -1,3 +1,7 @@
+{- | TypeChecking module
+--
+-- Place TypeChecking related definitions here.
+---}
 module Compiler.TypeChecking
   (
     tcExprToGraphciType
@@ -7,7 +11,11 @@ module Compiler.TypeChecking
 where
 
 
-import qualified Driver.GraphicConstraint as DGC
+import qualified Driver.Constraint as DGC
+import Driver.Constraint (SolverErr)
+import Driver.Transform.GraphType (runGraphType, syntacticType)
+import Driver.Transform (UnifyGNodes, UnifyGEdges)
+
 import Driver.Unification (unify, GraphUnifyError)
 
 import Language.Core (ExprF, Name, Label, ExprSurface, ExprSurfaceExt, TypSurface)
@@ -16,9 +24,6 @@ import Graph.Extension.GraphicType
 import Language.Generic
 import Language.Constraint.Graphic
 import Data.Text (Text)
-import Driver.Transform.GraphType (runGraphType, syntacticType)
-import Driver.Transform (UnifyGNodes, UnifyGEdges)
-import Driver.GraphicConstraint (SolverErr)
 import Transform.GraphType (GraphToTypeErr)
 
 data TypeCheckingErr

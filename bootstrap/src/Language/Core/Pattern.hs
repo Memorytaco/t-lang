@@ -15,7 +15,7 @@ where
 
 import Data.Functor.Foldable.TH
 import Data.Functor.Foldable (Recursive)
-import Tlang.TH (fixQ)
+import Language.TH (fixQ)
 import Prettyprinter
 import Data.Functor ((<&>))
 
