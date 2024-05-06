@@ -35,6 +35,7 @@ library
       Compiler.CodeGen
       Compiler.CodeGen.LLVM
       Compiler.CodeGen.LLVM.Lambda
+      Compiler.CodeGen.LLVM.Module
       Compiler.NameChecking
       Compiler.SourceParsing
       Compiler.Store
@@ -62,9 +63,9 @@ library
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic
+      Language.Constraint.Kind
       Language.Constraint.Unification
       Language.Core
-      Language.Core.Attribute
       Language.Core.Class
       Language.Core.Class.Decl
       Language.Core.Constraint
@@ -75,6 +76,7 @@ library
       Language.Core.Extension.Decl
       Language.Core.Extension.Expr
       Language.Core.Extension.Type
+      Language.Core.Macro
       Language.Core.Module
       Language.Core.Name
       Language.Core.Operator
@@ -100,8 +102,6 @@ library
       Language.Setting
       Language.TH
       Recursion.Morphism
-      Tlang.Codegen
-      Tlang.Inference.Kind
       Transform.CPSTransform
       Transform.Desugar
       Transform.GraphType

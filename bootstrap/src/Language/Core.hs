@@ -30,6 +30,10 @@ module Language.Core
   , ExprSurface
   , ExprSurfaceExt
 
+  -- ** surface macro lang
+  , MacroSurfaceAttr
+  , MacroSurfaceAttrExt
+
   -- ** parsed declaration structure
   , DeclSurface
   , DeclsSurface
@@ -78,7 +82,7 @@ module Language.Core
   , module Decl
   , module Pattern
   , module Name
-  , module Attribute
+  , module Macro
   , module Class
   , module Constraint
   , module Utility
@@ -94,7 +98,7 @@ import Language.Core.Operator as Operator
 import Language.Core.Decl as Decl
 import Language.Core.Pattern as Pattern
 import Language.Core.Name as Name
-import Language.Core.Attribute as Attribute
+import Language.Core.Macro as Macro
 import Language.Core.Constraint as Constraint
 import Language.Core.Class as Class
 import Language.Core.Utility as Utility
@@ -140,17 +144,28 @@ type GPatSurfaceLitExt = PatSurfaceLitExt
 -- | Surface Expr
 type ExprSurface typ = Expr (ExprSurfaceExt typ) Name
 type ExprSurfaceExt typ =
-  (   LetGrp (PatSurface typ)           -- plain pattern match via "let" binding
+      LetGrp (PatSurface typ)           -- plain pattern match via "let" binding
   :+: Let (Binder (Name @: Maybe typ))  -- desugared non-recursive "let" binding
   :+: Letrec (Binder (Name @: Maybe typ)) -- desugared possible-recrusive "let" binding group
   :+: Equation (GPatSurface typ) (Prefixes Name typ)  -- heavy lambda
   :+: Equation (Grp (PatSurface typ)) (Prefixes Name typ) -- light lambda
-  :+: Apply -- application, term beta-reduction or type application
+  :+: Apply     -- application, term beta-reduction or type application
   :+: Value typ -- unlifted type value
   :+: (@:) typ  -- type annotation
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
   :+: Tuple :+: Record Label :+: Selector Label :+: Constructor Label
-  )
+
+
+-------------------
+-- ** Surface Attribute Macro
+-------------------
+type MacroSurfaceAttr a = Macro MacroSurfaceAttrExt a
+type MacroSurfaceAttrExt =
+      LiteralText       -- allow string value in macro
+  :+: LiteralInteger    -- allow integer value in macro
+  :+: List              -- allow list value in macro
+  :+: Constructor Name  -- allow application in macro
+  :+: Record Name       -- allow key value pair in macro
 
 ----------------------------------
 -- ** Surface toplevel declaration
@@ -183,7 +198,7 @@ type ModuleSurfaceExt typ expr = DeclSurfaceExt typ expr
 
 -- | Graph representation of type
 type GraphicTypeSurface = CoreG GraphicNodesSurface GraphicEdgesSurface Int
-type GraphicNodesSurface = 
+type GraphicNodesSurface =
       NodePht :+: T NodeBot :+: T (NodeLit Integer) :+: T (NodeLit Text)
   :+: T NodeTup :+: T NodeSum :+: T NodeRec :+: T (NodeRef Name)
   :+: T NodeApp :+: T (NodeHas Label) :+: T NodeArr
@@ -191,7 +206,7 @@ type GraphicEdgesSurface = T Sub :+: T (Binding Name)
 
 -- | Graph representation of constraint
 type ConstraintSurface = CoreG ConstraintNodesSurface ConstraintEdgesSurface Int
-type ConstraintNodesSurface = 
+type ConstraintNodesSurface =
   GraphicNodesSurface
   :+: NDOrder :+: Histo :+: G
 type ConstraintEdgesSurface =

@@ -3,7 +3,9 @@
 {-# OPTIONS_GHC -Wno-incomplete-patterns #-}
 {-# OPTIONS_GHC -Wno-unused-matches #-}
 {-# OPTIONS_GHC -Wno-redundant-constraints #-}
-module Tlang.Inference.Kind
+{- | TODO: add kind constraint to solver after finishing the theroy part
+-- -}
+module Language.Constraint.Kind
   (
     KindUnifyError (..)
   , shift
@@ -193,3 +195,4 @@ genConstraint = cata go
     --   k <- freshName
     --   return ((k1 :<> foldr (::>) k kn) : s1 <> sn, TypCon term1 termn `annotate` k)
     -- go (TypRepF mr) = return . pure $ TypRep r `annotate` KindType
+

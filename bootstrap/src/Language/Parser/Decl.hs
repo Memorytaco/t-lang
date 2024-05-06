@@ -50,6 +50,7 @@ instance (ParserM e m, Rule (WithDecl e m a) (Decl decl info) m, Rule (WithDecl 
   rule _ end = try (parseRule @(WithDecl e m a) end) <|> parseRule @(WithDecl e m b) end
 
 -- | foreign interface
+-- TODO: replace `Attr` with `Macro`
 instance (ParserM e m, PrattToken proxy typ m, info ~ Name, Item (FFI typ Name) :<: decl)
   => Rule (WithDecl e m (Layer "ffi" proxy typ)) (Decl decl info) m where
   rule _ end = do

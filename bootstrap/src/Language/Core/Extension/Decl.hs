@@ -37,7 +37,7 @@ module Language.Core.Extension.Decl
 where
 
 import Language.Core.Operator
-import Language.Core.Attribute
+import Language.Core.Macro
 import Language.Core.Constraint (Prefixes (..))
 import Language.Core.Class.Decl
 

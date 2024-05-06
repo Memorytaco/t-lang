@@ -83,6 +83,8 @@ instance
   pretty (TypVar name) = pretty name
   pretty (Type t) = pretty t
 
+-- TODO: refine kind definition in `Language.Core.Type` module
+
 infixr 3 :->
 
 -- | type kind representation, any kind, normal kind (*) and higher kind

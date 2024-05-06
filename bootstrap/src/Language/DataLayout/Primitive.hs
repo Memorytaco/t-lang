@@ -1,6 +1,6 @@
 {- | * Language primitive types
-
-    it is the fundamental building blocks of native type.
+--
+--  it is the fundamental building blocks of native type.
 -}
 
 module Language.DataLayout.Primitive
@@ -36,17 +36,18 @@ import Prettyprinter ( encloseSep, comma, Pretty(pretty) )
 -- we can use it to do a direct translation between host type and llvm IR type.
 data PrimitiveT seq a where
   -- | void to mean empty value inhabitance of type
-  VoidT :: PrimitiveT seq a
+  VoidT   :: PrimitiveT seq a
   -- | see `PrimScalaType`
   Scala   :: ScalaType -> PrimitiveT seq a
-  -- | pointer type
+  -- | pointer type should only accept `PrimitiveT` type. The integer is
+  -- used for memory namespace.
   Ptr     :: PrimitiveT seq a -> Maybe Integer -> PrimitiveT seq a
   -- | raw sequential type, array or vector
   Seq     :: seq (PrimitiveT seq a) -> PrimitiveT seq a
   -- | Aggregate type
   Struct  :: [PrimitiveT seq a] -> Bool -> PrimitiveT seq a
   -- | Allow other elements to be merged into primitive type
-  Embed  :: a -> PrimitiveT seq a
+  Embed   :: a -> PrimitiveT seq a
   deriving (Functor, Foldable, Traversable)
 
 deriving instance (Eq a, Eq (t (PrimitiveT t a))) => Eq (PrimitiveT t a)

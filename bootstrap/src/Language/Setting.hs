@@ -1,7 +1,7 @@
-{- | Common utilities and settings for project
+{- | * Common utilities and settings
 -- 
 -- this module enforces some rules on the project
--- and has mostly monad setting.
+-- and most of them are monad settings.
 -}
 module Language.Setting
   (
@@ -13,12 +13,14 @@ module Language.Setting
   , node
 
   -- ** Allow read and modify graph
+  -- *** Grpah reader
   , HasGraphReader
   , GraphReader
   , askGraph
   , asksGraph
   , localGraph
 
+  -- *** Graph state
   , HasGraph
   , GraphState
   , modifyGraph
@@ -26,7 +28,7 @@ module Language.Setting
   , putGraph
   , getsGraph
 
-  -- ** Allow generate true random name
+  -- ** Allow generating true random name
   , HasRandomName
   , randomName
   , randomNameHint
@@ -45,24 +47,30 @@ import Data.Char (isAlphaNum)
 import Data.String (IsString (..))
 import System.Random.Stateful
 
+-- | common environment for creating node
 data NodeCreator
 type HasNodeCreator m = (HasState NodeCreator Int m)
 
 newNodeCounter :: HasNodeCreator m => m Int
 newNodeCounter = modify @NodeCreator (+1) >> get @NodeCreator
 
+-- | just return a new node with valid tag.
 node :: (node :<: nodes, HasNodeCreator m) => node (Hole nodes Int) -> m (Hole nodes Int)
 node val = newNodeCounter <&> hole val
 
+-- | graph monad reader
 data GraphReader
 type HasGraphReader nodes edges info m = (HasReader GraphReader (CoreG nodes edges info) m)
 
+-- | graph monad state modifier
 data GraphState
 type HasGraph nodes edges info m = (HasState GraphState (CoreG nodes edges info) m)
 
+-- | read graph
 askGraph :: HasGraphReader nodes edges info m => m (CoreG nodes edges info)
 askGraph = ask @GraphReader
 
+-- | read sub graph
 asksGraph :: HasGraphReader nodes edges info m => (CoreG nodes edges info -> a) -> m a
 asksGraph = asks @GraphReader
 
@@ -85,7 +93,7 @@ getsGraph = gets @GraphState
 
 type HasRandomName m = (StatefulGen (AtomicGenM StdGen) m, MonadIO m)
 
--- | randomName nameLength -> name
+-- | randomName :: nameLength -> name
 randomName :: (IsString name, HasRandomName m) => Int -> m name
 randomName n = fromString <$> replicateM n seed
   where seed = uniformRM ('0', 'Z') globalStdGen

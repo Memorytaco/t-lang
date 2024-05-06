@@ -1,8 +1,8 @@
 {- | * runtime type representation
 
-    This module introduces `DataRep` constructor to help
-    translating high level type into machine type, which is
-    LLVM IR type in this situation.
+--  This module introduces `DataRep` constructor to help
+--  translating high level type into machine type.
+--  It is originally designed to target at LLVM IR.
 
 -}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -25,9 +25,9 @@ import Prettyprinter (Pretty (..), encloseSep, (<+>))
 
 -- | runtime representation for type
 data DataRep t a where
-  -- | We have PrimitiveT contained, and it is a concrete type
+  -- | We have PrimitiveT contained, and it is a concrete type.
   RepLift :: t (DataRep t a) -> DataRep t a
-  -- | Introduce whatever type system using `f`
+  -- | Introduce whatever type system using `t`, and this is a direct encoding.
   DataRep :: a -> DataRep t a
   deriving (Functor)
 
@@ -41,7 +41,9 @@ instance (Show (t (DataRep t a)), Show a) => Show (DataRep t a) where
 deriving instance (Eq (t (DataRep t a)), Eq a) => Eq (DataRep t a)
 deriving instance (Ord (t (DataRep t a)), Ord a) => Ord (DataRep t a)
 
--- | A hint provided by user to determin which type we will use, but the result is not guarenteed
+-- | A hint provided by user to determin which type we will use, but the result is not guarenteed.
+--
+-- If we need other sequence alike primitive container, we can add it here.
 data SeqT a where
   SeqVector :: a -> Integer -> SeqT a
   SeqArray  :: a -> Maybe Integer -> SeqT a

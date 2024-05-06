@@ -1,12 +1,7 @@
-module Tlang.Codegen
-  ( -- ** FIXME: this module is not useful at current time, use `Driver.Codegen`
+module Compiler.CodeGen.LLVM.Module
 
-    -- ** helper
-    createModule
-  , shortString
-
-  )
 where
+
 
 import LLVM.AST
     ( defaultModule, Module(moduleSourceFileName, moduleName) )

@@ -7,6 +7,7 @@ module Language.Core.Extension.Common
   , Binder (..)
   , Cast (..)
   , Literal (..)
+  , List (..)
   )
 where
 
@@ -38,7 +39,7 @@ instance (Pretty label, Pretty a) => Pretty (Record label a) where
 instance (Show label, Show a) => Show (Record label a) where
   show (Record vs) = "{" <> intercalate ", " ((\(a, b) -> show a <> " = " <> show b) <$> vs) <> "}"
 
--- | Inject any constant into the expression
+-- | inject any other thing into the expression, e.g. @type injection
 newtype Value val a = Value val
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
   deriving (Pretty) via val
@@ -61,3 +62,7 @@ newtype Literal c a = Literal { getLiteral :: c }
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving (Show, Pretty) via c
 
+-- | add @[]@ list constructor to language
+newtype List a = List { unList :: [a] }
+  deriving (Eq, Ord, Functor, Foldable, Traversable)
+  deriving (Show, Pretty) via [a]

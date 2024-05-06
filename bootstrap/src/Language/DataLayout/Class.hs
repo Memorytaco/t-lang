@@ -1,3 +1,4 @@
+-- TODO: refine DataLayout.Class module and introduce lowlevel name mangle here
 module Language.DataLayout.Class
   ( TypeMangle (..)
   , EncodeLLVMType (..)
