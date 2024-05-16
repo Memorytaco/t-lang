@@ -29,7 +29,7 @@ import Language.Generic ((:>+:), type (|:) (..))
 import Language.Core (ExprF (..), Expr (..))
 import Language.Setting
 
-import Graph.Core (Hole (..), CoreG, HasOrderEdge, HasOrderGraph)
+import Graph.Core (Hole (..), CoreG, HasOrderGraph)
 import Graph.Extension.GraphicType
 
 

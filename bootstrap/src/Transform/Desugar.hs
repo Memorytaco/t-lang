@@ -1,9 +1,9 @@
-{-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE QuantifiedConstraints, AllowAmbiguousTypes #-}
+-- TODO: Complete this module
 module Transform.Desugar
   ( pruneForallType
 
-  , treeSugarRule
+  , foldSugarRule
   , runSugarRule
 
   , case01
@@ -45,6 +45,8 @@ pruneForallType = cata go
         Nothing -> TypBnd bnd
     go (TypeF f) = Type f
 
+
+-- | Structure to hold a desugar rule
 data SugarRule nodes edges info m a
   = HasGraph nodes edges info m
   => SugarRule (Recursion m (Hole nodes info) a)
@@ -59,20 +61,22 @@ hasBinding
   => Hole nodes info -> CoreG nodes edges info -> Bool
 hasBinding root = not . null . lFrom @(T (Binding name)) root
 
-addBinding
-  :: forall name nodes edges info. (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
-  => (Hole nodes info, Flag) -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-addBinding (from, flag) to gr = overlay gr (from -<< T (Binding flag i $ Nothing @name) >>- to)
-  where i = toInteger . (+1) . length $ lTo @(T (Binding name)) to gr
+addBinding :: forall name nodes edges info. (T (Binding name) :<: edges)
+           => (Hole nodes info, Flag) -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
+addBinding (from, flag) to gr = overlay gr (from -<< T (Binding flag $ Nothing @name) >>- to)
 
-treeSugarRule :: HasGraph nodes edges info m => [SugarRule nodes edges info m Bool] -> SugarRule nodes edges info m Bool
-treeSugarRule = foldr foldT (SugarRule $ Recursion \_ _ -> return False)
+-- | combine a list of desugar rule into one.
+--
+-- Returned `Bool` indicates whether the rule has been applied to the node.
+foldSugarRule :: HasGraph nodes edges info m => [SugarRule nodes edges info m Bool] -> SugarRule nodes edges info m Bool
+foldSugarRule = foldr foldT (SugarRule $ Recursion \_ _ -> return False)
   where
     foldT (SugarRule (Recursion f)) (SugarRule (Recursion g)) = SugarRule $ Recursion \sugar n ->
       f sugar n >>= \case
       True -> return True
       False -> g sugar n
 
+-- | driver for sugar rule, extract rules and apply it to node in a monad.
 runSugarRule :: SugarRule nodes edges info m a -> Hole nodes info -> m a
 runSugarRule (SugarRule (Recursion f)) = fix f
 
@@ -89,7 +93,7 @@ case01
     )
  => SugarRule nodes edges info m Bool
 case01 = SugarRule $ Recursion \sugar ->
-  maybeHole (const $ return False) \root (T (NodeApp _)) _ -> do
+  tryHole (const $ return False) \root (T (NodeApp _)) _ -> do
     subs <- fmap snd <$> sFrom root
     gr <- getGraph
     let foldT gr' n =
@@ -110,7 +114,7 @@ case10
     )
  => SugarRule nodes edges info m Bool
 case10 = SugarRule $ Recursion \sugar ->
-  maybeHole (const $ return False) \root (T (NodeTup _)) _ -> do
+  tryHole (const $ return False) \root (T (NodeTup _)) _ -> do
     subs <- fmap snd <$> sFrom root
     forM_ subs \n -> do
       getsGraph (hasBinding @name n) >>= \case

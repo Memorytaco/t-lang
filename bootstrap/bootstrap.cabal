@@ -60,10 +60,13 @@ library
       Graph.Data
       Graph.Extension.GraphicType
       Graph.Syntax
+      Graph.Tree
       JIT.FFI
       JIT.LLVM
       Language.Constraint.Graphic
       Language.Constraint.Kind
+      Language.Constraint.Relation.Error
+      Language.Constraint.Relation.Phantom
       Language.Constraint.Unification
       Language.Core
       Language.Core.Class
@@ -147,7 +150,6 @@ library
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
   build-depends:
       QuickCheck
-    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bytestring
@@ -215,7 +217,6 @@ executable yo
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
-    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bootstrap
@@ -290,7 +291,6 @@ test-suite bootstrap-test
   ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
-    , algebraic-graphs ==0.7
     , base >=4.9 && <5
     , bifunctors
     , bootstrap

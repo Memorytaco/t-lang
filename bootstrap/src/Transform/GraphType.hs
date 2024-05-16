@@ -1,4 +1,7 @@
-{- | * Convert graphic representation of type back to its syntactic representation
+{- | * Conversion between graph type and syntactic type
+--
+--  Convert graphic representation of type back
+--  to its syntactic representation.
 -}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
@@ -41,6 +44,10 @@ import Language.Setting ( asksGraph, HasGraphReader )
 
 import Capability.Reader (HasReader, ask, asks, local)
 import Control.Monad (forM)
+
+import Data.Functor.Foldable (cata, ListF (..))
+import Data.List ((\\))
+import Graph.Algorithm (topSort)
 
 import Data.Function (fix)
 import Data.String (IsString (..))
@@ -110,6 +117,27 @@ lookupName :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, name)]
            => Hole nodes info -> m (Maybe name)
 lookupName n = asks @"local" (lookup n)
 
+-- | build up binding edge order. We don't rely on an explicit sorting tag
+-- to correctly build up quantification. The binding order is built up by a
+-- topsort based on structure edge under the binder. The lowest node
+-- the outer in quantification order.
+--
+-- We can now ignore binding edge order anywhere other than here.
+bindingOrderOf
+  :: forall a nodes edges info. (Ord a, HasOrderGraph nodes edges info, T (Binding a) :<: edges, T Sub :<: edges)
+  => Hole nodes info -> CoreG nodes edges info -> [(Hole nodes info, T (Binding a) (Link edges))]
+bindingOrderOf root gr = dominates <> (candidates \\ dominates)
+    where tOrder =
+            let pick = isLinkOf @(T Sub)
+             in reverse . filter (/= root)
+             $ topSort (bfs pick root) (\_ (outs, _) -> [a | (_, (e, a)) <- outs, pick e]) gr
+          candidates = lTo @(T (Binding a)) root gr
+          dominates = do
+            node <- tOrder
+            case lookup node candidates of
+              Just e -> [(node, e)]
+              Nothing -> []
+
 -- | if the node has already been translated, return `TypVar name`, and otherwise pass
 -- control to the following monad block
 withLocal :: (Eq (Hole nodes info), HasReader "local" [(Hole nodes info, a)] m)
@@ -126,39 +154,50 @@ type WithBindingEnv m nodes edges info bind rep name a =
   , HasReader "local" [(Hole nodes info, a)] m
   , HasReader "scheme" (Maybe a -> m a) m
   , T (Binding a) :<: edges
+  , T Sub :<: edges
   , Ord a
   , Forall Prefix :<<: bind
   , Functor rep, Functor (bind name)
   , HasOrderGraph nodes edges info
   )
 
--- | automatically handling binding edge
+-- | automatically handling binding edge and convert nodes which
+-- bind to `root` to its binding name.
 withBinding
   :: forall m nodes edges info bind rep name a. (WithBindingEnv m nodes edges info bind rep name a)
-  => (Hole nodes info -> m (Type bind rep name a)) -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
+  => (Hole nodes info -> m (Type bind rep name a))
+  -> Hole nodes info -> m (Type bind rep name a) -> m (Type bind rep name a)
 withBinding restore root m = do
-  preBinds <- asksGraph $ lTo @(T (Binding a)) root
-  scheme <- ask @"scheme"
-  localBinds {- (flag, (node, name)) -} <- forM preBinds \(a, T (Binding flag _ name)) -> fmap (flag,) $ (a,) <$> scheme name
-  body <- local @"local" ((snd <$> localBinds) <>) m
-  bindings <- forM localBinds \(flag, (node, name)) -> do
-    typ <- restore node
-    return case flag of
-      Rigid -> name :~ typ
-      Flexible -> name :> typ
-      Explicit -> name :> typ
-  -- return the final type
-  return $ foldr (\bnd bod -> TypBnd (injj $ Forall bnd bod)) body bindings
+  -- get list of nodes which bind to root and we can use the list
+  -- to build a parameter name list like a, b, and c in "forall a b c. (a, b, c)"
+  --
+  -- we use binding order here to obtain correct order of binding edge.
+  preBinds <- asksGraph $ bindingOrderOf @a root
+  -- assign things names if the binding doesn't have a name
+  localBinds <- ask @"scheme" >>= \freshName ->
+    forM preBinds \(a, T (Binding flag name)) -> (flag,) . (a,) <$> freshName name
+  restoreLevel localBinds
+  where restoreLevel = cata \case
+          Cons (flag, env@(bndNode, name)) mRest -> do
+            -- for each binding edge, we restore its binding type
+            typ <- restore bndNode
+            -- with the binding name, we restore body type
+            tBody <- local @"local" (env:) mRest
+            let bnd = case flag of
+                  Rigid -> name :~ typ
+                  Flexible -> name :> typ
+                  Explicit -> name :> typ
+            return $ TypBnd (injj $ Forall bnd tBody)
+          Nil -> m
 
 
 -- | RULE: T NodeTup
 literal01
   :: ( HasGraphToTypeErr (Hole nodes info) m, T NodeTup :<: nodes, Tuple :<: rep
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
-literal01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeTup _)) _ ->
+literal01 = Conversion $ Recursion \restore -> tryHole unmatch \root (T (NodeTup _)) _ ->
   withLocal root $ withBinding restore root do
     subLinks <- asksGraph $ lFrom @(T Sub) root
     Type . inj . Tuple <$> mapM restore (snd <$> subLinks)
@@ -170,7 +209,7 @@ literal02
      , WithBindingEnv m nodes edges info bind rep name a
      )
   => Conversion nodes edges info bind rep name m a
-literal02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeRef _ (name :: name))) _ ->
+literal02 = Conversion $ Recursion \restore -> tryHole unmatch \root (T (NodeRef _ (name :: name))) _ ->
   withLocal root $ withBinding restore root do
     return (TypVar name)
 
@@ -182,7 +221,7 @@ literal03
      , IsString a
      )
   => Conversion nodes edges info bind rep name m a
-literal03 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeArr) _ ->
+literal03 = Conversion $ Recursion \restore -> tryHole unmatch \root (T NodeArr) _ ->
   withLocal root $ withBinding restore root do
     return (TypVar $ fromString "->")
 
@@ -195,7 +234,7 @@ literal04
      , WithBindingEnv m nodes edges info bind rep name a
      )
   => Conversion nodes edges info bind rep name m a
-literal04 = Conversion $ Recursion \restore -> maybeHole @(T (NodeLit lit)) unmatch \root (T (NodeLit lit)) _ ->
+literal04 = Conversion $ Recursion \restore -> tryHole @(T (NodeLit lit)) unmatch \root (T (NodeLit lit)) _ ->
   withLocal root $ withBinding restore root do
     return (Type . inj $ Literal lit)
 
@@ -207,10 +246,9 @@ literal05
      , T NodeRec :<: nodes
      , Record label :<: rep
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
-literal05 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeRec _)) _ ->
+literal05 = Conversion $ Recursion \restore -> tryHole  unmatch \root (T (NodeRec _)) _ ->
   withLocal root $ withBinding restore root do
     subLinks <- sFrom root
     fields <- mapM (unfoldLabel @label restore) (snd <$> subLinks) >>= mapM \case
@@ -227,10 +265,9 @@ literal06
      , T NodeSum :<: nodes
      , Variant label :<: rep
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
-literal06 = Conversion $ Recursion \restore -> maybeHole  unmatch \root (T (NodeSum _)) _ ->
+literal06 = Conversion $ Recursion \restore -> tryHole  unmatch \root (T (NodeSum _)) _ ->
   withLocal root $ withBinding restore root do
     subLinks <- sFrom root
     fields <- mapM (unfoldLabel @label restore) (snd <$> subLinks)
@@ -241,10 +278,9 @@ structure01
   :: ( HasGraphToTypeErr (Hole nodes info) m
      , T NodeApp :<: nodes
      , WithBindingEnv m nodes edges info bind rep name a
-     , T Sub :<: edges
      )
   => Conversion nodes edges info bind rep name m a
-structure01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (NodeApp _)) _ ->
+structure01 = Conversion $ Recursion \restore -> tryHole unmatch \root (T (NodeApp _)) _ ->
   withLocal root $ withBinding restore root do
     subLinks <- sFrom root
     case snd <$> subLinks of
@@ -256,13 +292,12 @@ structure01 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T (Nod
 special01
  :: ( HasGraphToTypeErr (Hole nodes info) m, NodePht :<: nodes
     , WithBindingEnv m nodes edges info bind rep name a
-    , T Sub :<: edges
     )
   => Conversion nodes edges info bind rep name m a
-special01 = Conversion $ Recursion \restore -> maybeHole unmatch \root NodePht _ ->
+special01 = Conversion $ Recursion \restore -> tryHole unmatch \root NodePht _ ->
   withLocal root $ withBinding restore root do
-    subLinks <- asksGraph $ lFrom @(T Sub) root
-    typs <- mapM restore (snd <$> subLinks)
+    realLinks <- asksGraph $ lFrom @(T Sub) root
+    typs <- mapM restore (snd <$> realLinks)
     case typs of
       [typ] -> return typ
       _ -> failProp $ PropFailSatisfy root "Illegal Phantom Node: it has no sub node or it has multiple sub nodes"
@@ -274,7 +309,7 @@ special02
     , WithBindingEnv m nodes edges info bind rep name a
     )
   => Conversion nodes edges info bind rep name m a
-special02 = Conversion $ Recursion \restore -> maybeHole unmatch \root (T NodeBot) _ ->
+special02 = Conversion $ Recursion \restore -> tryHole unmatch \root (T NodeBot) _ ->
   withLocal root $ withBinding restore root do
     return TypPht
 

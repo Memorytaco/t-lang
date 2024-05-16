@@ -1,4 +1,4 @@
-{-| * User interface module
+{- | * 
 -}
 
 module EvalLoop.Loop

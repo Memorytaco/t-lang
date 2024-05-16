@@ -1,0 +1,17 @@
+# Generated from web app, for more information, see: https://fourmolu.github.io/config/
+indentation: 2
+column-limit: 70
+function-arrows: leading
+comma-style: leading
+import-export-style: leading
+indent-wheres: true
+record-brace-space: true
+newlines-between-decls: 1
+haddock-style: single-line
+haddock-style-module: multi-line
+let-style: auto
+in-style: right-align
+single-constraint-parens: auto
+single-deriving-parens: auto
+unicode: detect
+respectful: true

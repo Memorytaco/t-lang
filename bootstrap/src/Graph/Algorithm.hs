@@ -13,9 +13,13 @@
 module Graph.Algorithm
   (
     -- | * Depth first traversal algorithms
-    dfsm, dfs
+    dfsM, dfs
     -- | * Breadth first traversal algorithms
-  , bfsm, bfs
+  , bfsM, bfs
+
+    -- | * TopSort algorithm
+  , spanForestM, spanForest
+  , topSortM, topSort
 
     -- | * Least matched sequence
   , lms
@@ -31,6 +35,7 @@ import Data.Maybe ( fromMaybe )
 import Control.Comonad.Cofree ( Cofree(..) )
 import Data.Functor.Foldable ( ListF(..) )
 import Control.Monad.Identity (Identity (..))
+import Graph.Tree (Forest (..), Tree (..), postorder)
 
 -- | `RouteT` is a iterator, it generates next route to go.
 --
@@ -57,8 +62,8 @@ type RouteStart e a = Graph e a -> [a]
 --
 -- Duplications in both `RouteStartT` and `RouteT` are resulting in no
 -- effect. The first unique one is picked up and duplications are ignored.
-dfsm :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m [a]
-dfsm startWith next g = do
+dfsM :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m [a]
+dfsM startWith next g = do
   starts <- startWith g
   reverse <$> loop starts []
   where loop [] routes = return routes
@@ -74,8 +79,8 @@ dfsm startWith next g = do
 --
 -- Duplications in both `RouteStartT` and `RouteT` are resulting in no
 -- effect. The first unique one is picked up and duplications are ignored.
-bfsm :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m [a]
-bfsm startWith next g = do
+bfsM :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m [a]
+bfsM startWith next g = do
   starts <- startWith g
   reverse <$> loop starts []
   where loop [] routes = return routes
@@ -87,13 +92,53 @@ bfsm startWith next g = do
             loop (as <> nexts) (a:routes)
           else loop as routes
 
--- | depth first traversal algorithm.
+-- | spanForest generation algorithm. with monad support.
+--
+-- Duplications in both `RouteStartT` and `RouteT` are resulting in no
+-- effect. The first unique one is picked up and duplications are ignored.
+spanForestM :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m (Forest a)
+spanForestM startWith next g = do
+  starts <- startWith g
+  snd <$> loop starts []
+  where loop [] routes = return (routes, Forest [])
+        loop (a:as) routes = do
+          if a `elem` routes
+          then loop as routes
+          else do
+            nexts <- next g (outFrom (== a) g, inTo (== a) g)
+            (r1, Forest f1) <- loop nexts (a:routes)
+            (r2, Forest f2) <- loop as r1
+            return (r2, Forest $ Tree a f1:f2)
+
+-- | topSort algorithm. with monad support. It does topsort starting
+-- with `RouteStartT` and usually it will simply be `return . toVertices`
+-- to select full graph. Or It can also choose carefully a subgraph
+-- using `RouteStartT` and `RouteT` to do topsort within a range.
+--
+-- Duplications in both `RouteStartT` and `RouteT` are resulting in no
+-- effect. The first unique one is picked up and duplications are ignored.
+--
+-- https://stackoverflow.com/questions/21675925/topological-sort-in-haskell
+topSortM :: (Monad m, Eq a) => RouteStartT m e a -> RouteT m e a -> Graph e a -> m [a]
+topSortM graphWith next g = do
+  Forest trees <- spanForestM graphWith next g
+  return $ reverse (trees >>= postorder)
+
+-- | depth first traversal algorithm
 dfs :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
-dfs startWith next = runIdentity . dfsm (return . startWith) (fmap return . next)
+dfs startWith next = runIdentity . dfsM (return . startWith) (fmap return . next)
 
 -- | breadth first traversal algorithm
 bfs :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
-bfs startWith next = runIdentity . bfsm (return . startWith) (fmap return . next)
+bfs startWith next = runIdentity . bfsM (return . startWith) (fmap return . next)
+
+-- | spanForest algorithm using depth first search algorithm
+spanForest :: Eq a => RouteStart e a -> Route e a -> Graph e a -> Forest a
+spanForest startWith next = runIdentity . spanForestM (return . startWith) (fmap return . next)
+
+-- | topSort algorith using depth first search algorithm
+topSort :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
+topSort graphWith next = runIdentity . topSortM (return . graphWith) (fmap return . next)
 
 -- | TODO: optimise its memory usage
 -- least matched sequence using brute force matching method

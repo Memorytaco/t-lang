@@ -208,7 +208,7 @@ type GraphicEdgesSurface = T Sub :+: T (Binding Name)
 type ConstraintSurface = CoreG ConstraintNodesSurface ConstraintEdgesSurface Int
 type ConstraintNodesSurface =
   GraphicNodesSurface
-  :+: NDOrder :+: Histo :+: G
+  :+: NDOrder :+: R [] :+: G
 type ConstraintEdgesSurface =
   GraphicEdgesSurface
   :+: Pht O :+: Pht Sub :+: Pht NDOrderLink

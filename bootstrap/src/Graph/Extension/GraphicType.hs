@@ -5,7 +5,7 @@
 -- 1. type nodes: nodes which are wrapped by `T`
 -- 2. constraint nodes: nodes like `G`. since we are constructing gMLF graphci constraint, constraint
 --    nodes are not allowed appearing under type nodes.
--- 3. functional nodes: nodes like `Histo`. functional nodes are not "real nodes", they should not
+-- 3. functional nodes: nodes wrapped by `I` and `R`. functional nodes are not "real nodes", they should not
 --    affect structure of term graph and they should not affect meaning of constraints.
 --
 -- Edges act as both labels and structures. The most common edge type is `Sub` which acts
@@ -41,24 +41,20 @@ module Graph.Extension.GraphicType
   -- ** Constraint node
   , G (..)
 
-  -- ** Functional node
-  , Histo (..)
-
   -- ** a wrapper to make difference among type nodes and constraint nodes
   -- or structure edges and constraint edges
   , T (..)
-  , Pht (..)
   , C (..)
-  , NDInfo
+  , Pht (..)
+  , I (..)
+  , R (..)
+
   , NDOrder (..)
   , NDOrderLink (..)
 
   -- ** Edge
-  , E (..)
-  , type (/.)
-  , type (+.)
-  , Sub (..)
   , O (..)
+  , Sub (..)
   , Binding (..)
   , Instance (..)
   , Unify (..)
@@ -73,7 +69,7 @@ module Graph.Extension.GraphicType
   )
 where
 
-import Data.Kind (Type)
+import Language.Core.Type (Arity (..))
 
 -- ** Node definition
 
@@ -91,9 +87,8 @@ newtype NodeLit lit = NodeLit lit deriving (Show, Eq, Ord)
 -- | Type application node
 newtype NodeApp = NodeApp Integer deriving (Show, Eq, Ord)
 
--- | Type constructor node. It refers to global nominal type.
--- boolean indicates whether it is type alias. `True` means it is type alias.
-data NodeRef name = NodeRef Bool name deriving (Show, Eq, Ord)
+-- | Type constructor node. It refers to global nominal type or simply a type variable.
+data NodeRef name = NodeRef Arity name deriving (Show, Eq, Ord)
 
 -- | primitive type node, inherit equality from its type parameter
 newtype NodeRep r = NodeRep r deriving (Show, Eq, Ord)
@@ -110,15 +105,6 @@ data NodeArr = NodeArr deriving (Show, Eq, Ord)
 -- | a redundant annotation node, it means nothing
 -- TODO: expand this node into annotation node to attach more information to nodes
 data NodePht a = NodePht deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
-
--- | TODO: to replace `Histo` nodes
--- This node family is meant to define a family of functional nodes.
-data family NDInfo x
-
--- | a `Histo` is meant to remember every merged node
-newtype Histo a = Histo [a]
-  deriving (Functor, Foldable, Traversable)
-  deriving (Show, Eq, Ord) via [a]
 
 -- | a special node used to track constraint dependency
 data NDOrder a = NDOrder
@@ -148,13 +134,24 @@ newtype C c a = C c
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via c
 
--- | `Pht` phantom node, it attach additional information to nodes.
+-- | `Pht` phantom node, Wrap things and behaves as virtual nodes.
 --
 -- Any nodes wrapped by this should not interfere operation on "normal"
 -- nodes, like constraint nodes or type nodes.
 newtype Pht c a = Pht c
   deriving (Eq, Ord, Functor, Foldable, Traversable)
   deriving Show via c
+
+-- | `I` information node. It is used to store information
+-- in a graph and linked via edge to target nodes.
+--
+-- Its meaning depends on its usage.
+newtype I i a = I i
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
+
+-- | `R` information node. It allows storing whole node info.
+newtype R f a = R (f a)
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- ** Edge definition
 
@@ -165,43 +162,11 @@ data O = O deriving (Show, Eq, Ord)
 
 -- *** General edge
 
--- define parameter
-data a /. b
-data a +. b
-
--- | Edge family
---
--- __Experimental__
-data family E (proxy :: k)
-
--- | indexed edge
-newtype instance E "structure"
-  = E Integer
-  deriving (Show, Eq, Ord)
-
--- | indexed binding edge
-data instance E ("binding" /. (name :: Type))
-  = B Flag Integer (Maybe name)
-  deriving (Show, Eq, Ord)
-
--- | unification edge, with no direction
-data instance E "unify"
-  = Unify' deriving (Show, Eq, Ord)
-
-data instance E (a +. b)
-  = El (E a)
-  | Er (E b)
-instance (Show (E a), Show (E b)) => Show (E (a +. b)) where
-  show (El e) = show e
-  show (Er e) = show e
-deriving instance (Eq (E a), Eq (E b)) => Eq (E (a +. b))
-deriving instance (Ord (E a), Ord (E b)) => Ord (E (a +. b))
-
 -- | structural edge, with number attached. orders matter.
 newtype Sub = Sub Integer deriving (Show, Eq, Ord)
 
 -- | binding edge, with number attached and also the origin name. orders and names matter.
-data Binding name = Binding Flag Integer (Maybe name) deriving (Show, Eq, Ord)
+data Binding name = Binding Flag (Maybe name) deriving (Show, Eq, Ord)
 
 -- | Used both for instance relation and permission
 -- if `Lock` is taken as relation, then it is treated the same as `Rigid`

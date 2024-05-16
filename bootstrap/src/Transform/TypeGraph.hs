@@ -1,11 +1,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
-{- | Transformation module for graphic type
+-- | Transformation module for graphic type
 --
 --  This module transform syntactic type into relevent graphic representation
---
---  TODO: fully check this module, add more unit tests
--- 
--}
 module Transform.TypeGraph
   (
   -- ** transform type into graph
@@ -40,7 +36,6 @@ import Control.Monad (forM, foldM)
 
 import Data.Functor.Foldable (cata)
 import Data.Functor ((<&>))
-import Data.Tuple (swap)
 
 -- ** for type
 import qualified Language.Core as Type
@@ -133,36 +128,15 @@ type HasToGraphicTypeErr name m
 failToGraphicTypeErr :: HasToGraphicTypeErr name m => ToGraphicTypeErr name -> m a
 failToGraphicTypeErr = throw @ToGraphicTypeErr
 
--- | increase binding index by 1, the lower binding index, the outer the binder
--- e.g. forall a b. anything
--- Index are:  1 2
--- a has 1, b has 2
---
--- another one:
---    forall a b c d e f. anything
---           1 2 3 4 5 6
-shiftBindingEdge
-  :: forall name nodes edges info
-   . (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
-  => Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-shiftBindingEdge root g = foldl shiftup g $ swap <$> lTo @(T (Binding name)) root g
-  where shiftup gr (e@(T (Binding flag i name)), n) = overlays
-          [ n -<< T (Binding flag (i+1) name) >>- root
-          , filterLink (/= link e) n root gr
-          ]
-{-# INLINE shiftBindingEdge #-}
-
 -- | move bound site from `from` to `to`
 moveBindingEdge
   :: forall name nodes edges info
-   . (Ord name, T (Binding name) :<: edges, HasOrderGraph nodes edges info)
+   . (T (Binding name) :<: edges, HasOrderGraph nodes edges info)
   => Hole nodes info -> Hole nodes info -> CoreG nodes edges info -> CoreG nodes edges info
-moveBindingEdge from to g = foldl move g $ swap <$> lTo @(T (Binding name)) from g
-  where move gr (e@(T (Binding flag i name)), n) = overlays
-          [ n -<< T (Binding flag i name) >>- to
-          , filterLink (/= link e) n from gr
-          ]
-{-# INLINE moveBindingEdge #-}
+moveBindingEdge from to = einduce $ tryLink @(T (Binding name)) (\e a b -> Just (e,a,b))
+  -- if `b` is just `from`, then replace it with `to`. `einduce` will automatically
+  -- do edge deletion so edge (a --> from) doesn't exist any more.
+  \e a b -> if b == from then Just (link e, a, to) else Just (link e, a, b)
 
 -- ** the algorithm for transforming syntactic type into graphic representation
 
@@ -189,9 +163,6 @@ instance FoldTypeGraph (Type.Type bind f name) Int where
           return $ (top -<< T (Sub i) >>- sub) <> subg
         return (top, overlays gs)
       go (Type.TypBndF binder) = foldBinderTypeGraph binder
-      --  <&> \case
-      --   Bind name -> lookupLocalName name
-      --   Free m -> m
       go (Type.TypeF v) = foldTypeGraph v
 
 
@@ -202,13 +173,13 @@ toGraph
      , HasTypeContext name nodes edges Int m
      , FoldBinderTypeGraph bind name Int, ConstrainBinderGraph bind name nodes edges Int m
      , FoldTypeGraph f Int, ConstrainGraph f nodes edges Int m
-     , Eq name
-     , Ord (edges (Link edges))
+     , Eq name, Ord (edges (Link edges))
      , Functor (bind name), Functor f
      , T NodeBot :<: nodes, T NodeApp :<: nodes, T Sub :<: edges
      , HasToGraphicTypeErr name m
      )
-  => (name -> m (Maybe (Hole nodes Int, CoreG nodes edges Int))) -> Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
+  => (name -> m (Maybe (Hole nodes Int, CoreG nodes edges Int)))
+  -> Type.Type bind f name name -> m (Hole nodes Int, CoreG nodes edges Int)
 toGraph lookupGlobal = foldTypeGraph . fmap (lookupFreeName lookupGlobal)
 
 -- ** instances
@@ -218,16 +189,17 @@ toGraph lookupGlobal = foldTypeGraph . fmap (lookupFreeName lookupGlobal)
 type instance ConstrainBinderGraph Prefix name nodes edges info m
   = ( HasOrderGraph nodes edges info
     , T (Binding name) :<: edges, T Sub :<: edges
-    , Ord name
+    , Ord name, Show name
     , NodePht :<: nodes
     , HasNodeCreator m
     , HasTypeContext name nodes edges info m
     )
-type instance ConstrainBinderGraph (Forall Prefix) name nodes edges info m = ConstrainBinderGraph Prefix name nodes edges info m
+type instance ConstrainBinderGraph (Forall Prefix) name nodes edges info m
+  = ConstrainBinderGraph Prefix name nodes edges info m
 -- | handle `Forall` binder
 instance FoldBinderTypeGraph (Forall Prefix) name Int where
-  foldBinderTypeGraph (Forall bounds mbody) = do
-    (name, mbound, flag) <- case bounds of
+  foldBinderTypeGraph (Forall bound mbody) = do
+    (name, mbound, flag) <- case bound of
       name :~ mbound -> return (name, mbound, Rigid)
       name :> mbound -> return (name, mbound, Flexible)
     -- convert bounds first
@@ -236,14 +208,23 @@ instance FoldBinderTypeGraph (Forall Prefix) name Int where
     (root, body) <- appendContext [(Bind name, binding)] mbody
     -- check whether the body is merely bounded type nodes, if so there
     -- may exist a loop via binding edge, and a phantom node needs to be put here
-    -- to remove the self binding loop
+    -- to remove the self binding loop.
+    --
+    -- to handle this situation: @forall a. a@
     if root == var then do
       pht <- node NodePht
-      -- TODO: explain why we need to move all binding edges from old root to the phantom node
-      return (pht, overlays [ moveBindingEdge @name root pht $ shiftBindingEdge @name root body
-                            , bbody, var -<< T (Binding flag 1 (Just name)) >>- pht
-                            , pht -<< T (Sub 1) >>- root])
-    else return (root, overlays [shiftBindingEdge @name root body, bbody, var -<< T (Binding flag 1 (Just name)) >>- root])
+      -- A phantom node delegates one loop binding node to avoid
+      -- infinite self binding and thus can avoid loop in
+      -- implementation.
+      return . (pht,) . overlays $
+        [ moveBindingEdge @name root pht body
+        , bbody, var -<< T (Binding flag (Just name)) >>- pht
+        , pht -<< T (Sub 1) >>- root
+        ]
+    else return . (root,) . overlays $
+      [ body, bbody
+      , var -<< T (Binding flag (Just name)) >>- root
+      ]
 
 type instance ConstrainBinderGraph (Scope Prefix) name nodes edges info m = ConstrainBinderGraph Prefix name nodes edges info m
 -- | handle `Scope` binder

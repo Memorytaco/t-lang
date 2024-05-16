@@ -26,7 +26,7 @@ import Data.Kind (Type, Constraint)
 import Data.Proxy (Proxy (..))
 import Control.Applicative ((<|>))
 
-data Route = Here | TurnLeft Route | TurnRight Route | Structure Route Route
+data Route = Here | OnLeft Route | OnRight Route | Fork Route Route
 data Result = Found Route | NotFound | Ambiguous
 
 type family Elem (f :: Type -> Type) (g :: Type -> Type) :: Result where
@@ -38,11 +38,11 @@ type family Choose (l :: Result) (r :: Result) :: Result where
   Choose ('Found x) ('Found y) = 'Ambiguous
   Choose 'Ambiguous y = 'Ambiguous
   Choose x 'Ambiguous = 'Ambiguous
-  Choose ('Found x) y = 'Found ('TurnLeft x)
-  Choose x ('Found y) = 'Found ('TurnRight y)
+  Choose ('Found x) y = 'Found ('OnLeft x)
+  Choose x ('Found y) = 'Found ('OnRight y)
   Choose x y = 'NotFound
 type family Dive (l :: Result) (r :: Result) :: Result where
-  Dive ('Found x) ('Found y) = 'Found ('Structure x y)
+  Dive ('Found x) ('Found y) = 'Found ('Fork x y)
   Dive 'Ambiguous _ = 'Ambiguous
   Dive _ 'Ambiguous = 'Ambiguous
   Dive _ _ = 'NotFound
@@ -53,16 +53,16 @@ class Subsume (evi :: Result) (f :: Type -> Type) (g :: Type -> Type) where
 instance Subsume ('Found 'Here) f f where
   inj' _ = id
   prj' _ = Just
-instance Subsume ('Found p) f l => Subsume ('Found ('TurnLeft p)) f (l :+: r) where
+instance Subsume ('Found p) f l => Subsume ('Found ('OnLeft p)) f (l :+: r) where
   inj' _ = Inl . inj' (Proxy @('Found p))
   prj' _ (Inl x) = prj' (Proxy @('Found p)) x
   prj' _ _ = Nothing
-instance Subsume ('Found p) f r => Subsume ('Found ('TurnRight p)) f (l :+: r) where
+instance Subsume ('Found p) f r => Subsume ('Found ('OnRight p)) f (l :+: r) where
   inj' _ = Inr . inj' (Proxy @('Found p))
   prj' _ (Inr x) = prj' (Proxy @('Found p)) x
   prj' _ _ = Nothing
 instance (Subsume ('Found tol) l g, Subsume ('Found tor) r g)
-  => Subsume ('Found ('Structure tol tor)) (l :+: r) g where
+  => Subsume ('Found ('Fork tol tor)) (l :+: r) g where
     inj' _ (Inl x) = inj' (Proxy @('Found tol)) x
     inj' _ (Inr x) = inj' (Proxy @('Found tor)) x
     prj' _ x = Inl <$> prj' (Proxy @('Found tol)) x
@@ -86,8 +86,11 @@ type family Find' (f :: Type -> Type) (g :: Type -> Type) :: Bool where
   Find' f g = 'False
 
 class NoDup (f :: Type -> Type) (a :: Bool)
-instance (TypeError ('Text "The Following Type:" ':$$: ('Text "  " ':<>: 'ShowType f) ':$$: 'Text "Contains duplication"))
-  => NoDup f 'True
+instance
+  ( TypeError ('Text "The Following Type:"
+    ':$$: ('Text "  " ':<>: 'ShowType f)
+    ':$$: 'Text "Contains duplication")
+  ) => NoDup f 'True
 instance NoDup f 'False
 
 -- Check whether `Elem` Reduction gets stucked
@@ -111,13 +114,14 @@ instance NoDup f 'False
 -- | Generic definition to save typing, a type indexed method
 type f :<: g = (Subsume (Elem f g) f g, NoDup f (Dup f '[]), NoDup g (Dup g '[]))
 
--- | Helpful type family to save typing
+-- | Helpful type family to save typing: @container :>+: '[Item1, Item2, Item3, ..]@
 type family (:>+:) (sup :: Type -> Type) (subs :: [Type -> Type]) :: Constraint where
   sup :>+: (a ': as) = (a :<: sup, sup :>+: as)
   sup :>+: '[] = ()
 
 -- This `Check` code may be redundant, it is too strict to be useful
 -- type f :<: g = (Subsume (Elem f g) f g, Check (PotentialParameter f g) (Elem f g), NoDup f (Dup f '[]), NoDup g (Dup g '[]))
+
 type f :~: g = (f :<: g, g :<: f)
 
 -- | injector
@@ -131,8 +135,8 @@ prj = prj' (Proxy @(Elem f g))
 split :: (f :~: (l :+: r)) => (l a -> b) -> (r a -> b) -> f a -> b
 split l r x =
   case inj x of
-    Inl y -> l y
-    Inr y -> r y
+    Inl a -> l a
+    Inr b -> r b
 
 -- | * Bisubsume definition
 
@@ -148,16 +152,16 @@ class Subsume2 (evi :: Result) (f :: Type -> Type -> Type) (g :: Type -> Type ->
 instance Subsume2 ('Found 'Here) f f where
   injj' _ = id
   prjj' _ = Just
-instance Subsume2 ('Found p) f l => Subsume2 ('Found ('TurnLeft p)) f (l :++: r) where
+instance Subsume2 ('Found p) f l => Subsume2 ('Found ('OnLeft p)) f (l :++: r) where
   injj' _ = Inll . injj' (Proxy @('Found p))
   prjj' _ (Inll x) = prjj' (Proxy @('Found p)) x
   prjj' _ _ = Nothing
-instance Subsume2 ('Found p) f r => Subsume2 ('Found ('TurnRight p)) f (l :++: r) where
+instance Subsume2 ('Found p) f r => Subsume2 ('Found ('OnRight p)) f (l :++: r) where
   injj' _ = Inrr . injj' (Proxy @('Found p))
   prjj' _ (Inrr x) = prjj' (Proxy @('Found p)) x
   prjj' _ _ = Nothing
 instance (Subsume2 ('Found tol) l g, Subsume2 ('Found tor) r g)
-  => Subsume2 ('Found ('Structure tol tor)) (l :++: r) g where
+  => Subsume2 ('Found ('Fork tol tor)) (l :++: r) g where
     injj' _ (Inll x) = injj' (Proxy @('Found tol)) x
     injj' _ (Inrr x) = injj' (Proxy @('Found tor)) x
     prjj' _ x = Inll <$> prjj' (Proxy @('Found tol)) x

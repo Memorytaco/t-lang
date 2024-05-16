@@ -1,7 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-{-# HLINT ignore "Use $" #-}
-{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE AllowAmbiguousTypes, BangPatterns  #-}
 module Language.Constraint.Graphic
   (
 
@@ -195,7 +192,7 @@ genConstraint = cata go
       depR <- node NDOrder
       let gr = overlays
              [ g -<< T (Sub 1) >>- var
-             , var -<< T (Binding Flexible 1 $ Just name) >>- g
+             , var -<< T (Binding Flexible $ Just name) >>- g
              , depR -++ Pht NDOrderLink ++- g
              ]
       case val'maybe of
@@ -267,7 +264,7 @@ instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
                , app -<< T (Sub 2) >>- domain
                , app -<< T (Sub 3) >>- codomain
                , g -<< T (Sub 1) >>- codomain
-               , overlays $ [r'a, r'b, app, arr, domain, codomain] <&> \n -> n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+               , overlays $ [r'a, r'b, app, arr, domain, codomain] <&> \n -> n -<< T (Binding Flexible $ Nothing @name) >>- g
                , depR -++ Pht NDOrderLink ++- g
                , depR -<< Pht (Sub 1) >>- dep'a
                , depR -<< Pht (Sub 2) >>- dep'b
@@ -316,7 +313,7 @@ instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF 
             [ gr, gr'
             , depR -<< Pht (Sub i) >>- d'
             , r -++ T Unify ++- var
-            , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+            , g' -<< T (Binding Flexible $ Nothing @name) >>- g
             ]
     -- unify every branch with bottom node and need to bind
     -- every sub G to top G
@@ -327,7 +324,7 @@ instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF 
       [ gr
       , depR -++ Pht NDOrderLink ++- g
       , g -<< T (Sub 1) >>- var
-      , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , var -<< T (Binding Flexible $ Nothing @name) >>- g
       ]
     where
       -- turn a pattern binds into unifiable bindings
@@ -348,15 +345,15 @@ instance ConstraintGen (Equation (Grp (PatSurface t)) (Prefixes name t)) (ExprF 
           [ r'gr, pat'gr
           -- build skeleton
           , overlays  -- skeleton binding edge
-            [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+            [ n -<< T (Binding Flexible $ Nothing @name) >>- g
             | n <- [app, arr, domain, codomain]
             ]
           , overlays {- skeleton -} $ zip [1..] [arr, domain, codomain]
               <&> \(i, n) -> app -<< T (Sub i) >>- n
           , g -<< T (Sub 1) >>- app
           -- add binding edge
-          , r'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g    -- pattern
-          , pat'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g  -- body
+          , r'g -<< T (Binding Flexible $ Nothing @name) >>- g    -- pattern
+          , pat'g -<< T (Binding Flexible $ Nothing @name) >>- g  -- body
           -- add constraint edge
           , r'g -<< T (Instance 1) >>- codomain -- body instance
           , domain -++ T Unify ++- pat'n  -- domain unification
@@ -417,7 +414,7 @@ instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) 
         $ overlays
         [ p'gr, e'gr
         , e'root -++ T Unify ++- p'root
-        , p'g -<< T (Binding Flexible 1 $ Nothing @name) >>- e'g
+        , p'g -<< T (Binding Flexible $ Nothing @name) >>- e'g
         , e'dep -<< Pht (Sub 1) >>- p'dep
         ]
     -- TODO: add duplication check for bindings
@@ -438,7 +435,7 @@ instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) 
         ]
       -- build constraint binding edges
       , overlays
-        [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- e'g
+        [ n -<< T (Binding Flexible $ Nothing @name) >>- e'g
         | n <- envs ^.. traverse . _5
         ]
       -- merge graphs
@@ -467,10 +464,10 @@ instance ConstraintGen LiteralText (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (LiteralText (Literal t)) = do
     g <- node (G 1)
     depR <- node NDOrder
-    n <- node (T $ NodeRef False (fromString @name "text"))
+    n <- node (T $ NodeRef mempty (fromString @name "text"))
     return $ StageConstraint (g :| ExprF (inj $ LiteralText $ Literal t)) g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 type instance ConstrainGraphic LiteralInteger (ExprF f name |: Hole ns Int) m nodes edges info
@@ -486,10 +483,10 @@ instance ConstraintGen LiteralInteger (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (LiteralInteger (Literal t)) = do
     g <- node (G 1)
     depR <- node NDOrder
-    n <- node (T $ NodeRef False (fromString @name "int"))
+    n <- node (T $ NodeRef mempty (fromString @name "int"))
     return $ StageConstraint (g :| ExprF (inj $ LiteralInteger $ Literal t)) g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 type instance ConstrainGraphic LiteralNumber (ExprF f name |: Hole ns Int) m nodes edges info
@@ -505,10 +502,10 @@ instance ConstraintGen LiteralNumber (ExprF f name |: Hole nodes Int) Int where
   stageConstraint (LiteralNumber (Literal t)) = do
     g <- node (G 1)
     depR <- node NDOrder
-    n <- node (T $ NodeRef False (fromString @name "double"))
+    n <- node (T $ NodeRef mempty (fromString @name "double"))
     return $ StageConstraint (g :| ExprF (inj $ LiteralNumber $ Literal t)) g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -536,7 +533,7 @@ instance ConstraintGen (Literal t) (ExprF f name |: Hole nodes Int) Int where
     n <- node (T $ NodeLit t)
     return $ StageConstraint (g :| ExprF (inj $ Literal t)) g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -561,8 +558,8 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
       var <- node (T NodeBot)
       return $ overlays
         [ tup -<< T (Sub ix) >>- var
-        , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
-        , g' -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , var -<< T (Binding Flexible $ Nothing @name) >>- g
+        , g' -<< T (Binding Flexible $ Nothing @name) >>- g
         , depR -<< Pht (Sub ix) >>- gdep
         , g' -<< T (Instance 1) >>- var
         , gr'
@@ -570,7 +567,7 @@ instance ConstraintGen Tuple (ExprF f name |: Hole nodes Int) Int where
     let gdeps = join $ sia ^.. traverse . _2 . atScope . _1
     return $ StageConstraint (g :| ExprF (inj . Tuple $ sia ^.. traverse . _2 . atInfo)) g (gdeps, depR) $ overlays
       [ gr, g -<< T (Sub 1) >>- tup
-      , tup -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , tup -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -609,10 +606,10 @@ genPatternConstraint = cata go
              [ app -<< T (Sub 1) >>- arr
              , app -<< T (Sub 2) >>- domain
              , app -<< T (Sub 3) >>- codomain
-             , Connect (link . T . Binding Flexible 1 $ Nothing @name)
+             , Connect (link . T . Binding Flexible $ Nothing @name)
                  (overlays $ Vertex <$> [arr, domain, codomain])
                  (Vertex g)
-             , app -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+             , app -<< T (Binding Flexible $ Nothing @name) >>- g
              ]
       return ((app, domain, codomain), gr)
 
@@ -624,7 +621,7 @@ genPatternConstraint = cata go
       return $ StageConstraint (PatternData (g :| PatWildF) []) g ([], depR)
         $ overlays
         [ g -<< T (Sub 1) >>- var
-        , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        , var -<< T (Binding Flexible $ Nothing @name) >>- g
         , depR -++ Pht NDOrderLink ++- g
         ]
 
@@ -634,7 +631,7 @@ genPatternConstraint = cata go
       depR <- node NDOrder
       return $ StageConstraint (PatternData (g :| PatUnitF) []) g ([], depR)
         $ overlays
-        [ n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        [ n -<< T (Binding Flexible $ Nothing @name) >>- g
         , g -<< T (Sub 1) >>- n
         , depR -++ Pht NDOrderLink ++- g
         ]
@@ -646,7 +643,7 @@ genPatternConstraint = cata go
       return $ StageConstraint (PatternData (g :| PatVarF name) [(name, (Instance 1, g))]) g ([], depR)
         $ overlays
         [ g -<< T (Sub 1) >>- var
-        , var -<< T (Binding Flexible 1 $ Just name) >>- g
+        , var -<< T (Binding Flexible $ Just name) >>- g
         , depR -++ Pht NDOrderLink ++- g
         ]
 
@@ -665,19 +662,19 @@ genPatternConstraint = cata go
         return . (var: n'root: n'us, ) $ overlays
           [ n'gr
           -- add binding edge and structure edge
-          , var -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+          , var -<< T (Binding Flexible $ Nothing @name) >>- g
           , tup -<< T (Sub i) >>- var
           -- add unify constraint
           , var -++ T Unify ++- n'root
           -- bind sub constraint
-          , n'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+          , n'g -<< T (Binding Flexible $ Nothing @name) >>- g
           -- add constraint dependency order
           , depR -<< Pht (Sub i) >>- n'd
           ]
       let patd = PatternData (g :| PatTupF (sia ^.. traverse . _1 . atInfo . pattern))
                              (sia ^.. traverse . _1 . atInfo . bindings . traverse)
       return $ StageConstraint patd g (gdeps, depR) $ overlays
-        [ gr, tup -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+        [ gr, tup -<< T (Binding Flexible $ Nothing @name) >>- g
         , g -<< T (Sub 1) >>- tup
         , depR -++ Pht NDOrderLink ++- g
         ]
@@ -695,10 +692,10 @@ genPatternConstraint = cata go
         var <- node (T NodeBot)
         return (overlays
           [ gr
-          , has -<< (T . Binding Flexible 1 $ Nothing @name) >>- recn
+          , has -<< (T . Binding Flexible $ Nothing @name) >>- recn
           , recn -<< T (Sub i) >>- has
           , has -<< T (Sub i) >>- var
-          , n -<< (T . Binding Flexible 1 $ Nothing @name) >>- recn
+          , n -<< (T . Binding Flexible $ Nothing @name) >>- recn
           , n' -++ T Unify ++- var
           , depR -<< Pht (Sub i) >>- gdep
           ], gdeps <> [n', var])
@@ -706,7 +703,7 @@ genPatternConstraint = cata go
                              (join $ sia ^.. traverse . _1 . _2 . atInfo . bindings)
       return $ StageConstraint patd g (gdeps, depR) $ overlays
         [ gr
-        , recn -<< (T . Binding Flexible 1 $ Nothing @name) >>- g
+        , recn -<< (T . Binding Flexible $ Nothing @name) >>- g
         , g -<< T (Sub 1) >>- recn
         , depR -++ Pht NDOrderLink ++- g
         ]
@@ -729,10 +726,10 @@ genPatternConstraint = cata go
               -- connect result node
               , g -<< T (Sub 1) >>- domain
               -- connect right pattern node
-              , pat'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+              , pat'g -<< T (Binding Flexible $ Nothing @name) >>- g
               , pat'root -++ T Unify ++- codomain
               -- connect left expr node
-              , e'g -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+              , e'g -<< T (Binding Flexible $ Nothing @name) >>- g
               , e'g -<< T (Instance 1) >>- app
               -- connect tracker node
               , depR -<< Pht (Sub 1) >>- e'dep
@@ -777,12 +774,12 @@ type instance ConstrainGraphic LiteralText (PatternInfo lits injs ns label name 
 instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralText (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeRef False $ fromString @name "text")
+    n <- node (T $ NodeRef mempty $ fromString @name "text")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralText $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -813,7 +810,7 @@ instance ConstraintGen (Literal t) (PatternInfo lits injs nodes label name expr)
     let patd = PatternData (g :| PatPrmF (inj $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -831,12 +828,12 @@ type instance ConstrainGraphic LiteralInteger (PatternInfo lits injs ns label na
 instance ConstraintGen LiteralInteger (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralInteger (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeRef False $ fromString @name "int")
+    n <- node (T $ NodeRef mempty $ fromString @name "int")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj . LiteralInteger $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -854,12 +851,12 @@ type instance ConstrainGraphic LiteralNumber (PatternInfo lits injs ns label nam
 instance ConstraintGen LiteralNumber (PatternInfo lits injs nodes label name expr) Int where
   stageConstraint (LiteralNumber (Literal t)) = do
     g <- node (G 1)
-    n <- node (T $ NodeRef False $ fromString @name "string")
+    n <- node (T $ NodeRef mempty $ fromString @name "string")
     depR <- node NDOrder
     let patd = PatternData (g :| PatPrmF (inj $ LiteralNumber $ Literal t)) mempty
     return $ StageConstraint patd g ([], depR) $ overlays
       [ g -<< T (Sub 1) >>- n
-      , n -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+      , n -<< T (Binding Flexible $ Nothing @name) >>- g
       , depR -++ Pht NDOrderLink ++- g
       ]
 
@@ -982,10 +979,10 @@ expand :: forall name edges nodes err m
 expand source target !gr = do
   (gRoot, gFrontiers, gType) <- copy @name source gr
   return . (gRoot, gFrontiers >>= \(a,b) -> [a,b],) . compress $ overlays
-    [ gRoot -<< T (Binding Flexible 1 $ Nothing @name) >>- target
+    [ gRoot -<< T (Binding Flexible $ Nothing @name) >>- target
     , overlays $ gFrontiers >>= \(old, new) ->
         [ old -++ T Unify ++- new
-        , new -<< T (Binding Flexible 1 $ Nothing @name) >>- target
+        , new -<< T (Binding Flexible $ Nothing @name) >>- target
         ]
     , gr, gType
     ]

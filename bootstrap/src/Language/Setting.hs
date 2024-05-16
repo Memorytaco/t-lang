@@ -6,8 +6,10 @@
 module Language.Setting
   (
 
+    HasGraphShow
+
   -- ** Allow creating nodes
-    HasNodeCreator
+  , HasNodeCreator
   , NodeCreator
   , newNodeCounter
   , node
@@ -35,7 +37,7 @@ module Language.Setting
   )
 where
 
-import Graph.Core (CoreG, Hole, hole)
+import Graph.Core (CoreG, Hole, Link, hole)
 import Language.Generic ((:<:))
 
 import Capability.State (HasState, modify, get, put, gets)
@@ -46,6 +48,8 @@ import Data.Functor
 import Data.Char (isAlphaNum)
 import Data.String (IsString (..))
 import System.Random.Stateful
+
+type HasGraphShow nodes edges info = (Show (Link edges), Show (Hole nodes info), Show info)
 
 -- | common environment for creating node
 data NodeCreator

@@ -6,6 +6,9 @@ module Language.Core.Type
   , Kind (..)
   , KindF (..)
 
+  , Arity (..)
+  , Variance (..)
+
   )
 where
 
@@ -17,6 +20,14 @@ import Language.Core.Utility
 import Prettyprinter (Pretty (..), parens, hsep)
 
 import qualified Data.Kind as T (Type)
+
+-- | Arity of type symbol
+newtype Arity = Arity [Variance]
+  deriving (Show, Eq, Ord)
+  deriving newtype (Semigroup, Monoid)
+
+-- | Variance of parameter position
+data Variance = Positive | Negative deriving (Show, Eq, Ord)
 
 -- | type representation. parameterised with some extensions.
 -- please refer to `Language.Core.Extension.Type` for all available options.

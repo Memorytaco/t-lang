@@ -28,7 +28,7 @@ import Data.Bifunctor (first)
 import Data.String (IsString (..))
 import Capability.Error ( HasCatch, HasThrow, MonadError(..) )
 
--- | shofthand for monad
+-- | shorthand for monad
 type M name nodes edges m
   = ReaderT (TypeContextTable name nodes edges Int)
       (StateT Int (ExceptT (ToGraphicTypeErr name) m))
@@ -111,9 +111,9 @@ mockGlobalConstraint name = do
   g <- node (G 1)
   r <- if fromString "->" == name
   then node (T NodeArr)
-  else node (T $ NodeRef False name)
+  else node (T $ NodeRef mempty name)
   return . Just . (g, ) $ overlays
-    [ r -<< T (Binding Flexible 1 $ Nothing @name) >>- g
+    [ r -<< T (Binding Flexible $ Nothing @name) >>- g
     , g -<< T (Sub 1) >>- r
     ]
 
@@ -128,5 +128,5 @@ mockGlobal
 mockGlobal name = do
   r <- if fromString "->" == name
     then node (T NodeArr)
-    else node (T $ NodeRef False name)
+    else node (T $ NodeRef mempty name)
   return $ Just (r, Vertex r)

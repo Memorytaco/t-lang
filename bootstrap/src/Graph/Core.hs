@@ -1,4 +1,4 @@
-{-# LANGUAGE AllowAmbiguousTypes #-}
+{-# LANGUAGE AllowAmbiguousTypes, PartialTypeSignatures #-}
 {- | Graph related definition
 --
 -- We use definitions here as core structure for graph and
@@ -32,7 +32,8 @@ module Graph.Core
   -- ** helpers
   , hole, link, lFrom, lTo, linkFrom, linkTo
   , isHole, isLink, isLinkOf, filterLink
-  , maybeHole, maybeLink
+  , tryHole, tryLink
+  , isHoleOf, areHolesOf
   , fromEdge, fromEdges, toEdges
   , (-<<), (>>-)
   , (-++), (++-)
@@ -43,15 +44,17 @@ module Graph.Core
   , induceLink, replaceLink
 
   -- ** algorithms
-  , reachable, linkable, transpose, dfs, isHoleOf, compress
+  , reachable, linkable, transpose, dfs, bfs, compress
+  , splitHole
   )
 where
 
-import Language.Generic.Subsume ( (:<:), inj, prj )
+import Language.Generic.Subsume ( (:<:), inj, prj, (:~:), split )
 
 import qualified Graph.Data as Algebra
 import Graph.Data (Graph (..), GraphF (..), induce, einduce, transpose, order, outFrom, inTo, overlay, overlays, fromVertices)
 import qualified Graph.Algorithm as Algorithm
+import Language.Generic ((:+:))
 
 -- | algebraic edge for graph
 newtype Link e = Link (e (Link e))
@@ -159,31 +162,43 @@ compress gr =
   in overlay (Algebra.fromEdges edges) (fromVertices vertices)
 
 -- | act like `maybe` function but test against `Hole`
-maybeHole
+tryHole
   :: (node :<: nodes)
   => (Hole nodes info -> a)
   -> (Hole nodes info -> node (Hole nodes info) -> info -> a)
   -> Hole nodes info
   -> a
-maybeHole f g node@(Hole (prj -> node'maybe) info)
-  = maybe (f node) (`g'` info) node'maybe
-  where g' = g node
+tryHole fls tru node@(Hole (prj -> node'maybe) info)
+  = maybe (fls node) (`g'` info) node'maybe
+  where g' = tru node
+
+-- | `split` applied to Hole structure
+splitHole
+  :: ((fls :+: tru) :~: nodes)
+  => (Hole nodes info -> info -> fls (Hole nodes info) -> a)
+  -> (Hole nodes info -> info -> tru (Hole nodes info) -> a)
+  -> Hole nodes info -> a
+splitHole fls tru n@(Hole tag info)
+  = split (fls n info) (tru n info) tag
 
 -- | general predicate for Hole
-isHole :: (node :<: nodes) => Hole nodes info -> (node (Hole nodes info) -> info -> Bool) -> Bool
-isHole node p = maybeHole (const False) (const p) node
+isHole :: node :<: nodes => Hole nodes info -> (node (Hole nodes info) -> info -> Bool) -> Bool
+isHole node p = tryHole (const False) (const p) node
 {-# INLINE isHole #-}
 
 isHoleOf :: forall node nodes info. (node :<: nodes) => Hole nodes info -> Bool
-isHoleOf = maybeHole @node (const False) (\ _ _ _ -> True)
+isHoleOf = tryHole @node (const False) (\ _ _ _ -> True)
+
+areHolesOf :: forall tru fls nodes info. (fls :+: tru) :~: nodes => Hole nodes info -> Bool
+areHolesOf = splitHole (\_ _ (_ :: fls _) -> False) (\_ _ (_ :: tru _) -> True)
 
 -- | act like `maybe` function but test against `Link`
-maybeLink :: edge :<: edges => (Link edges -> a) -> (edge (Link edges) -> a) -> Link edges -> a
-maybeLink f g l@(Link (prj -> e'Maybe)) = maybe (f l) g e'Maybe
+tryLink :: edge :<: edges => (Link edges -> a) -> (edge (Link edges) -> a) -> Link edges -> a
+tryLink fls tru l@(Link (prj -> e)) = maybe (fls l) tru e
 
 -- | general predicate for Link
 isLink :: (edge :<: edges) => (edge (Link edges) -> Bool) -> Link edges -> Bool
-isLink predicate (Link (prj -> e)) = maybe False predicate e
+isLink p (Link (prj -> e)) = maybe False p e
 
 -- | use type level marker to check edge kind
 isLinkOf :: forall edge edges. (edge :<: edges) => Link edges -> Bool
@@ -225,12 +240,17 @@ hasVertex = any
 
 reachable :: HasEqGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> [Hole ns info]
 reachable = dfs
+{-# INLINE reachable #-}
 
 -- ** algorithms
 
--- | get a collection of reachable nodes, with a predicate to select valid routing edge
-dfs :: HasEqGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> [Hole ns info]
+-- | depth first search, with a predicate to select valid routing edge
+dfs :: Eq a => (t -> Bool) -> Graph t a -> a -> [a]
 dfs p gr start = Algorithm.dfs (const [start]) (\_g (os, _) -> [a | (_, (e, a)) <- os, p e]) gr
+
+-- | breadth first search, with a predicate to select valid routing edge
+bfs :: Eq a => (t -> Bool) -> a -> Graph t a -> [a]
+bfs p start = Algorithm.bfs (const [start]) (\_g (os, _) -> [a | (_, (e, a)) <- os, p e])
 
 -- | test whether one node is reachable via specified edges
 linkable :: HasOrderGraph ns es info => (Link es -> Bool) -> CoreG ns es info -> Hole ns info -> Hole ns info -> Bool

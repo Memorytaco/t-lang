@@ -22,7 +22,7 @@ import Capability.State (HasState)
 
 import Graph.Core ( CoreG, Hole, HasOrderGraph )
 import Language.Setting (GraphState)
-import Transform.Desugar (runSugarRule, treeSugarRule, case01, case10)
+import Transform.Desugar (runSugarRule, foldSugarRule, case01, case10)
 import Language.Core (Name)
 import Language.Generic
 import Graph.Extension.GraphicType
@@ -40,11 +40,12 @@ newtype TypeGraphSugar nodes edges info m a = TypeGraphSugar
 driveTypeGraphSugar :: TypeGraphSugar nodes edges info m a -> CoreG nodes edges info -> m (a, CoreG nodes edges info)
 driveTypeGraphSugar m = runStateT (runTypeGraphSugar m)
 
--- | Graphic type constraint requires every node should have exactly one __binder__, which this function serves.
+-- | Graphic type constraint requires each node should have exactly one __binder__, which is the purpose
+-- this function serves.
 addBindingToType
   :: (HasOrderGraph nodes edges info, nodes :>+: '[T NodeApp, T NodeTup], edges :>+: '[T (Binding Name), T Sub], Monad m)
-  => CoreG nodes edges info -> Hole nodes info -> m (Bool, CoreG nodes edges info)
-addBindingToType gr g = driveTypeGraphSugar (runSugarRule (treeSugarRule rules) g) gr
+  => Hole nodes info -> CoreG nodes edges info -> m (Bool, CoreG nodes edges info)
+addBindingToType root = driveTypeGraphSugar (runSugarRule (foldSugarRule rules) root)
   where rules = 
           [ case01 @Name, case10 @Name
           ]
