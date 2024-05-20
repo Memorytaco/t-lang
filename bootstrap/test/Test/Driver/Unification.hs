@@ -94,6 +94,8 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   , ("forall (a = (1, 2)) . a", "(1, 2)")
   , ("(1, 2)", "forall (a = (1, 2)) . a")
 
+  , ("forall a b. (a, b)", "forall a b (c = (a, b)) . (a, c)")
+
   , ("forall a. (a, a)", "forall a b. (a, b)")
   , ("forall a (b ~ (a, a)) . b", "forall a. (a, a)")
 

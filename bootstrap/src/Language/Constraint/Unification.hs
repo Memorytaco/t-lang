@@ -23,7 +23,6 @@ module Language.Constraint.Unification
   , HasGraphUnifyError
 
   -- ** basic error handler
-  , failMsg
   , failProp
   , unmatch
 
@@ -466,7 +465,8 @@ sequel unify ((a,b): xs)
     vals <- sequel unify $ bimap subst subst <$> xs
     return $ val : vals
 
--- | Merge Relation, from |-> to, replace `from` with `to` and delete `from` and keep `to`.
+-- | Graft;Raise;Merge;Weak Relation, from |-> to, replace `from` with `to`
+-- or delete `from` and keep `to`.
 --
 -- if `from` and `to` are the same, it does nothing.
 --

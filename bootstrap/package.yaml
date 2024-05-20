@@ -5,6 +5,7 @@ license:             BSD3
 author:              "dunor"
 maintainer:          "dunor@dunor.dev"
 copyright:           "2024 dunor"
+language:            GHC2021
 
 extra-source-files:
 - README.md
