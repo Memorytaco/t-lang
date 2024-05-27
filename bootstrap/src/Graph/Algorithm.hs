@@ -136,7 +136,7 @@ bfs startWith next = runIdentity . bfsM (return . startWith) (fmap return . next
 spanForest :: Eq a => RouteStart e a -> Route e a -> Graph e a -> Forest a
 spanForest startWith next = runIdentity . spanForestM (return . startWith) (fmap return . next)
 
--- | topSort algorith using depth first search algorithm
+-- | topSort algorithm using depth first search algorithm
 topSort :: Eq a => RouteStart e a -> Route e a -> Graph e a -> [a]
 topSort graphWith next = runIdentity . topSortM (return . graphWith) (fmap return . next)
 

@@ -3,6 +3,7 @@ module Graph.Data
     Graph (..)  -- ^ Directed Grpah
   , UGraph (..) -- ^ Undirected Graph
   , GraphF (..)
+  , GraphT (..)
 
   , Many (..)
   , MGraph (..) -- ^ MultiEdged Graph
@@ -54,6 +55,7 @@ import qualified Data.Foldable as Fold (Foldable (toList))
 import qualified Data.Set as Set (toAscList, fromList)
 import Utility.Operator ((<!>))
 import Utility.Data (Snd (..))
+import Control.Monad.Trans (MonadTrans (..))
 
 import qualified Test.QuickCheck as QC
 import Test.QuickCheck.Arbitrary (Arbitrary)
@@ -123,6 +125,26 @@ instance (Arbitrary e, Arbitrary a) => Arbitrary (Graph e a) where
             , Connect <$> rn (n-1) <*> rn (n `div` 2) <*> rn (n `div` 2)
             ]
             where rn s = QC.resize s QC.arbitrary
+
+-- | Transformer of `Graph`
+newtype GraphT e m a = GraphT { unGraphT :: m (Graph e a) }
+  deriving (Functor, Foldable, Traversable)
+
+instance Applicative m => Applicative (GraphT e m) where
+  pure = GraphT . pure . pure
+  (GraphT f) <*> (GraphT g) = GraphT $ ((<*>) <$> f) <*> g
+
+instance Monad m => Monad (GraphT e m) where
+  (GraphT mg) >>= f = GraphT do
+    gr <- mg
+    cata alg (unGraphT . f <$> gr)
+    where alg NoneF = return None
+          alg (ConnectF e ma mb) = Connect e <$> ma <*> mb
+          alg (OverlayF ma mb) = Overlay <$> ma <*> mb
+          alg (VertexF ma) = ma
+
+instance MonadTrans (GraphT e) where
+  lift ma = GraphT (Vertex <$> ma)
 
 -- | one implementation for edge label
 newtype Many e = Many (Cofree Maybe e)

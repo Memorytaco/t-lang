@@ -20,39 +20,39 @@ import Prettyprinter
 import Data.Functor ((<&>))
 
 -- | pattern matching syntax
-data Pattern lit ext label name expr
+data Pattern prm ext label name expr
   = PatWild         -- ^ match every thing and ignore it
   | PatUnit         -- ^ unit pattern
   | PatVar name     -- ^ bind content to a variable or match a constructor
-  | PatPrm (lit (Pattern lit ext label name expr))    -- ^ match builtin primitives, its semantic is determined by extension
-  | PatTup [Pattern lit ext label name expr]          -- ^ tuple pattern
-  | PatRec [(label, Pattern lit ext label name expr)] -- ^ record pattern, open or closed
-  | PatSym label [Pattern lit ext label name expr]    -- ^ variant pattern, both for **polymorphic variant** and **closed variant**
-  | PatView expr (Pattern lit ext label name expr)    -- ^ allow applying function to the argument and view results
-  | PatBind name (Pattern lit ext label name expr)    -- ^ assign a name to the whold pattern
-  | PatExt (ext (Pattern lit ext label name expr))    -- ^ pattern extension
+  | PatPrm (prm (Pattern prm ext label name expr))    -- ^ match builtin primitives, its semantic is determined by extension
+  | PatTup [Pattern prm ext label name expr]          -- ^ tuple pattern
+  | PatRec [(label, Pattern prm ext label name expr)] -- ^ record pattern, open or closed
+  | PatSym label [Pattern prm ext label name expr]    -- ^ variant pattern, both for **polymorphic variant** and **closed variant**
+  | PatView expr (Pattern prm ext label name expr)    -- ^ allow applying function to the argument and view results
+  | PatBind name (Pattern prm ext label name expr)    -- ^ assign a name to the whold pattern
+  | PatExt (ext (Pattern prm ext label name expr))    -- ^ pattern extension
   deriving (Functor, Foldable, Traversable)
 
 deriving instance
-  ( Show (lit (Pattern lit ext label name expr))
-  , Show (ext (Pattern lit ext label name expr))
+  ( Show (prm (Pattern prm ext label name expr))
+  , Show (ext (Pattern prm ext label name expr))
   , Show name, Show expr, Show label)
-  => Show (Pattern lit ext label name expr)
+  => Show (Pattern prm ext label name expr)
 deriving instance
-  ( Eq (lit (Pattern lit ext label name expr))
-  , Eq (ext (Pattern lit ext label name expr))
+  ( Eq (prm (Pattern prm ext label name expr))
+  , Eq (ext (Pattern prm ext label name expr))
   , Eq name, Eq expr, Eq label)
-  => Eq (Pattern lit ext label name expr)
+  => Eq (Pattern prm ext label name expr)
 
 instance
-  ( forall x. Pretty x => Pretty (lit x)
+  ( forall x. Pretty x => Pretty (prm x)
   , forall x. Pretty x => Pretty (ext x)
   , Pretty label, Pretty name, Pretty expr)
-  => Pretty (Pattern lit ext label name expr) where
+  => Pretty (Pattern prm ext label name expr) where
   pretty PatWild = "_"
   pretty PatUnit = "()"
   pretty (PatVar name) = "?" <> pretty name
-  pretty (PatPrm lit) = pretty lit
+  pretty (PatPrm prm) = pretty prm
   pretty (PatTup ts) = tupled (pretty <$> ts)
   pretty (PatRec rs) = encloseSep lbrace rbrace comma $ rs <&> \(l, p) ->
     pretty l <+> "=" <+> pretty p
@@ -85,5 +85,5 @@ instance Pretty (f a) => Pretty (Grp f a) where
   pretty (Grp p ps) = concatWith (\a b -> a <+> comma <+> b) (pretty <$> p:ps)
 
 makeBaseFunctor $ fixQ [d|
-  instance (Functor ext, Functor lit) => Recursive (Pattern lit ext label name expr)
+  instance (Functor ext, Functor prm) => Recursive (Pattern prm ext label name expr)
   |]

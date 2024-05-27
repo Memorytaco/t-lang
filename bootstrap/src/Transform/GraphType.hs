@@ -223,7 +223,10 @@ literal03
   => Conversion nodes edges info bind rep name m a
 literal03 = Conversion $ Recursion \restore -> tryHole unmatch \root (T NodeArr) _ ->
   withLocal root $ withBinding restore root do
-    return (TypVar $ fromString "->")
+    typs <- asksGraph (lFrom @(T Sub) root) >>= mapM restore . fmap snd
+    if null typs
+       then return (TypVar $ fromString "->")
+       else return $ TypCon (TypVar $ fromString "->") typs
 
 -- | RULE: T (NodeLit @lit)
 literal04

@@ -1,11 +1,9 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
-{-# OPTIONS_GHC -Wno-missing-signatures #-}
-{- | ** unification driver code
--}
+-- | ** unification driver code
 module Driver.Unification
   (
     -- ** unify with exception
-    runUnify
+    driveUnifier
   , unify
   , GraphUnifyError (..)
   )
@@ -16,16 +14,16 @@ import Control.Monad.State (StateT (..))
 
 import Data.Text (Text)
 
+import Graph.Core (CoreG, HasOrderGraph, Hole)
 import Language.Constraint.Unification
-import Graph.Core ( CoreG, Hole, HasOrderGraph )
 import Language.Core (Label, Name)
-import Language.Setting ( GraphState, HasGraphShow )
 import Language.Generic ((:>+:))
+import Language.Setting (GraphState, HasGraphShow)
 
+import Capability.Error (HasCatch, HasThrow, MonadError (..))
 import Capability.Sink (HasSink)
 import Capability.Source (HasSource)
 import Capability.State (HasState, MonadState (..))
-import Capability.Error (HasThrow, HasCatch, MonadError (..))
 import Graph.Extension.GraphicType
 
 -- | unification monad
@@ -38,10 +36,10 @@ newtype GraphUnify ns es m a = GraphUnify
     deriving (HasState GraphState (CoreG ns es Int), HasSource GraphState (CoreG ns es Int), HasSink GraphState (CoreG ns es Int))
         via MonadState (StateT (CoreG ns es Int) (ExceptT (GraphUnifyError (Hole ns Int)) m))
 
-runUnify
+driveUnifier
   :: Unifier (GraphUnify ns es m) ns Int -> CoreG ns es Int -> Hole ns Int -> Hole ns Int
   -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
-runUnify u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
+driveUnifier u g a b = runExceptT $ runStateT (runGraphUnify $ runUnifier u a b) g
 
 unify
   :: ( Monad m, HasOrderGraph ns es Int, HasGraphShow ns es Int
@@ -52,7 +50,7 @@ unify
   => CoreG ns es Int
   -> Hole ns Int -> Hole ns Int
   -> m (Either (GraphUnifyError (Hole ns Int)) (Hole ns Int, CoreG ns es Int))
-unify = runUnify . hook1 . foldCase $ Case
+unify = driveUnifier . hook1 . foldCase $ Case
   [
 
   -- bottom variable node

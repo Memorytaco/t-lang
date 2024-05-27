@@ -30,7 +30,7 @@ module Graph.Core
   , GraphF (..)
 
   -- ** helpers
-  , hole, link, lFrom, lTo, linkFrom, linkTo
+  , hole, link, lFrom, lFroms, lTo, lTos, linkFrom, linkTo
   , isHole, isLink, isLinkOf, filterLink
   , tryHole, tryLink
   , isHoleOf, areHolesOf
@@ -147,10 +147,20 @@ lFrom :: (e :<: es, Ord (e (Link es)), HasOrderGraph ns es info)
       => Hole ns info -> CoreG ns es info -> [(e (Link es), Hole ns info)]
 lFrom n g = order [(e, b) | (_, (Link tag, b)) <- linkFrom (== n) g, Just e <- [prj tag]]
 
+-- | query out edges and nodes, with ascendent order. Filter on edge label with type.
+lFroms :: (e :<: es, Ord (e (Link es)), HasOrderGraph ns es info)
+      => [Hole ns info] -> CoreG ns es info -> [(e (Link es), Hole ns info)]
+lFroms ns g = order [(e, b) | (_, (Link tag, b)) <- linkFrom (`elem` ns) g, Just e <- [prj tag]]
+
 -- | query in edges and nodes, with ascendent order. Filter on edge label with type.
 lTo :: (e :<: es, Ord (e (Link es)), HasOrderGraph ns es info)
     => Hole ns info -> CoreG ns es info -> [(Hole ns info, e (Link es))]
 lTo n g = order [(a, e) | ((a, Link tag), _) <- linkTo (== n) g, Just e <- [prj tag]]
+
+
+lTos :: (e :<: es, Ord (e (Link es)), HasOrderGraph ns es info)
+    => [Hole ns info] -> CoreG ns es info -> [(Hole ns info, e (Link es))]
+lTos ns g = order [(a, e) | ((a, Link tag), _) <- linkTo (`elem` ns) g, Just e <- [prj tag]]
 
 -- | compress a graph, O(size(gr))
 --

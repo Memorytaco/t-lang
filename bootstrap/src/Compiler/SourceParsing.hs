@@ -30,6 +30,10 @@ module Compiler.SourceParsing
   -- ** querying item
   , lookupSurfaceModule
 
+  -- *** item conversion
+  , querySyntacticType
+  , queryGraphicType
+
   -- ** re-export builtin parser
   , driveParser -- ^ driver
   , surfaceExpr -- ^ expression
@@ -41,7 +45,7 @@ where
 import Language.Core
   ( ModuleSurface, TypSurface, ExprSurface, DeclSurface
   , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, Decls (getDecls)
-  , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface
+  , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface, ConstraintEdgesSurface, ConstraintNodesSurface
   )
 import Compiler.Store ( HasCompilerStore, UseCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
 import Data.Text (Text)
@@ -61,9 +65,11 @@ import Capability.Reader (asks)
 
 import Control.Monad.Except (runExceptT, MonadError (throwError))
 import Control.Monad.Trans (MonadTrans(..))
-import Driver.Transform.TypeGraph (toGraphicTypeMock)
+import Driver.Transform.TypeGraph (toGraphicTypeMock, ToGraphicTypeErr)
 import Transform.TypeGraph (TypeContextTable)
-import Graph.Core (Hole)
+import Graph.Core (Hole, CoreG)
+import Driver.Transform.GraphType (runGraphType, syntacticType)
+import Transform.GraphType (GraphToTypeErr)
 
 -- ** general methods for surface module
 
@@ -157,3 +163,25 @@ lookupSurfaceModule :: AccessCompilerStore m => Name -> m (Maybe ModuleSurface)
 lookupSurfaceModule name =
   asks @UseCompilerStore (^. (stageSourceParsing . spSources))
   <&> lookup name . (traverse %~ \(_, m) -> (fuseModuleName (m ^. moduleHeader), m))
+
+-- *** syntactic type and graphic type conversion
+
+-- | convert graphic type into syntactic type
+querySyntacticType
+  :: MonadFail m
+  => (Hole ConstraintNodesSurface Int, CoreG ConstraintNodesSurface ConstraintEdgesSurface Int)
+  -> [(Hole ConstraintNodesSurface Int, Name)] -> (String, Int)
+  -> m (TypSurface, (String, Int))
+querySyntacticType (r, gr) context hint = runGraphType gr context hint syntacticType r >>= \case
+  Left err -> fail $ show err
+  Right a -> return a
+
+-- | convert syntactic type into graphic type.
+--
+-- TODO: Add real environment
+queryGraphicType :: (MonadFail m, nodes ~ ConstraintNodesSurface, edges ~ ConstraintEdgesSurface)
+                 => TypeContextTable Name nodes edges Int -> Int -> TypSurface
+                 -> m ((Hole nodes Int, CoreG nodes edges Int), Int)
+queryGraphicType ctx seed typ = toGraphicTypeMock ctx seed typ >>= \case
+  Left err -> fail $ show err
+  Right a -> return a

@@ -258,7 +258,7 @@ case30
   => Unifier m ns info
 case30 = Unifier $ Recursion2 \unify ->
   match unmatch \(a, T (NodeApp an), _ia) ->
-  match (failProp . NodeDoesn'tMatch a) \(b, T (NodeApp bn), _ib) -> do
+  match (unmatch a) \(b, T (NodeApp bn), _ib) -> do
     -- structure node should have same number of subnodes
     when (an /= bn) $ failProp $ NodeDoesn'tMatch a b
     as <- getsGraph $ lFrom @(T Sub) a
@@ -278,10 +278,15 @@ case31
      , T (Binding Name) :<: es
      )
   => Unifier m ns info
-case31 = Unifier $ Recursion2 \_unify ->
+case31 = Unifier $ Recursion2 \unify ->
   match unmatch \(a, T NodeArr, _ia) ->
-  match (failProp . NodeDoesn'tMatch a) \(b, T NodeArr, _ib) -> do
-    b |-> a
+  match (unmatch a) \(b, T NodeArr, _ib) -> do
+    as <- getsGraph $ lFrom @(T Sub) a
+    bs <- getsGraph $ lFrom @(T Sub) b
+    ab <- if length as == length bs
+             then return (zip (snd <$> as) (snd <$> bs))
+             else failMsg "NodeArr nodes don't have same number of children"
+    b |-> a >>= (sequel unify ab $>)
 
 -- | unification: NodeLit
 --

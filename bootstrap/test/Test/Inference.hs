@@ -13,7 +13,6 @@ import Text.Megaparsec
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.HUnit (testCase, testCaseSteps, assertFailure, assertBool)
 import Prettyprinter
-import Transform.Desugar (pruneForallType)
 
 buildCorrectCase :: Text -> TestTree
 buildCorrectCase text = testCaseSteps (unpack text) \output -> do
@@ -22,7 +21,7 @@ buildCorrectCase text = testCaseSteps (unpack text) \output -> do
     Left err -> assertFailure $ "Parser Error: " <> errorBundlePretty err
     Right e -> return e
   tcExprToSyntacticType [] 0 ("t", 0) e >>= \case
-    Right (t, _) -> output $ show $ pretty $ pruneForallType t
+    Right (t, _) -> output . show $ pretty t
     Left err -> assertFailure $ "Inference Error: " <> show err
 
 buildWrongCase :: Text -> TestTree
@@ -57,7 +56,11 @@ inferringExpressionWithNoError = testGroup "Inferring Expression With No Error" 
   , "(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13)"
   , "let ?a = 3 in a"
   , "let ?a = 3 in 3"
-  , "[ ?a = a ]"
+  , "\\ ?a = a"
+  , "\\ ?a, ?b = a"
+  , "let ?a = 3;; ?b = 24 in b"
+  , "let ?const = \\ ?a, ?b = a;; ?i = 32 in const 32 \"nothing\""
+  , "(\\ ?a = a) 32"
   ]
 
 inferringExpressionWithError :: TestTree

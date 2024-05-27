@@ -142,10 +142,7 @@ repl'loop = do
                 RQueryTypeOf withSugar e ->
                   tcExprToSyntacticType [] 0 ("a", 0) e >>= \case
                     Left err -> liftInput $ outputStrLn $ show err
-                    Right (t, _) -> liftInput do
-                      if withSugar
-                      then outputStrLn $ show $ pretty $ pruneForallType t
-                      else outputStrLn $ show $ pretty t
+                    Right (t, _) -> liftInput do outputStrLn $ show $ pretty t
                 RLoadObject _ -> undefined
                 RLoadShared _ -> undefined
                 RDumpBitcode e -> do

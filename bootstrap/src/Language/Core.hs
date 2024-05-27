@@ -144,10 +144,10 @@ type GPatSurfaceLitExt = PatSurfaceLitExt
 -- | Surface Expr
 type ExprSurface typ = Expr (ExprSurfaceExt typ) Name
 type ExprSurfaceExt typ =
-      LetGrp (PatSurface typ)           -- plain pattern match via "let" binding
-  :+: Let (Binder (Name @: Maybe typ))  -- desugared non-recursive "let" binding
-  :+: Letrec (Binder (Name @: Maybe typ)) -- desugared possible-recrusive "let" binding group
-  :+: Equation (GPatSurface typ) (Prefixes Name typ)  -- heavy lambda
+      LetGrp (PatSurface typ)                             -- plain pattern match via "let" binding
+  :+: Let (Binder (Name @: Maybe typ))                    -- desugared non-recursive "let" binding
+  :+: Letrec (Binder (Name @: Maybe typ))                 -- desugared possible-recrusive "let" binding group
+  :+: Equation (GPatSurface typ) (Prefixes Name typ)      -- heavy lambda
   :+: Equation (Grp (PatSurface typ)) (Prefixes Name typ) -- light lambda
   :+: Apply     -- application, term beta-reduction or type application
   :+: Value typ -- unlifted type value

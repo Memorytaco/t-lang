@@ -29,7 +29,7 @@ import Language.Generic ((:>+:), type (|:) (..))
 import Language.Core (ExprF (..), Expr (..))
 import Language.Setting
 
-import Graph.Core (Hole (..), CoreG, HasOrderGraph)
+import Graph.Core (Hole (..), Link, CoreG, HasOrderGraph)
 import Graph.Extension.GraphicType
 
 
@@ -77,7 +77,7 @@ genGC :: forall nodes edges name m f target.
   , nodes :>+: '[T NodeBot, G, NDOrder]
   , Traversable f
   , Eq name
-  , Monad m
+  , Monad m, Show name
   ) => Expr f name -> BindingTable name nodes -> Int
   -> m (Either (ConstraintGenErr name) (StageConstraint nodes edges Int target, Int))
 genGC e = driveGCGen (genConstraint e)
@@ -130,7 +130,7 @@ solve
     , nodes :>+: '[NDOrder, G, T NodeBot]
     , Ord name
     , HasOrderGraph nodes edges Int
-    , Monad m
+    , Monad m, Show (nodes (Hole nodes Int)), Show (edges (Link edges))
     )
   => StageConstraint nodes edges Int a
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
@@ -147,7 +147,7 @@ preInfer
      , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
      , nodes :>+: '[NDOrder, G, T NodeBot]
      , HasOrderGraph nodes edges Int, Monad m
-     , Traversable f, Ord name
+     , Traversable f, Ord name, Show (nodes (Hole nodes Int)), Show (edges (Link edges)), Show name
      )
   => Expr f name -> BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
@@ -167,14 +167,14 @@ infer
      , edges :>+: '[Pht Sub, Pht NDOrderLink, T (Binding name), T Unify, T Instance, T Sub]
      , nodes :>+: '[NDOrder, G, T NodeBot, NodePht]
      , HasOrderGraph nodes edges Int, Monad m
-     , Traversable f, Ord name
+     , Traversable f, Ord name, Show (nodes (Hole nodes Int)), Show (edges (Link edges)), Show name
      )
   => BindingTable name nodes -> Int
   -> Unifier err nodes edges Int (GCSolver name err nodes edges m)
   -> Expr f name
   -> m (Either (SolverErr name (Hole nodes Int) (CoreG nodes edges Int) err) ((Hole nodes Int, CoreG nodes edges Int), Int))
-infer env i unify e =
-  genGC e env i >>= \case
-    Right (constraint, i') ->
-      driveGCSolver (solveConstraint @name constraint >>= getSolutionFromConstraint) unify i'
+infer env seed unify expr =
+  genGC expr env seed >>= \case
+    Right (constraint, seed') ->
+      driveGCSolver (solveConstraint @name constraint >>= getSolutionFromConstraint) unify seed'
     Left err -> return (Left $ ConstraintGenErr err)

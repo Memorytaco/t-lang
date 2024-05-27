@@ -100,6 +100,8 @@ unifyingOfUnifiableTypesShouldNotGoWrong = testGroup "Unifying of Unifiable Type
   , ("forall a (b ~ (a, a)) . b", "forall a. (a, a)")
 
   , ("forall a (b ~ (a, a)) . (a, b, a)", "forall a b. (a, b, a)")
+
+  , ("forall a b. a -> b", "forall a. a -> a")
   -- , ("forall a (b ~ (a, a)) . (a, b)", "forall a. (a, a)")  -- cause hang
 
   -- , ("forall f a. f a", "forall f a. a f")
