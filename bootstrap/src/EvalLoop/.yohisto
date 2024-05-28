@@ -1,0 +1,17 @@
+a +b
+:type a + b
+:def operator + 6 infixl
+:def operator + 7 6 infix
+:def operator + 7 6
+:def operator + 7 infix
+:def operator _ + _ 7 infix
+:def operator _ + 7 infix
+a + b
+CLI/Parser.hs
+Read.hs
+ok.ok
+::run
+let a = 32 in 6
+:load Read.hs
+:type 32 32
+:type (\\ ?a = a) 32

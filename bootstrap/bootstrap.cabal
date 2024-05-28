@@ -159,7 +159,7 @@ library
     , containers
     , exceptions
     , free
-    , haskeline
+    , isocline
     , lens
     , libffi
     , llvm-hs
@@ -227,7 +227,7 @@ executable yo
     , containers
     , exceptions
     , free
-    , haskeline
+    , isocline
     , lens
     , libffi
     , llvm-hs
@@ -301,7 +301,7 @@ test-suite bootstrap-test
     , containers
     , exceptions
     , free
-    , haskeline
+    , isocline
     , lens
     , libffi
     , llvm-hs

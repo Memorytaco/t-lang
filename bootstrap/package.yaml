@@ -23,14 +23,13 @@ dependencies:
 - bytestring
 - llvm-hs
 - llvm-hs-pure
-- haskeline
 - transformers
 - recursion-schemes
 - free
 - bifunctors
 - libffi
-- megaparsec
 - text
+- megaparsec
 - optparse-applicative
 - exceptions
 - type-errors
@@ -40,10 +39,11 @@ dependencies:
 - QuickCheck
 - tasty-quickcheck
 - capability
-- prettyprinter
 - lens
+- prettyprinter
 - random
 - comonad
+- isocline
 
 ghc-options:
 - -Wall
