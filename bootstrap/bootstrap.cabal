@@ -11,9 +11,9 @@ description:    Please see the README on GitHub at <https://github.com/memorytac
 category:       Programming Language (PL)
 homepage:       https://github.com/memorytaco/yo#readme
 bug-reports:    https://github.com/memorytaco/yo/issues
-author:         dunor
-maintainer:     dunor@dunor.dev
-copyright:      2024 dunor
+author:         Andrew Elliot
+maintainer:     memorytoco@gmail.com
+copyright:      2024 Andrew Elliot
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -106,11 +106,13 @@ library
       Language.Setting
       Language.TH
       Recursion.Morphism
-      Transform.CPSTransform
       Transform.Desugar
       Transform.GraphType
+      Transform.LowerCPS
       Transform.LowerType
       Transform.Pass
+      Transform.Rename
+      Transform.Simplify
       Transform.TypeGraph
       Utility.Data
       Utility.Operator

@@ -2,16 +2,15 @@ name:                bootstrap
 version:             0.2.0.0
 github:              "memorytaco/yo/bootstrap"
 license:             BSD3
-author:              "dunor"
-maintainer:          "dunor@dunor.dev"
-copyright:           "2024 dunor"
+author:              "Andrew Elliot"
+maintainer:          "memorytoco@gmail.com"
+copyright:           "2024 Andrew Elliot"
 language:            GHC2021
 
 extra-source-files:
 - README.md
 - CHANGELOG.md
 
-# Metadata used when publishing your package
 synopsis:            Compiler implementation of bootstrap compiler in Haskell.
 category:            Programming Language (PL)
 description:         Please see the README on GitHub at <https://github.com/memorytaco/yo/bootstrap#readme>

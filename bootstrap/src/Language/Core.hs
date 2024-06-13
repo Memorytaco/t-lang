@@ -229,18 +229,17 @@ type PatInternal typ = Pattern PatInternalLitExt (Cast typ :+: PatGroup) Label N
 type PatInternalLitExt = LiteralText :+: LiteralInteger :+: LiteralNumber
 
 type ExprInternal typ = Expr (ExprInternalExt typ)
-type ExprInternalExt typ =
-  (   Let (Binder (Name @: typ))        -- non-recursive local binding
+type ExprInternalExt typ
+  =   Let (Binder (Name @: typ))        -- non-recursive local binding
   :+: Letrec (Binder (Name @: typ))     -- recursive local binding group
   :+: Lambda (Binder (Prefix Name typ)) -- type lambda
   :+: Lambda (Binder (Name @: typ))     -- term lambda
-  :+: Apply
-  :+: Match (PatInternal typ) -- pattern match
-  :+: Value (Coerce Name typ) -- evidence of type inference
-  :+: Cast typ                -- type coercion
+  :+: Apply                             -- term application
+  :+: Match (PatInternal typ)           -- pattern match
+  :+: Value (Coerce Name typ)           -- evidence of type inference
+  :+: Cast typ                          -- type coercion
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
   :+: Tuple :+: Record Label :+: Selector Label :+: Constructor Label
-  )
 
 
 ------------------------------------------

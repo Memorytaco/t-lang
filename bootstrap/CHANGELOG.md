@@ -8,24 +8,56 @@ and this project adheres to the
 
 # Unreleased
 
-## [0.2.0.0] - 2024-04-08
+## [0.2.1.0] - 2024-04-08
 
 ### Added
-
-- Graph algorithms for new Graph.Data module
-- More tests on Graph.Data
 
 #### dependencies
 
 ### Removed
 
 ### Plan
-- Refactor Parser for better error message and flexibility
-- Refactor implementation of algebraic graph
 
 ### BugFix
 
 # Release
+
+## [0.2.0.0] - 2024-06-13
+
+### Added
+
+- Graph algorithms for new Graph.Data module
+- Better algorithm for transforming between graphic and syntactic type
+- Add core structure of macro for language
+- More tests on Graph.Data
+- More tests on Unification
+- Add better ui for REPL with limited completion
+- Add two pass: Rename and Simplify
+
+#### dependencies
+
+- haskeline
+
+### Removed
+
+- Rename CPSTransform to LowerCPS
+
+#### dependencies
+
+- isocline
+
+### Plan
+
+- Refactor Parser for better error message and flexibility
+- Refactor implementation of algebraic graph
+- Language modification for better structure
+- Better desugaring rule
+
+### BugFix
+
+- Fix an error of looking up names when transforming types to graphs
+- Fix an error of unwanted desugaring process when trying to print out
+  types
 
 ## [0.1.0.1] - 2024-01-24
 

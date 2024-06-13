@@ -9,7 +9,7 @@ where
 
 import System.Console.Isocline
 
-import Data.Text (Text, pack, dropWhileEnd, isPrefixOf, stripPrefix, unpack)
+import Data.Text (Text, pack, dropWhileEnd, stripPrefix, unpack)
 import qualified Data.Text.IO as Text (putStrLn)
 import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
 import Text.Megaparsec

@@ -233,7 +233,7 @@ type instance ConstrainGraphic Apply (ExprF f name |: Hole ns Int) m nodes edges
     , HasNodeCreator m
     , HasOrderGraph nodes edges info
     , edges :>+: '[Pht Sub, T Instance, T Sub, T (Binding name)]
-    , nodes :>+: '[T NodeApp, T NodeArr, T NodeBot, G]
+    , nodes :>+: '[T NodeArr, T NodeBot, G]
     )
 -- | Constraint for `Apply`
 instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
@@ -252,7 +252,7 @@ instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
       genInstance r gr to = gr <> (r -<< T (Instance 1) >>- to)
 
       -- collect graph and generate constraint
-      genApp (r'a, gr'a) (r'b, gr'b) = do
+      genApp (g'a, gr'a) (g'b, gr'b) = do
         g <- node (G 1)
         arr <- node (T NodeArr)
         domain <- node (T NodeBot)
@@ -263,10 +263,10 @@ instance ConstraintGen Apply (ExprF f name |: Hole nodes Int) Int where
           , arr -<< T (Sub 2) >>- codomain
           , g -<< T (Sub 1) >>- codomain
           , Connect (link $ T (Binding Flexible $ Nothing @name))
-              (fromVertices [r'a, r'b, arr, domain, codomain])
+              (fromVertices [g'a, g'b, arr, domain, codomain])
               (Vertex g)
-          , genInstance r'a gr'a arr
-          , genInstance r'b gr'b domain
+          , genInstance g'a gr'a arr
+          , genInstance g'b gr'b domain
           ]
 
 type instance ConstrainGraphic
@@ -291,7 +291,7 @@ type instance ConstrainGraphic (Equation (Grp (PatSurface t)) (Prefixes name t))
     , Equation (Grp (PatSurface t)) (Prefixes name t) :<: f
     , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
     , edges :>+: '[Pht Sub]
-    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
+    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeTup, T NodeRec, T (NodeHas Label)]
     , nodes :>+: '[T (NodeRef name)]
     , name ~ Name, info ~ Int, ns ~ nodes
     )
@@ -380,7 +380,7 @@ type instance ConstrainGraphic (LetGrp (PatSurface t)) (ExprF f name |: Hole ns 
   = ( Monad m
     , edges :>+: '[T Sub, T (Binding Name), T Instance, T Unify]
     , edges :>+: '[Pht Sub]
-    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas Label)]
+    , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeTup, T NodeRec, T (NodeHas Label)]
     , nodes :>+: '[T (NodeRef name)]
     , HasNodeCreator m
     , HasConstraintGenErr name m
@@ -555,7 +555,7 @@ genPatternConstraint
      , ConstraintGen injs target Int, ConstrainGraphic injs target m nodes edges Int
 
      , edges :>+: '[T Sub, T (Binding name), T Instance, T Unify]
-     , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeApp, T NodeTup, T NodeRec, T (NodeHas label)]
+     , nodes :>+: '[T NodeBot, G, T NodeArr, T NodeTup, T NodeRec, T (NodeHas label)]
      , Traversable lits, Traversable injs, HasNodeCreator m
      , HasConstraintGenErr name m
      , HasOrderGraph nodes edges Int
