@@ -57,10 +57,10 @@ instance (forall x. Pretty x => Pretty (binder x), Pretty expr) => Pretty (Letre
 --
 -- e.g.
 --    identity: [ ?a = a ]
---    identity2: \ ?a => a
+--    identity2: \ ?a = a
 --    const: [ ?v, _ = v ]
---    const2: \ ?v, _ => v
---    const3: \ ?v => \_ => v
+--    const2: \ ?v, _ = v
+--    const3: \ ?v = \_ = v
 data Equation bind prefix expr
   = Equation prefix (bind expr, expr) [(bind expr, expr)]
   deriving (Show, Eq, Functor, Foldable, Traversable)
@@ -116,13 +116,13 @@ instance (Pretty name, Pretty e) => Pretty (Constructor name e) where
 --    (forall (a > ⊥). a) < int := (forall a. a) (CoerceTrans (CoerceIn (CoerceBot int)) CoerceElim)
 --                              := int
 data Coerce name typ
-  = CoerceRefl      -- ^ identity
-  | CoerceBot typ   -- ^ bottom, if target type is Bot then replace it with __typ__
-  | CoerceHyp name  -- ^ abstract, replace type t with a if a :> t
+  = CoerceRefl                  -- ^ identity
+  | CoerceBot typ               -- ^ bottom, if target type is Bot then replace it with __typ__
+  | CoerceHyp name              -- ^ abstract, replace type t with a if a :> t
   | CoerceIn  (Coerce name typ) -- ^ Inner instantiation
   | CoerceOut (Coerce name typ) -- ^ Outer instantiation
-  | CoerceElim      -- ^ remove binder and substitution var with bounded typ
-  | CoerceIntro     -- ^ add a new binder
+  | CoerceElim                  -- ^ remove binder and substitution var with bounded typ
+  | CoerceIntro                 -- ^ add a new binder
   | CoerceTrans (Coerce name typ) (Coerce name typ) -- ^ sequel application of type computation
   deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
@@ -149,6 +149,11 @@ data LambdaI bind name f e = LambdaI (bind e) (f (Either name e)) deriving (Func
 deriving instance (forall a. Show (bind a), forall a. Show (f a)) => Show (LambdaI bind name f e)
 deriving instance (forall a. Eq (bind a), forall a. Eq (f a)) => Eq (LambdaI bind name f e)
 deriving instance (forall a. Ord (bind a), forall a. Ord (f a)) => Ord (LambdaI bind name f e)
+
+-- | `Join` operator, it has similar functionality of `Let` but serves different
+-- purpose. Recursion is allowed here.
+data Join f e = Join (f e) e e
+  deriving (Show, Eq, Ord, Functor, Foldable, Traversable)
 
 -- | pattern match expression
 data Match match e

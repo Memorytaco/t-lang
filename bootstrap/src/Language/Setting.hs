@@ -97,8 +97,10 @@ getsGraph = gets @GraphState
 
 type HasRandomName m = (StatefulGen (AtomicGenM StdGen) m, MonadIO m)
 
--- | randomName :: nameLength -> name
-randomName :: (IsString name, HasRandomName m) => Int -> m name
+-- | generate a random name for anything with a `IsString` instance
+randomName :: (IsString name, HasRandomName m)
+           => Int    -- ^ name length
+           -> m name -- ^ a random name
 randomName n = fromString <$> replicateM n seed
   where seed = uniformRM ('0', 'Z') globalStdGen
            >>= \c -> if isAlphaNum c then return c else seed
