@@ -2,7 +2,7 @@
 module Language.Core.Expr
   ( Expr (..)
   , ExprF (..)
-  , type (@:) (..)
+  , type (:::) (..)
   )
 where
 
@@ -14,11 +14,11 @@ import Language.TH (fixQ)
 import Prettyprinter (Pretty (..), colon, (<+>))
 
 -- | type annotation with full power of the type system
-data typ @: term = term :@ typ deriving (Show, Eq, Functor, Traversable, Foldable)
-$(deriveBifunctor ''(@:))
+data term ::: typ = term ::: typ deriving (Show, Eq, Functor, Traversable, Foldable)
+$(deriveBifunctor ''(:::))
 
-instance (Pretty typ, Pretty term) => Pretty (typ @: term) where
-  pretty (term :@ typ) = pretty term <+> colon <+> pretty typ
+instance (Pretty typ, Pretty term) => Pretty (typ ::: term) where
+  pretty (term ::: typ) = pretty term <+> colon <+> pretty typ
 
 -- | a `Free` like structure for defining `Expr`
 --

@@ -44,7 +44,7 @@ where
 
 import Language.Core
   ( ModuleSurface, TypSurface, ExprSurface, DeclSurface
-  , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, Decls (getDecls)
+  , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, DeclStore (unDeclStore)
   , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface, ConstraintEdgesSurface, ConstraintNodesSurface
   )
 import Compiler.Store ( HasCompilerStore, UseCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
@@ -79,7 +79,7 @@ prettyShowSurfaceModule (Module header impts decls) = intercalate "\n" (headerDo
   where
     headerDoc = [show $ fuseModuleName header <> " :"]
     imptsDoc = "imports:":"":(impts <&> show)
-    declsDoc = "definitions:":"":(getDecls decls <&> show)
+    declsDoc = "definitions:":"":(unDeclStore decls <&> show)
 
 -- ** actions for source file
 

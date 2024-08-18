@@ -15,10 +15,10 @@ import Language.Generic ((:<:))
 import Language.Core.Extension.Decl
 
 import Data.Text (Text)
-import Data.Functor ((<&>))
 import Data.List (find)
 import Data.Maybe (fromMaybe)
 import Control.Monad (void, forM, forM_)
+import Control.Lens ((^.))
 
 import Capability.State (HasState, modify)
 
@@ -53,33 +53,30 @@ stmtUse = do
   void $ reservedOp ";;"
   return (pos, Use name $ fromMaybe [] items)
 
-infixl 4 ??
-(??) :: forall decl decls info. (decl :<: decls, Query decl)
-     => Module decls info -> (info -> Bool) -> [decl info]
-_mod ?? info = queryAll info (_moduleDecls _mod)
-
 module'
-  :: forall e m decls
+  :: forall e m set
    . ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
      , HasState "OperatorStore" OperatorStore m
-     , Item (UserOperator Text) :<: decls)
-  => [Module decls Name] -> m (Decl decls Name)
-  -> m () -> m (Module decls Name)
+     , Item (UserOperator Text) :<: set)
+  => [Module set Name] -> m (Decl set Name)
+  -> m () -> m (Module set Name)
 module' ms declaraton e = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
   uses <- many stmtUse >>= \deps -> do
     forM deps \(pos, u@(Use namespace@(Alias from _) imps)) -> region (setErrorOffset pos) do
       forM_ imps \(Alias sym _) -> do
-        case lookUpModule from ms <&> (`itemOf` (== sym)) of
-          Just ops -> forM_ ops putIntoEnv
+        case isDeclStoreOf @(Item (UserOperator Text)) . (^. moduleDecls) <$> lookUpModule from ms of
+          Just entries -> case filter (\(Item _ _name) -> _name == sym) entries of
+                        [] -> fail $
+                          "module (" <> show namespace <> ") does not contain definition for" <> show sym
+                        ops -> forM_ ops putIntoEnv
           Nothing -> fail
-            $ "module (" <> show namespace <> ") does not contain definition for " <> show sym <> " or it does not exist"
+            $ "module (" <> show namespace <> ") doesn't contain operator definition"
       return u
   decls <- many declaraton <* e
-  return (Module name uses $ Decls decls)
+  return (Module name uses $ DeclStore decls)
   where
-    itemOf = (??) @(Item (UserOperator Text)) @decls
-    lookUpModule :: ModuleName -> [Module decls Name] -> Maybe (Module decls Name)
+    lookUpModule :: ModuleName -> [Module set Name] -> Maybe (Module set Name)
     lookUpModule name = find $ (== name) . _moduleHeader
     putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)

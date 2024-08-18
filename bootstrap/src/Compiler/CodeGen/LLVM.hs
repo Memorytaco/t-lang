@@ -187,9 +187,9 @@ instance LLVMIRGen m pattern' => LLVMIRGen m (Equation pattern' prefix) where
   genOperand _ = do
     error "lambda not defined"
 
-instance LLVMIRGen m ((@:) typ) where
-  type LLVMIRGenContext m ((@:) typ) = ()
-  genOperand (v :@ _) = v
+instance LLVMIRGen m ((:::) typ) where
+  type LLVMIRGenContext m ((:::) typ) = ()
+  genOperand (_ ::: v) = v
 
 -- **** global definition
 

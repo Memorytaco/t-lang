@@ -17,10 +17,10 @@ import Control.Monad
 import Control.Monad.State (StateT (..))
 import Data.Functor (($>))
 
-import Language.Core
-  ( query, Decls (..)
-  , moduleHeader, moduleDecls, fuseModuleName
-  )
+import Language.Core.Decl
+    ( DeclStore(..), isDeclOf )
+import Language.Core.Module
+    ( moduleHeader, moduleDecls, fuseModuleName )
 import Language.Core.Extension.Decl (Item (..), UserOperator (..))
 
 import qualified Data.Map as Map
@@ -139,11 +139,11 @@ evaFeed = do
             ReadCommand cmd ->
               case cmd of
                 RDefineGlobal decl -> do
-                  case query @(Item (UserOperator Text)) (const True) decl of
+                  case isDeclOf @(Item (UserOperator Text)) decl of
                     Just (Item (UserOperator op) _) ->
                       modify @UserEva $ loopState . evalStore . operators %~ (op:)
                     Nothing -> return ()
-                  modify @UserEva (loopState . evalStore . thisModule . moduleDecls %~ (Decls . (decl:) . getDecls))
+                  modify @UserEva (loopState . evalStore . thisModule . moduleDecls %~ (DeclStore . (decl:) . unDeclStore))
                   liftIO $ print decl
                 RListSource (Just name) -> do
                   sourceStore <- gets @UserEva (^. (loopState . evalStore . stageStore . stageSourceParsing . spFiles))
@@ -159,7 +159,7 @@ evaFeed = do
                   mods <- gets @UserEva (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources)) <&> fmap snd
                   liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (print . fuseModuleName)
                 RListDecls -> liftIO do
-                  mapM_ print $ getDecls $ lControl ^. loopState . evalStore . thisModule . moduleDecls
+                  mapM_ print $ unDeclStore $ lControl ^. loopState . evalStore . thisModule . moduleDecls
                 RLoadSource path -> loadModuleFromFile path >>= \case
                   Right m -> liftIO . putStrLn $ "load module "<> show (fuseModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
                   Left s -> liftIO $ putStrLn s

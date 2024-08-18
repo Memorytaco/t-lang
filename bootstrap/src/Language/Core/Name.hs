@@ -11,7 +11,8 @@ module Language.Core.Name
   , _QName, _QNameSpace
 
   , Alias (..)
-  , getAliasName
+  , getCurrentName
+  , getOriginName
   , aliasName
   , isSameAlias
 
@@ -56,9 +57,14 @@ data Alias name
   = Alias name (Maybe name)
   deriving (Eq, Ord, Functor)
 
--- | get name from aliased name
-getAliasName :: Alias name -> name
-getAliasName (Alias name alias'maybe) = fromMaybe name alias'maybe
+-- | get name of an item and if it has aliased name, return it
+-- or otherwise return its real name.
+getCurrentName :: Alias name -> name
+getCurrentName (Alias name alias'maybe) = fromMaybe name alias'maybe
+
+-- | get original name of item.
+getOriginName :: Alias name -> name
+getOriginName (Alias name _) = name
 
 -- | give alias "b" to name "a".
 --

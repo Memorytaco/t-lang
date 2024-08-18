@@ -115,14 +115,14 @@ unify = refold shrink rollup
 genConstraint
   :: ( MonadFail m
      , HasState "name" Integer m
-     , HasState "env" [Kind f String String @: name] m  -- name with unsolved kind, kind could be open
-     , HasReader "env" [Kind f String solved @: name] m -- name with solved kind, kind should be closed
-     , HasReader "local" [Kind f String String @: name] m -- local bound
+     , HasState "env" [name ::: Kind f String String] m  -- name with unsolved kind, kind could be open
+     , HasReader "env" [name ::: Kind f String solved] m -- name with solved kind, kind should be closed
+     , HasReader "local" [name ::: Kind f String String] m -- local bound
      , HasState "constraint" [Kind f String String :<> Kind f String String] m -- generated constraint
      , Functor f, Functor rep, Functor (bind name)
      )
   => Type bind rep name a
-  -> m (AnnotatedType bind rep (Kind f String String @: name) a (Kind f String String))
+  -> m (AnnotatedType bind rep (name ::: Kind f String String) a (Kind f String String))
 genConstraint = cata go
   where
     -- | new meta kind variable

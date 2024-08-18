@@ -168,11 +168,11 @@ instance (PatternC e m, Rule proxy expr m)
 -- ** extension for pattern
 
 -- | type annotation for pattern
-instance (PatternC e m, (@:) typ :<: ext, PrattToken proxy typ m)
+instance (PatternC e m, (:::) typ :<: ext, PrattToken proxy typ m)
   => PrattToken (WithPattern e m (Layer "annotation" proxy typ)) (Pattern lit ext label name expr) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
       nud' _ = fail "Pattern annotation expect a pattern first"
       led' end left = do
         typ :: typ <- pratt @proxy end Go
-        return . PatExt . inj $ left :@ typ
+        return . PatExt . inj $ typ ::: left

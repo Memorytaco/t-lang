@@ -424,14 +424,14 @@ instance ConstraintGen (LetGrp (PatSurface t)) (ExprF f name |: Hole nodes Int) 
         r <- getInstance i g gr
         return (name, r :| Inl (T Unify))
 
-type instance ConstrainGraphic (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
-instance ConstraintGen (Let (Binder (name @: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
+type instance ConstrainGraphic (Let (Binder (name ::: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Let (Binder (name ::: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
 
-type instance ConstrainGraphic (Letrec (Binder (name @: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
-instance ConstraintGen (Letrec (Binder (name @: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
+type instance ConstrainGraphic (Letrec (Binder (name ::: Maybe t))) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen (Letrec (Binder (name ::: Maybe t))) (ExprF f name |: Hole nodes Int) Int where
 
-type instance ConstrainGraphic ((@:) t) (ExprF f name |: Hole ns Int) m nodes edges info = ()
-instance ConstraintGen ((@:) t) (ExprF f name |: Hole nodes Int) Int where
+type instance ConstrainGraphic ((:::) t) (ExprF f name |: Hole ns Int) m nodes edges info = ()
+instance ConstraintGen ((:::) t) (ExprF f name |: Hole nodes Int) Int where
 
 type instance ConstrainGraphic LiteralText (ExprF f name |: Hole ns Int) m nodes edges info
   = ( ns ~ nodes
@@ -729,9 +729,9 @@ instance ConstraintGen LiteralText (PatternInfo lits injs nodes label name expr)
       ]
 
 -- | handle type cast in pattern matching
-type instance ConstrainGraphic ((@:) t) (PatternInfo lits injs ns label name expr) m nodes edges info
+type instance ConstrainGraphic ((:::) t) (PatternInfo lits injs ns label name expr) m nodes edges info
   = ()
-instance ConstraintGen ((@:) t) (PatternInfo lits injs nodes label name expr) Int where
+instance ConstraintGen ((:::) t) (PatternInfo lits injs nodes label name expr) Int where
 
 type instance ConstrainGraphic PatGroup (PatternInfo lits injs ns label name expr) m nodes edges info
   = ()

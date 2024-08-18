@@ -39,7 +39,6 @@ where
 import Language.Core.Operator
 import Language.Core.Macro
 import Language.Core.Constraint (Prefixes (..))
-import Language.Core.Class.Decl
 
 import Data.Functor.Identity (Identity (..))
 import Data.Bifunctor (first)
@@ -121,11 +120,3 @@ data UserValue val typ info
 data UserOperator name
   = UserOperator (OperatorSpace (Operator name))
   deriving (Show, Eq, Functor)
-
--- ** Definition of `Decl` related type class instance
-
--- *** `DeclInfo` related
-instance DeclInfo (UserValue val typ) where
-  getInfo (UserValue _ _ info) = info
-instance DeclInfo (Item a) where
-  getInfo (Item _ info) = info

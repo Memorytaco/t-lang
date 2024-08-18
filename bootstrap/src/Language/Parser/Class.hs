@@ -44,8 +44,8 @@ import GHC.TypeLits
 -- * token parser
 
 -- | intermediate name for pratt parser semantic token
-class Monad m => PrattToken (tag :: any) (a :: Type) (m :: Type -> Type) | tag a -> m where
-  tokenize :: Proxy tag -> (m () -> Power -> m a)
+class Monad m => PrattToken (lang:: any) (a :: Type) (m :: Type -> Type) | lang a -> m where
+  tokenize :: Proxy lang -> (m () -> Power -> m a)
            -> m () -> m (Semantic m a)
 
 -- | This is the class where we define syntax of type level parser DSL.

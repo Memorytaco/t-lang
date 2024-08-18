@@ -36,7 +36,7 @@ module Language.Core
 
   -- ** parsed declaration structure
   , DeclSurface
-  , DeclsSurface
+  , DeclStoreSurface
   , DeclSurfaceExt
 
   -- ** parsed module
@@ -83,7 +83,6 @@ module Language.Core
   , module Pattern
   , module Name
   , module Macro
-  , module Class
   , module Constraint
   , module Utility
 
@@ -100,7 +99,6 @@ import Language.Core.Pattern as Pattern
 import Language.Core.Name as Name
 import Language.Core.Macro as Macro
 import Language.Core.Constraint as Constraint
-import Language.Core.Class as Class
 import Language.Core.Utility as Utility
 
 -- ** required imports
@@ -131,10 +129,10 @@ type TypSurfaceBndExt = Forall Prefix :++: Scope Prefix
 -- ** Surface Pattern
 ---------------------
 
-type PatSurface typ = Pattern PatSurfaceLitExt ((@:) typ) Label Name
+type PatSurface typ = Pattern PatSurfaceLitExt ((:::) typ) Label Name
 type PatSurfaceLitExt = LiteralText :+: LiteralInteger :+: LiteralNumber
 
-type GPatSurface typ = Pattern GPatSurfaceLitExt ((@:) typ :+: PatGroup) Label Name
+type GPatSurface typ = Pattern GPatSurfaceLitExt ((:::) typ :+: PatGroup) Label Name
 type GPatSurfaceLitExt = PatSurfaceLitExt
 
 ------------------
@@ -145,13 +143,13 @@ type GPatSurfaceLitExt = PatSurfaceLitExt
 type ExprSurface typ = Expr (ExprSurfaceExt typ) Name
 type ExprSurfaceExt typ =
       LetGrp (PatSurface typ)                             -- plain pattern match via "let" binding
-  :+: Let (Binder (Name @: Maybe typ))                    -- desugared non-recursive "let" binding
-  :+: Letrec (Binder (Name @: Maybe typ))                 -- desugared possible-recrusive "let" binding group
+  :+: Let (Binder (Name ::: Maybe typ))                   -- desugared non-recursive "let" binding
+  :+: Letrec (Binder (Name ::: Maybe typ))                -- desugared possible-recrusive "let" binding group
   :+: Equation (GPatSurface typ) (Prefixes Name typ)      -- heavy lambda
   :+: Equation (Grp (PatSurface typ)) (Prefixes Name typ) -- light lambda
   :+: Apply     -- application, term beta-reduction or type application
   :+: Value typ -- unlifted type value
-  :+: (@:) typ  -- type annotation
+  :+: (:::) typ -- type annotation
   :+: LiteralText :+: LiteralInteger :+: LiteralNumber
   :+: Tuple :+: Record Label :+: Selector Label :+: Constructor Label
 
@@ -175,7 +173,7 @@ type MacroSurfaceAttrExt =
 --
 -- Every structure is parameterised by `Name` for querying
 type DeclSurface = Decl (DeclSurfaceExt TypSurface (ExprSurface TypSurface)) Name
-type DeclsSurface = Decls (DeclSurfaceExt TypSurface (ExprSurface TypSurface)) Name
+type DeclStoreSurface = DeclStore (DeclSurfaceExt TypSurface (ExprSurface TypSurface)) Name
 type DeclSurfaceExt typ expr =
       Item (UserOperator Text)
   :+: Item (AliasType DataPrefix typ Name)
@@ -230,10 +228,10 @@ type PatInternalLitExt = LiteralText :+: LiteralInteger :+: LiteralNumber
 
 type ExprInternal typ = Expr (ExprInternalExt typ)
 type ExprInternalExt typ
-  =   Let (Binder (Name @: typ))        -- non-recursive local binding
-  :+: Letrec (Binder (Name @: typ))     -- recursive local binding group
+  =   Let (Binder (Name ::: typ))        -- non-recursive local binding
+  :+: Letrec (Binder (Name ::: typ))     -- recursive local binding group
   :+: Lambda (Binder (Prefix Name typ)) -- type lambda
-  :+: Lambda (Binder (Name @: typ))     -- term lambda
+  :+: Lambda (Binder (Name ::: typ))     -- term lambda
   :+: Apply                             -- term application
   :+: Match (PatInternal typ)           -- pattern match
   :+: Value (Coerce Name typ)           -- evidence of type inference
@@ -252,10 +250,10 @@ type ExprInternalExt typ
 type SugarLambdaType typ = Lambda (Binder (Prefix Name typ))
 
 -- ** Sugar term lambda, which may or may not include type annotation
-type SugarLambdaTerm typ = Lambda (Binder (Name @: Maybe typ))
+type SugarLambdaTerm typ = Lambda (Binder (Name ::: Maybe typ))
 
 -- ** Sugar recursive "Let" binding group, all allow optional type annotation
-type SugarLetRecur typ = Letrec (Binder (Name @: Maybe typ))
+type SugarLetRecur typ = Letrec (Binder (Name ::: Maybe typ))
 
 -- ** Sugar normal "Let" binding group
-type SugarLetTerm typ = Let (Binder (Name @: Maybe typ))
+type SugarLetTerm typ = Let (Binder (Name ::: Maybe typ))

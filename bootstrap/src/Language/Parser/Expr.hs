@@ -155,14 +155,14 @@ instance (ExprC e m, Apply :<: f, Constructor Label :<: f)
     return $ literal variant
 
 -- | type annotation
-instance (ExprC e m, (@:) typ :<: f, PrattToken proxy typ m)
+instance (ExprC e m, (:::) typ :<: f, PrattToken proxy typ m)
   => PrattToken (WithExpr e m (Layer "annotation" proxy typ)) (Expr f name) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
       nud' _ = fail "Type annotation expect an expression first"
       led' end left = do
         typ :: typ <- pratt @proxy end Go
-        return . Expr . inj $ left :@ typ
+        return . Expr . inj $ typ ::: left
 
 -- | let expression
 instance (ExprC e m, Apply :<: f, LetGrp pat :<: f, PrattToken proxy (pat (Expr f name)) m)

@@ -34,11 +34,11 @@ data ModuleName = ModuleName [Name] Name deriving (Show, Eq, Ord)
 fuseModuleName :: ModuleName -> Name
 fuseModuleName (ModuleName ls l) = mconcat $ intersperse "/" (ls <> [l])
 
-data Module decls info
+data Module set a
   = Module
-    { _moduleHeader :: ModuleName       -- ^ Module name
-    , _moduleImports :: [Use info]      -- ^ Module imports, including lexical items
-    , _moduleDecls :: Decls decls info  -- ^ Module declarations
+    { _moduleHeader :: ModuleName     -- ^ Module name
+    , _moduleImports :: [Use a]       -- ^ Module imports, including lexical items
+    , _moduleDecls :: DeclStore set a -- ^ Module declarations
     } deriving (Show, Eq, Functor)
 
 -- | A use statement to import symbol name.
