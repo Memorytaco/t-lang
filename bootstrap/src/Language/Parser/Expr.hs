@@ -1,5 +1,5 @@
 module Language.Parser.Expr
-  ( WithExpr
+  ( ExprSyntax
   )
 where
 
@@ -24,8 +24,30 @@ import Capability.Reader (HasReader, asks)
 
 import Language.Generic ((:<:), inj, prj)
 
-data WithExpr (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
-type ExprC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
+-- | Syntax definition DSL for expression of language.
+--
+-- It supports default ":-" sequence operator and also "Layer" extensin.
+--
+-- Available entries:
+--
+-- 1. "identifier" :: Name
+-- 2. "text" :: LiteralText
+-- 3. "integer" :: LiteralInteger
+-- 4. "number" :: LiteralNumber
+-- 5. "operator"
+-- 6. "group" :: Expr
+-- 7. "tuple" :: Tuple
+-- 8. "record" :: Record Label _
+-- 9. "selector" :: Selector Label
+-- 10. "constructor" :: Constructor Label
+-- 11. Layer "annotation" :: (_ ::: _)
+-- 12. Layer "let" :: LetGrp
+-- 13. Layer "block" :: Equation
+-- 14. Layer "line" :: Equation
+-- 15. Layer "@type" :: typ
+--
+data ExprSyntax (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
+type ExprParserEnv e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
 cons :: (Apply :<: f) => Expr f name -> Expr f name -> Expr f name
 cons x@(Expr p) v = case prj @Apply p of
@@ -38,55 +60,55 @@ literal a = Semantic (const $ return a) (\_ left -> return $ cons left a) (retur
 
 -- * compound syntax
 
-instance ( PrattToken (WithExpr e m a) (Expr f name) m
-         , PrattToken (WithExpr e m b) (Expr f name) m
-         , ExprC e m
+instance ( PrattToken (ExprSyntax e m a) (Expr f name) m
+         , PrattToken (ExprSyntax e m b) (Expr f name) m
+         , ExprParserEnv e m
          )
-  => PrattToken (WithExpr e m (a :- b)) (Expr f name) m where
-  tokenize _ parser end = try (tokenize (Proxy @(WithExpr e m a)) parser end)
-                      <|> tokenize (Proxy @(WithExpr e m b)) parser end
+  => PrattToken (ExprSyntax e m (a :- b)) (Expr f name) m where
+  tokenize _ parser end = try (tokenize (Proxy @(ExprSyntax e m a)) parser end)
+                      <|> tokenize (Proxy @(ExprSyntax e m b)) parser end
 
-instance ( PrattToken (WithExpr e m a) (Expr f name) m
-         , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => PrattToken (WithExpr e m (msg ?- a)) (Expr f name) m where
+instance ( PrattToken (ExprSyntax e m a) (Expr f name) m
+         , KnownSymbol msg, ExprParserEnv e m, MonadParsecDbg e Text m)
+  => PrattToken (ExprSyntax e m (msg ?- a)) (Expr f name) m where
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
-                        $ tokenize (Proxy @(WithExpr e m a)) parser end
+                        $ tokenize (Proxy @(ExprSyntax e m a)) parser end
 
-instance ( Rule (WithExpr e m a) (Expr f name) m
-         , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => Rule (WithExpr e m (msg ?- a)) (Expr f name) m where
+instance ( Rule (ExprSyntax e m a) (Expr f name) m
+         , KnownSymbol msg, ExprParserEnv e m, MonadParsecDbg e Text m)
+  => Rule (ExprSyntax e m (msg ?- a)) (Expr f name) m where
   rule _ end = dbg' (symbolVal $ Proxy @msg)
-               $ rule (Proxy @(WithExpr e m a)) end
+               $ rule (Proxy @(ExprSyntax e m a)) end
 
-instance ( Rule (WithExpr e m (msg ?- a)) (Expr f name) m
-         , KnownSymbol msg, ExprC e m, MonadParsecDbg e Text m)
-  => Rule (msg ?- WithExpr e m a) (Expr f name) m where
+instance ( Rule (ExprSyntax e m (msg ?- a)) (Expr f name) m
+         , KnownSymbol msg, ExprParserEnv e m, MonadParsecDbg e Text m)
+  => Rule (msg ?- ExprSyntax e m a) (Expr f name) m where
   rule _ end = dbg' (symbolVal $ Proxy @msg)
-               $ rule (Proxy @(WithExpr e m (msg ?- a))) end
+               $ rule (Proxy @(ExprSyntax e m (msg ?- a))) end
 
 -- | expression identifier
-instance (ExprC e m, name ~ Name, Apply :<: f)
-  => PrattToken (WithExpr e m "identifier") (Expr f name) m where
+instance (ExprParserEnv e m, name ~ Name, Apply :<: f)
+  => PrattToken (ExprSyntax e m "identifier") (Expr f name) m where
   tokenize _ _ _ = identifier <&> Val . Name <&> literal
 
 -- | literal text
-instance (ExprC e m, Apply :<: f, LiteralText :<: f)
-  => PrattToken (WithExpr e m "text") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, LiteralText :<: f)
+  => PrattToken (ExprSyntax e m "text") (Expr f name) m where
   tokenize _ _ _ = stringLiteral <&> Expr . inj . LiteralText . Literal <&> literal
 
 -- | literal integer
-instance (ExprC e m, Apply :<: f, LiteralInteger :<: f)
-  => PrattToken (WithExpr e m "integer") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, LiteralInteger :<: f)
+  => PrattToken (ExprSyntax e m "integer") (Expr f name) m where
   tokenize _ _ _ = integer <&> Expr . inj . LiteralInteger . Literal <&> literal
 
 -- | literal floating
-instance (ExprC e m, Apply :<: f, LiteralNumber :<: f)
-  => PrattToken (WithExpr e m "number") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, LiteralNumber :<: f)
+  => PrattToken (ExprSyntax e m "number") (Expr f name) m where
   tokenize _ _ _ = float <&> Expr . inj . LiteralNumber . Literal <&> literal
 
 -- | operators for expression
-instance (ExprC e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operator Text] m)
-  => PrattToken (WithExpr e m "operator") (Expr f name) m where
+instance (ExprParserEnv e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operator Text] m)
+  => PrattToken (ExprSyntax e m "operator") (Expr f name) m where
   tokenize _ parser _ = do
     pos <- getOffset
     op <- operator
@@ -117,33 +139,33 @@ instance (ExprC e m, Name ~ name, Apply :<: f, HasReader "TermOperator" [Operato
     return (Semantic nud' led' (return $ Power l))
 
 -- | group operator for expression
-instance (ExprC e m, Apply :<: f)
-  => PrattToken (WithExpr e m "group") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f)
+  => PrattToken (ExprSyntax e m "group") (Expr f name) m where
   tokenize _ parser _ = parens (parser (lookAhead $ reservedOp ")" $> ()) Go) <&> literal
 
 -- | tuple expression
-instance (ExprC e m, Apply :<: f, Tuple :<: f)
-  => PrattToken (WithExpr e m "tuple") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, Tuple :<: f)
+  => PrattToken (ExprSyntax e m "tuple") (Expr f name) m where
   tokenize _ parser _ = do
     let fields = parens $ parser (void . lookAhead $ reservedOp "," <|> reservedOp ")") Go `sepBy` reservedOp ","
     try (parens space) $> [] <|> fields <&> literal . Expr . inj . Tuple
 
 -- | record expression
-instance (ExprC e m, Apply :<: f, Record Label :<: f)
-  => PrattToken (WithExpr e m "record") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, Record Label :<: f)
+  => PrattToken (ExprSyntax e m "record") (Expr f name) m where
   tokenize _ parser _ = do
     let field = (,) <$> fmap Label identifier <* reservedOp "=" <*> parser (void . lookAhead $ reservedOp "," <|> reservedOp "}") Go
     fields <- braces (field `sepBy` reservedOp ",")
     return $ literal (Expr . inj $ Record fields)
 
 -- | selector expression
-instance (ExprC e m, Apply :<: f, Selector Label :<: f)
-  => PrattToken (WithExpr e m "selector") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, Selector Label :<: f)
+  => PrattToken (ExprSyntax e m "selector") (Expr f name) m where
   tokenize _ _ _ = char '.' *> identifier <&> Expr . inj . Selector . Label <&> literal
 
 -- | variant constructor
-instance (ExprC e m, Apply :<: f, Constructor Label :<: f)
-  => PrattToken (WithExpr e m "constructor") (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, Constructor Label :<: f)
+  => PrattToken (ExprSyntax e m "constructor") (Expr f name) m where
   tokenize _ parser _ = do
     let item = do
           var <- identifier' <* symbol "|" <&> Label <?> "Expr: constructor label"
@@ -155,8 +177,8 @@ instance (ExprC e m, Apply :<: f, Constructor Label :<: f)
     return $ literal variant
 
 -- | type annotation
-instance (ExprC e m, (:::) typ :<: f, PrattToken proxy typ m)
-  => PrattToken (WithExpr e m (Layer "annotation" proxy typ)) (Expr f name) m where
+instance (ExprParserEnv e m, (:::) typ :<: f, PrattToken proxy typ m)
+  => PrattToken (ExprSyntax e m (Layer "annotation" proxy typ)) (Expr f name) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
       nud' _ = fail "Type annotation expect an expression first"
@@ -165,8 +187,8 @@ instance (ExprC e m, (:::) typ :<: f, PrattToken proxy typ m)
         return . Expr . inj $ typ ::: left
 
 -- | let expression
-instance (ExprC e m, Apply :<: f, LetGrp pat :<: f, PrattToken proxy (pat (Expr f name)) m)
-  => PrattToken (WithExpr e m (Layer "let" proxy (Hint pat))) (Expr f name) m where
+instance (ExprParserEnv e m, Apply :<: f, LetGrp pat :<: f, PrattToken proxy (pat (Expr f name)) m)
+  => PrattToken (ExprSyntax e m (Layer "let" proxy (Hint pat))) (Expr f name) m where
   tokenize _ parser end = do
     reserved "let" $> ()
     let parseHead = pratt @proxy (lookAhead (reservedOp "=") $> ()) Go <?> "Let Expression Head"
@@ -180,12 +202,12 @@ instance (ExprC e m, Apply :<: f, LetGrp pat :<: f, PrattToken proxy (pat (Expr 
     return . literal . Expr . inj $ LetGrp binds ret
 
 -- | block lambda for expression
-instance ( ExprC e m, Apply :<: f
+instance ( ExprParserEnv e m, Apply :<: f
          , PatGroup :<: pext
          , PrattToken proxy (Pattern plit pext plabel pname (Expr f name)) m
          , Equation (Pattern plit pext plabel pname) (Prefixes Name (Type tbind trep tname a)) :<: f
          )
-  => PrattToken (WithExpr e m (Layer ("block" :- Type tbind trep tname a) proxy (Hint (Pattern plit pext plabel pname))))
+  => PrattToken (ExprSyntax e m (Layer ("block" :- Type tbind trep tname a) proxy (Hint (Pattern plit pext plabel pname))))
                 (Expr f name) m where
   tokenize _ parser _ = do
     let iPat = pratt @proxy @(Pattern plit pext plabel pname (Expr f name))
@@ -202,11 +224,11 @@ instance ( ExprC e m, Apply :<: f
     brackets (lambda <&> Expr . inj <?> "block lambda") <&> literal
 
 -- | one line lambda for expression
-instance ( ExprC e m, Apply :<: f
+instance ( ExprParserEnv e m, Apply :<: f
          , PrattToken proxy (pat (Expr f name)) m
          , Equation (Grp pat) (Prefixes Name (Type tbind trep tname a)) :<: f
          )
-  => PrattToken (WithExpr e m (Layer ("line" :- Type tbind trep tname a) proxy (Hint (Grp pat))))
+  => PrattToken (ExprSyntax e m (Layer ("line" :- Type tbind trep tname a) proxy (Hint (Grp pat))))
                 (Expr f name) m where
   tokenize _ parser end = do
     let iPat = pratt @proxy @(pat (Expr f name))
@@ -221,14 +243,14 @@ instance ( ExprC e m, Apply :<: f
     reservedOp "\\" *> (lambda <&> Expr . inj) <&> literal
 
 -- | type application
-instance ( ExprC e m
+instance ( ExprParserEnv e m
          , PrattToken proxy (Type tbind trep tname a) m
          , Value (Type tbind trep tname a) :<: f
          , Apply :<: f
          , a ~ Name, Tuple :<: trep, Literal Text :<: trep, Literal Integer :<: trep
          , Record Label :<: trep
          )
-  => PrattToken (WithExpr e m (Layer "@type" proxy (Type tbind trep tname a)))
+  => PrattToken (ExprSyntax e m (Layer "@type" proxy (Type tbind trep tname a)))
                 (Expr f name) m where
   tokenize _ _ _ = char '@' >> do
     typ <- parens (pratt @proxy @(Type tbind trep tname a) (lookAhead (reservedOp ")") $> ()) Go)

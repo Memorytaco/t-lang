@@ -1,7 +1,7 @@
 module Language.Parser.Pattern
   (
     -- ** pattern parser handler
-    WithPattern
+    PatternSyntax
   )
 where
 
@@ -22,7 +22,7 @@ import Language.Generic ((:<:), inj)
 import Capability.Reader (HasReader, asks)
 
 -- | the `a` is where to define and use syntax
-data WithPattern (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
+data PatternSyntax (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
 type PatternC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
 cons :: MonadFail m
@@ -36,57 +36,57 @@ literal a = Semantic (const $ return a) (\_ left -> cons left a) (return Infinit
 
 -- * compound syntax
 
-instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
-         , PrattToken (WithPattern e m as) (Pattern lit ext label name expr) m
+instance ( PrattToken (PatternSyntax e m a) (Pattern lit ext label name expr) m
+         , PrattToken (PatternSyntax e m as) (Pattern lit ext label name expr) m
          , PatternC e m
          )
-  => PrattToken (WithPattern e m (a :- as)) (Pattern lit ext label name expr) m where
-  tokenize _ parser end = try (tokenize (Proxy @(WithPattern e m a)) parser end)
-                      <|> tokenize (Proxy @(WithPattern e m as)) parser end
+  => PrattToken (PatternSyntax e m (a :- as)) (Pattern lit ext label name expr) m where
+  tokenize _ parser end = try (tokenize (Proxy @(PatternSyntax e m a)) parser end)
+                      <|> tokenize (Proxy @(PatternSyntax e m as)) parser end
 
-instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
+instance ( PrattToken (PatternSyntax e m a) (Pattern lit ext label name expr) m
          , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
-  => PrattToken (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m (msg ?- a)) (Pattern lit ext label name expr) m where
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
-                        $ tokenize (Proxy @(WithPattern e m a)) parser end
+                        $ tokenize (Proxy @(PatternSyntax e m a)) parser end
 
-instance ( PrattToken (WithPattern e m a) (Pattern lit ext label name expr) m
+instance ( PrattToken (PatternSyntax e m a) (Pattern lit ext label name expr) m
          , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
-  => PrattToken (msg ?- WithPattern e m a) (Pattern lit ext label name expr) m where
+  => PrattToken (msg ?- PatternSyntax e m a) (Pattern lit ext label name expr) m where
   tokenize _ parser end = dbg' (symbolVal $ Proxy @msg)
-                        $ tokenize (Proxy @(WithPattern e m (msg ?- a))) parser end
+                        $ tokenize (Proxy @(PatternSyntax e m (msg ?- a))) parser end
 
-instance ( Rule (WithPattern e m a) (Pattern lit ext label name expr) m
+instance ( Rule (PatternSyntax e m a) (Pattern lit ext label name expr) m
          , KnownSymbol msg, PatternC e m, MonadParsecDbg e Text m)
-  => Rule (WithPattern e m (msg ?- a)) (Pattern lit ext label name expr) m where
+  => Rule (PatternSyntax e m (msg ?- a)) (Pattern lit ext label name expr) m where
   rule _ end = dbg' (symbolVal $ Proxy @msg)
-               $ rule (Proxy @(WithPattern e m a)) end
+               $ rule (Proxy @(PatternSyntax e m a)) end
 
 -- | wild pattern
 instance PatternC e m
-  => PrattToken (WithPattern e m "wild") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "wild") (Pattern lit ext label name expr) m where
   tokenize _ _ _ = reserved "_" $> literal PatWild <?> "Wild pattern"
 
 -- | variable binding pattern
 instance (PatternC e m, name ~ Name)
-  => PrattToken (WithPattern e m "variable") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "variable") (Pattern lit ext label name expr) m where
   tokenize _ _ _ = do
     var <- (char '?' <|> char '!') *> identifier <&> PatVar . Name
     return $ literal var
 
 -- | group operator for pattern
 instance PatternC e m
-  => PrattToken (WithPattern e m "group") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "group") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = parens (parser (lookAhead $ reservedOp ")" $> ()) Go) <&> literal
 
 -- | symbol constructor
 instance (PatternC e m, label ~ Label)
-  => PrattToken (WithPattern e m "variant") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "variant") (Pattern lit ext label name expr) m where
   tokenize _ _ _ = identifier <&> literal . flip PatSym [] . Label  <?> "Constructor pattern"
 
 -- | operator symbol constructor
 instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator Text] m)
-  => PrattToken (WithPattern e m "operator") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "operator") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
     pos <- getOffset
     op <- operator
@@ -118,7 +118,7 @@ instance (PatternC e m, label ~ Label, HasReader "PatternOperator" [Operator Tex
 
 -- | literal pattern
 instance (PatternC e m, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
-  => PrattToken (WithPattern e m "literal") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "literal") (Pattern lit ext label name expr) m where
   tokenize _ _ _ = do
     lit <- try (float <&> PatPrm . inj . LiteralNumber . Literal)
        <|> (integer <&> PatPrm . inj . LiteralInteger . Literal)
@@ -127,7 +127,7 @@ instance (PatternC e m, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteg
 
 -- | `@` pattern
 instance (PatternC e m, name ~ Name, label ~ Label, LiteralText :<: lit, LiteralNumber :<: lit, LiteralInteger :<: lit)
-  => PrattToken (WithPattern e m "binding") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "binding") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
     var <- (char '?' <|> char '!') *> fmap Name identifier' <* char '@'
     pat <- parens (parser (lookAhead $ reservedOp ")" $> ()) Go)
@@ -142,7 +142,7 @@ instance (PatternC e m, name ~ Name, label ~ Label, LiteralText :<: lit, Literal
 
 -- | record pattern
 instance (PatternC e m, label ~ Label)
-  => PrattToken (WithPattern e m "record") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "record") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
     let field = identifier <|> operator <&> Label
         pair = (,) <$> field <*> (reservedOp "=" *> parser (lookAhead $ (reservedOp "," <|> reservedOp "}") $> ()) Go)
@@ -151,7 +151,7 @@ instance (PatternC e m, label ~ Label)
 
 -- | tuple pattern
 instance (PatternC e m)
-  => PrattToken (WithPattern e m "tuple") (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m "tuple") (Pattern lit ext label name expr) m where
   tokenize _ parser _ = do
     tup <- try (symbol "(" >> symbol ")" $> PatUnit)
        <|> (fmap PatTup . parens $ sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
@@ -159,7 +159,7 @@ instance (PatternC e m)
 
 -- | view pattern
 instance (PatternC e m, Rule proxy expr m)
-  => PrattToken (WithPattern e m (Layer "view" proxy expr)) (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m (Layer "view" proxy expr)) (Pattern lit ext label name expr) m where
   tokenize _ parser end = do
     e <- parseRule @proxy (lookAhead (reservedOp "->") $> ()) <* reservedOp "->"
     pat <- parser end Go
@@ -169,7 +169,7 @@ instance (PatternC e m, Rule proxy expr m)
 
 -- | type annotation for pattern
 instance (PatternC e m, (:::) typ :<: ext, PrattToken proxy typ m)
-  => PrattToken (WithPattern e m (Layer "annotation" proxy typ)) (Pattern lit ext label name expr) m where
+  => PrattToken (PatternSyntax e m (Layer "annotation" proxy typ)) (Pattern lit ext label name expr) m where
   tokenize _ _ _ = reservedOp ":" $> Semantic nud' led' (return $ BuiltinL 1)
     where
       nud' _ = fail "Pattern annotation expect a pattern first"

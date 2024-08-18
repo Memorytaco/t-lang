@@ -2,7 +2,7 @@
 -}
 
 module Language.Parser.Type
-  ( WithType
+  ( TypeSyntax
 
   -- ** syntax group
   , record
@@ -30,9 +30,27 @@ import Control.Monad (when)
 
 import Capability.Reader (HasReader, asks)
 
--- | symbol for type parser
-data WithType (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
-type TypeC e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
+-- | Syntax definition DSL for type of language.
+--
+-- It supports default ":-" sequence operator and also "Layer" extensin.
+--
+-- Available entries:
+--
+-- 1. "identifier"
+-- 2. "operator"
+-- 3. "group"
+-- 4. "nat"
+-- 5. "text"
+-- 6. "record"
+-- 7. "variant"
+-- 8. "tuple"
+-- 9. "rep"
+-- 10. "forall"
+-- 11. "abstract"
+--
+data TypeSyntax (e :: Kind.Type) (m :: Kind.Type -> Kind.Type) (a :: k)
+
+type TypeParserEnv e m = (MonadFail m, ShowErrorComponent e, MonadParsec e Text m)
 
 -- pratt @(WithType Void _ ("identifier" :- "operator" :- "group" :- Tuple)) @(TypeAST Identity) eof Go
 
@@ -46,7 +64,7 @@ literal a = Semantic (const $ return a) (\_ left -> return $ cons left a) (retur
 
 -- *** syntax group
 
-record :: TypeC e m => (m () -> Power -> m (Type bind rep name a)) -> m (Record Label (Type bind rep name a))
+record :: TypeParserEnv e m => (m () -> Power -> m (Type bind rep name a)) -> m (Record Label (Type bind rep name a))
 record parser = braces (sepBy1 pair (reservedOp ",")) <&> Record
   where pair = do
           name <- identifier <|> operator <&> Label
@@ -54,17 +72,17 @@ record parser = braces (sepBy1 pair (reservedOp ",")) <&> Record
           return (name, typ)
 
 -- | use type level
-instance ( PrattToken (WithType e m x) (Type bind rep name a) m
-         , PrattToken (WithType e m y) (Type bind rep name a) m
-         , TypeC e m
+instance ( PrattToken (TypeSyntax e m x) (Type bind rep name a) m
+         , PrattToken (TypeSyntax e m y) (Type bind rep name a) m
+         , TypeParserEnv e m
          )
-  => PrattToken (WithType e m (x :- y)) (Type bind rep name a) m where
-  tokenize _ parser end = try (tokenize (Proxy @(WithType e m x)) parser end)
-                      <|> tokenize (Proxy @(WithType e m y)) parser end
+  => PrattToken (TypeSyntax e m (x :- y)) (Type bind rep name a) m where
+  tokenize _ parser end = try (tokenize (Proxy @(TypeSyntax e m x)) parser end)
+                      <|> tokenize (Proxy @(TypeSyntax e m y)) parser end
 
 -- | most common identifier in `Type`
-instance (TypeC e m, a ~ Name)
-  => PrattToken (WithType e m "identifier") (Type bind rep name a) m where
+instance (TypeParserEnv e m, a ~ Name)
+  => PrattToken (TypeSyntax e m "identifier") (Type bind rep name a) m where
   tokenize _ _ _ = do
     name <- Name <$> identifier <?> "Type Identifier"
     if name `elem` ["forall"]
@@ -72,8 +90,8 @@ instance (TypeC e m, a ~ Name)
        else return . literal $ TypVar name
 
 -- | "operator" in type
-instance (TypeC e m, a ~ Name, HasReader "TypeOperator" [Operator Text] m)
-  => PrattToken (WithType e m "operator") (Type bind rep name a) m where
+instance (TypeParserEnv e m, a ~ Name, HasReader "TypeOperator" [Operator Text] m)
+  => PrattToken (TypeSyntax e m "operator") (Type bind rep name a) m where
   tokenize _ parser _ = do
     op <- operator
     when (op `elem` ["\\", "."]) do
@@ -105,32 +123,32 @@ instance (TypeC e m, a ~ Name, HasReader "TypeOperator" [Operator Text] m)
     return (Semantic nud' led' (return $ Power l))
 
 -- | enable "(any type expression)" group
-instance TypeC e m
-  => PrattToken (WithType e m "group") (Type bind rep name a) m where
+instance TypeParserEnv e m
+  => PrattToken (TypeSyntax e m "group") (Type bind rep name a) m where
   tokenize _ parser _ = parens (parser (lookAhead (reservedOp ")") $> ()) Go) <&> literal
 
 -- | type level nat number
-instance (TypeC e m, Literal Integer :<: rep)
-  => PrattToken (WithType e m "nat") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Literal Integer :<: rep)
+  => PrattToken (TypeSyntax e m "nat") (Type bind rep name a) m where
   tokenize _ _ _ = do
     nat <- Type . inj . Literal @Integer <$> integer <?> "Natural Number"
     return $ literal nat
 
 -- | type level str number
-instance (TypeC e m, Literal Text :<: rep)
-  => PrattToken (WithType e m "text") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Literal Text :<: rep)
+  => PrattToken (TypeSyntax e m "text") (Type bind rep name a) m where
   tokenize _ _ _ = do
     str <- Type . inj . Literal <$> stringLiteral <?> "Type Level String"
     return $ literal str
 
 -- -- | record literal for type
-instance (TypeC e m, Record Label :<: rep)
-  => PrattToken (WithType e m "record") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Record Label :<: rep)
+  => PrattToken (TypeSyntax e m "record") (Type bind rep name a) m where
   tokenize _ parser _ = record parser <&> literal . Type . inj
 
 -- | variant literal for type
-instance (TypeC e m, Variant Label :<: rep)
-  => PrattToken (WithType e m "variant") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Variant Label :<: rep)
+  => PrattToken (TypeSyntax e m "variant") (Type bind rep name a) m where
   tokenize _ parser _ = do
     let pair = do
           name <- identifier <|> operator <&> Label
@@ -141,8 +159,8 @@ instance (TypeC e m, Variant Label :<: rep)
     return $ literal variant
 
 -- | tuple literal for type
-instance (TypeC e m, Tuple :<: rep)
-  => PrattToken (WithType e m "tuple") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Tuple :<: rep)
+  => PrattToken (TypeSyntax e m "tuple") (Type bind rep name a) m where
   tokenize _ parser _ = do
     tuple <- parens (sepBy (parser (lookAhead $ (reservedOp "," <|> reservedOp ")") $> ()) Go) (reservedOp ","))
           <&> Type . inj . Tuple
@@ -151,8 +169,8 @@ instance (TypeC e m, Tuple :<: rep)
 -- | runtime representation for type
 --
 -- TODO: we need to build an interface like FFI to deal with foreign low level type
-instance (TypeC e m, Rep.Rep :<: rep)
-  => PrattToken (WithType e m "rep") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Rep.Rep :<: rep)
+  => PrattToken (TypeSyntax e m "rep") (Type bind rep name a) m where
   tokenize _ parser _ = do
     typ <- symbol "#[" *> (Rep.Rep . Rep.RepLift <$> prim) <* symbol "]"
     return . literal . Type $ inj typ
@@ -175,8 +193,8 @@ instance (TypeC e m, Rep.Rep :<: rep)
       lft = symbol "$" *> parens (parser (lookAhead $ symbol ")" $> ()) Go) <&> Rep.Embed . Rep.DataRep
 
 -- | `Forall` quantified type
-instance (TypeC e m, Forall Prefix :<<: bind, a ~ Name, name ~ Name)
-  => PrattToken (WithType e m "forall") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Forall Prefix :<<: bind, a ~ Name, name ~ Name)
+  => PrattToken (TypeSyntax e m "forall") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
         bound = (:> TypPht) <$> name <|> parens do
@@ -190,8 +208,8 @@ instance (TypeC e m, Forall Prefix :<<: bind, a ~ Name, name ~ Name)
       collect bound typ = TypBnd (injj @(Forall Prefix) @bind $ Forall bound typ)
 
 -- | `Scope` quantified type
-instance (TypeC e m, Scope Prefix :<<: bind, name ~ Name, a ~ Name)
-  => PrattToken (WithType e m "abstract") (Type bind rep name a) m where
+instance (TypeParserEnv e m, Scope Prefix :<<: bind, name ~ Name, a ~ Name)
+  => PrattToken (TypeSyntax e m "abstract") (Type bind rep name a) m where
   tokenize _ parser end = do
     let name = Name <$> identifier
         bound = (:> TypPht) <$> name

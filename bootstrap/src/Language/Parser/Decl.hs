@@ -6,8 +6,8 @@ module Language.Parser.Decl
     declaration
 
   -- ** Decl related type level DSL
-  , WithDecl
-  , WithDataDef
+  , DeclSyntax
+  , DeclDataSyntax
   )
 where
 
@@ -42,17 +42,17 @@ type ParserM e m =
 -- * `e` is error
 -- * `m` is monad
 -- * `a` is lang token
-data WithDecl (e :: Type) (m :: Type -> Type) (a :: k)
+data DeclSyntax (e :: Type) (m :: Type -> Type) (a :: k)
 
 -- | define sequence operator
-instance (ParserM e m, Rule (WithDecl e m a) (Decl decl info) m, Rule (WithDecl e m b) (Decl decl info) m)
-  => Rule (WithDecl e m (a :- b)) (Decl decl info) m where
-  rule _ end = try (parseRule @(WithDecl e m a) end) <|> parseRule @(WithDecl e m b) end
+instance (ParserM e m, Rule (DeclSyntax e m a) (Decl decl info) m, Rule (DeclSyntax e m b) (Decl decl info) m)
+  => Rule (DeclSyntax e m (a :- b)) (Decl decl info) m where
+  rule _ end = try (parseRule @(DeclSyntax e m a) end) <|> parseRule @(DeclSyntax e m b) end
 
 -- | foreign interface
 -- TODO: replace `Attr` with `Macro`
 instance (ParserM e m, PrattToken proxy typ m, info ~ Name, Item (FFI typ Name) :<: decl)
-  => Rule (WithDecl e m (Layer "ffi" proxy typ)) (Decl decl info) m where
+  => Rule (DeclSyntax e m (Layer "ffi" proxy typ)) (Decl decl info) m where
   rule _ end = do
     void $ reserved "foreign"
     attrs <- optional $ brackets (commaSep attr)
@@ -73,7 +73,7 @@ instance (ParserM e m, PrattToken proxy typ m, info ~ Name, Item (FFI typ Name) 
 
 -- | top level definition
 instance (ParserM e m, PrattToken tProxy typ m, Rule eProxy expr m, info ~ Name, UserValue expr (Maybe typ) :<: decl)
-  => Rule (WithDecl e m (Layer "define" (tProxy :- eProxy) (typ :- expr))) (Decl decl info) m where
+  => Rule (DeclSyntax e m (Layer "define" (tProxy :- eProxy) (typ :- expr))) (Decl decl info) m where
   rule _ end = do
     void $ reserved "let"
     name <- fmap Name $ identifier <|> operator
@@ -86,7 +86,7 @@ instance ( ParserM e m, PrattToken proxy typ m
          , info ~ Name, typ ~ AST.Type tbind trep Name Name
          , Item (AliasType DataPrefix typ Name) :<: decl
          )
-  => Rule (WithDecl e m (Layer "type" proxy typ)) (Decl decl info) m where
+  => Rule (DeclSyntax e m (Layer "type" proxy typ)) (Decl decl info) m where
   rule _ end = do
     void $ reserved "type"
     alias <- name
@@ -103,10 +103,10 @@ instance ( ParserM e m, PrattToken proxy typ m
       typVar :: m (Prefix Name typ)
       typVar = identifier <&> (:> TypPht) . Name
 
-data WithDataDef (e :: Type) (m :: Type -> Type) (a :: k)
+data DeclDataSyntax (e :: Type) (m :: Type -> Type) (a :: k)
 
 instance (ParserM e m, PrattToken proxy typ m, label ~ Label, DataStruct label :<: x)
-  => Rule (WithDataDef e m (Layer "struct" proxy typ)) (DataBody x typ) m where
+  => Rule (DeclDataSyntax e m (Layer "struct" proxy typ)) (DataBody x typ) m where
   rule _ _ = braces do
     let fieldName = identifier <|> operator <&> Label
         field = do
@@ -118,7 +118,7 @@ instance (ParserM e m, PrattToken proxy typ m, label ~ Label, DataStruct label :
     return $ DataBody (inj $ DataStruct cs1 css)
 
 instance (ParserM e m, PrattToken proxy typ m, field ~ Label, typ ~ AST.Type tbind trep name a, a ~ Name, DataEnum field :<: x)
-  => Rule (WithDataDef e m (Layer "enum" proxy typ)) (DataBody x typ) m where
+  => Rule (DeclDataSyntax e m (Layer "enum" proxy typ)) (DataBody x typ) m where
   rule _ end = do
     let fieldName = identifier <|> operator <&> Label
         field = TypVar . Name <$> identifier
@@ -127,30 +127,30 @@ instance (ParserM e m, PrattToken proxy typ m, field ~ Label, typ ~ AST.Type tbi
     DataEnum <$> dataEnum <*> dataEnum `manyTill` end <&> DataBody . inj
 
 instance (ParserM e m, PrattToken proxy typ m, Identity :<: x)
-  => Rule (WithDataDef e m (Layer "coerce" proxy typ)) (DataBody x typ) m where
+  => Rule (DeclDataSyntax e m (Layer "coerce" proxy typ)) (DataBody x typ) m where
   rule _ end = do
     val <- reservedOp "=" *> pratt @proxy @typ (lookAhead end $> ()) Go <&> DataBody . inj . Identity
     end $> val
 
 instance (ParserM e m, PrattToken proxy typ m, DataNone :<: x)
-  => Rule (WithDataDef e m (Layer "phantom" proxy typ)) (DataBody x typ) m where
+  => Rule (DeclDataSyntax e m (Layer "phantom" proxy typ)) (DataBody x typ) m where
   rule _ end = end $> DataBody (inj $ DataNone @typ)
 
 -- | sequence parsing
 instance ( ParserM e m
-         , Rule (WithDataDef e m a) (DataBody x typ) m
-         , Rule (WithDataDef e m b) (DataBody x typ) m
+         , Rule (DeclDataSyntax e m a) (DataBody x typ) m
+         , Rule (DeclDataSyntax e m b) (DataBody x typ) m
          )
-  => Rule (WithDataDef e m (a :- b)) (DataBody x typ) m where
-  rule _ end = parseRule @(WithDataDef e m a) end
-           <|> parseRule @(WithDataDef e m b) end
+  => Rule (DeclDataSyntax e m (a :- b)) (DataBody x typ) m where
+  rule _ end = parseRule @(DeclDataSyntax e m a) end
+           <|> parseRule @(DeclDataSyntax e m b) end
 
 instance ( ParserM e m
          , info ~ Name, typ ~ AST.Type tbind trep name a
          , Item (DataType DataPrefix xt typ Name) :<: decl
          , Rule proxy def m, def ~ xt typ
          )
-  => Rule (WithDecl e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
+  => Rule (DeclSyntax e m (Layer ("data" :- typ) proxy def)) (Decl decl info) m where
   rule _ end = do
     dataName <- reserved "data" *> name
     vars :: [Prefix Name typ] <- manyTill typVar (lookAhead . choice . (end:) $ void . reservedOp <$> ["|", "{", "="])
@@ -168,7 +168,7 @@ instance ( ParserM e m
 instance ( ParserM e m, info ~ Name, Item (UserOperator Text) :<: decl
          , HasState "OperatorStore" OperatorStore m
          )
-  => Rule (WithDecl e m "fixity") (Decl decl info) m where
+  => Rule (DeclSyntax e m "fixity") (Decl decl info) m where
   rule _ end = do
     type'maybe <- reserved "operator" >> optional (reserved "type")
     prefix <- case type'maybe of
