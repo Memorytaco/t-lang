@@ -1,0 +1,6 @@
+module syntax/ast *
+exclude ( ##type )
+// everything imported and defined
+;;
+
+use std/net self * ;;

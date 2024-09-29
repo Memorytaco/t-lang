@@ -1,0 +1,45 @@
+module "git@github://yolang/stdlib" /* example prefix, usage is defined by compiler */ example/module
+// exporting list
+( #unix#fs#open
+, #unix#fs#open#(:+)
+, module #unix#fs ()
+, module #unix#process * exclude (fork)
+, module (#unix, #net)    // export whole module
+, module *                // all modules imported
+, module * exclude (#net) // all modules imported excluding ..
+, * exclude ((++))        // everything defined excluding ..
+)
+;;
+
+// import simple module
+use std/prelude ;;
+
+// import module with alias, "prelude" and "stdlib" are in scope
+use std/prelude alias stdlib ;;
+
+/* import module renamed, only module "cl" is in scope, "container" is hiding
+**
+** all items under container are in scope.
+*/
+use stdlib/container as cl *;;
+
+// import simple module name with attribute
+use "external" clib/io;;
+
+// import all names from simple module
+use io/unix *;;
+
+// import all names from module and also the module name "process"
+use io/unix/process self *;;
+
+// import all except something from simple module
+use io/unix/net * exclude (type);;
+
+// import something from module
+use io/unix/pipe {
+  (??), // with operator
+  net_open, // selective items from pipe
+  stdio *, // all items from stdio
+  fs * exclude (openfd), // all items from fs except ...
+  fs/inline { memfs, (--) } // selective items from fs/inline inside io/unix/pipe
+};;
