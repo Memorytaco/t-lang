@@ -27,6 +27,7 @@
     "prebuildify": "prebuildify --napi --strip",
     "parse": "tree-sitter parse",
     "gen": "tree-sitter generate",
+    "h": "tree-sitter highlight",
     "debug": "tree-sitter parse --debug-graph"
   },
   "files": [

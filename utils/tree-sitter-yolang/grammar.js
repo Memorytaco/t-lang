@@ -14,7 +14,7 @@ module.exports = grammar({
     ),
 
     // module declaration and its exporting list
-    module: $ => statement(seq("module", optional($.module_attr), $.module_path, optional(choice(
+    module: $ => statement("module", optional($.module_attr), $.module_path, optional(choice(
       // inside parenthesis
       wrapsep("(", ")", ",", choice(
         $.qualified_id,
@@ -31,7 +31,7 @@ module.exports = grammar({
         $.identifier,
         $.operator_id,
       )))))
-    )))),
+    ))),
     module_attr: $ => $.string,
     module_annotation: _$ => /[A-Za-z_]\w*:/,
     module_path: _$ => token(sep1("/", /[A-Za-z_]\w*/)),
@@ -46,7 +46,7 @@ module.exports = grammar({
     module_id: _$ => /#[A-Za-z_]\w*(#[A-Za-z_]\w*)*/,
 
     // use statement
-    use: $ => statement(seq("use", optional($.module_attr), optional($.module_annotation), $.use_piece)),
+    use: $ => statement("use", optional($.module_attr), optional($.module_annotation), $.use_piece),
     use_piece: $ => seq(
       alias($.module_path, $.use_path),
       optional(choice(
@@ -70,51 +70,55 @@ module.exports = grammar({
       seq( '/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/',))),
 
     declaration: $ => choice(
-      $.data
+      $.data,
+      $.let_binding,
+      $.fixity
     ),
 
     // type declaration
-    data: $ => statement(seq("data", alias($.id, $.type_constructor), repeat(alias($.id, $.type_param)), optional(choice(
-      seq("=", optional(seq(
+    data: $ => statement("data", alias($.id, $.type_constructor), repeat(alias($.id, $.type_param)), optional(choice(
+      seq("=",
+        optional(seq(
           alias($.id, $.newtype_evidence),
           optional(seq(",", alias($.id, $.newtype_reverse_evidence))),
           "of"
         )),
-        $.type_expr
+        $.type
       ),
       repeat1(seq("|", alias($.id, $.data_constructor), repeat(choice($.id, $.type_unit, $.type_tuple)))),
-      wrap("{", "}", sep1(",", seq($.id, ":", $.type_expr)))
-    )))),
+      wrap("{", "}", sep1(",", seq($.id, ":", $.type)))
+    ))),
 
-    type_expr: $ => prec.right(1, seq(
+    // type expression
+    type: $ => prec.right(1, seq(
       choice(
         seq("forall", repeat1(choice(
           alias($.id, $.type_var_id),
-          // TODO: refine semantic of ":", after it should be kind expression instead of type_expr
-          wrap("(", ")", seq(alias($.id, $.type_var_id), choice("=", "~", ":"), $.type_expr))
-        )),".", $.type_expr),
+          // TODO: refine semantic of ":", after it should be kind expression instead of type
+          wrap("(", ")", seq(alias($.id, $.type_var_id), choice("=", "~", ":"), $.type))
+        )),".", $.type),
         alias("->", $.type_reserved_function),
         $.operator,
         $.type_var,
         $.type_unit,
         $.type_tuple,
-        wrap("(", ")", $.type_expr),
-        $.primitive_type_expr
+        wrap("(", ")", $.type),
+        $.primitive_type
       ),
-      repeat(choice($.type_expr, $.type_effect_suffix)),
+      repeat(choice($.type, $.type_effect_suffix)),
     )),
 
     // type effect suffix
     type_effect_suffix: $ => choice(
       alias(seq("!", token.immediate(/'?[A-Za-z_]\w*/)), $.type_eff_name),
-      wrap("!{", "}", sep(",", choice($.identifier, $.type_implicit_var)))
+      wrapsep("!{", "}", ",", choice($.identifier, $.type_implicit_var))
     ),
     type_unit: _$ => /\(\s*\)/,
-    type_tuple: $ => wrap("(", ")", sep1(",", $.type_expr)),
+    type_tuple: $ => wrap("(", ")", sep1(",", $.type)),
     type_var: $ => choice(alias($.id, $.type_var_id), $.type_implicit_var),
     type_implicit_var: _$ => /'[A-Za-z_]\w*/,
 
-    primitive_type_expr: $ => choice(
+    primitive_type: $ => choice(
       alias($.primitive_reverse_atom, $.primitive_reverse_atom_prim),
       wrap("#!(", ")", seq($.primitive_compound, choice(
         repeat(seq("|", $.primitive_compound)),
@@ -122,7 +126,7 @@ module.exports = grammar({
       ))),
     ),
     primitive_reverse_atom: _$ => seq("#!", token.immediate(/[A-Za-z_]\w*/)),
-    primitive_reverse_prim: $ => wrap("#!(", ")", $.type_expr),
+    primitive_reverse_prim: $ => wrap("#!(", ")", $.type),
     primitive_compound: $ => prec.left(2, choice(
       seq(alias($.type_var, $.primitive_cons), repeat($.primitive_compound)),
       $.operator,
@@ -135,21 +139,69 @@ module.exports = grammar({
       )))
     )),
 
-    type_decl: _$ => /type/,
+
+    // operator fixity declaration
+    fixity: $ => statement("fixity", /\d+/,
+      choice(seq("_", repeat1($.operator)), seq(repeat1($.operator), "_")),
+      repeat(choice("infix", "postfix", "prefix"))
+    ),
+
+    // let binding includes effect block, value definition and function definition
+    let_binding: $ => statement("let", choice($.id, $.force_id, $.operator_id), optional(seq(":", $.type)), choice(
+      seq("=", $.expression),
+      repeat1(seq("|", sep1(",", $.pattern), "=", $.expression)),
+      seq("do", wrapsep("{", "}", ";;", $.id))
+    )),
+
+    // expression
+    expression: $ => prec.left(1, seq(
+      choice(
+        $.macro_id, $.identifier, $.number,
+        $.string, $.string_cons, $.operator,
+        seq("forall", repeat1($.id), ".", $.expression),
+        seq("let", sep1(",", seq($.pattern, optional(seq("or", $.expression)), "=", $.expression)), "in", $.expression),
+        seq(wrapsep1("|", "|", ",", $.pattern), $.expression),
+        seq(optional(seq("with", sep1(",", $.identifier))), "do", wrapsep("{", "}", ";;", choice(
+          seq("let", $.pattern, "<-", $.expression),
+          seq("const", sep1(",", seq($.pattern, optional(seq("or", $.expression)), "=", $.expression))),
+          $.expression
+        ))),
+        wrapsep1("[", "]", "|", seq(sep1(",", $.pattern), "=", $.expression)),
+        wrapsep("(", ")", ",", $.expression),
+      ), optional(choice(seq(":", $.type), repeat1($.expression)))
+    )),
+
+    // definition of pattern
+    pattern: $ => prec.left(1, seq(
+      choice(
+        seq(choice(alias("_", $.pattern_wildcard), $.pattern_var), optional(seq(
+          token.immediate("@"),
+          choice($.pattern_unit, wrapsep("(", ")", ",", $.pattern))
+        ))),
+        $.pattern_cons,
+        $.pattern_unit,
+        $.string_cons,
+        $.string,
+        $.number,
+        seq("!", $.expression, "->", $.pattern),
+        wrapsep1("(", ")", ",", $.pattern)
+      ), optional(choice(seq(":", $.type), repeat1($.pattern)))
+    )),
+    pattern_var: _$ => seq("?", token.immediate(/[A-Za-z_]\w*/)),
+    pattern_cons: $ => prec(1, $.id),
+    pattern_unit: _$ => /\(\s*\)/,
+
 
     // definition of terminal symbol
-    _digit : _$ => /\d/,
-    _octet: _$ => /[0-7]/,
-    _hex: _$ => /[a-fA-F]|\d/,
-    _hex_integer: $ => seq(/0[xX]/, repeat1($._digit)),
-    _octet_integer: $ => seq(/0[oO]/, repeat1($._octet)),
+    hex_integer: _$ => /0[xX][_A-Za-z0-9]+/,
+    octet_integer: _$ => /0[oO][_0-7]+/,
 
     // integer
-    integer: $ => choice(repeat1($._digit), $._hex_integer, $._octet_integer),
-    floating: $ => seq(repeat($._digit), ".", repeat1($._digit)),
+    integer: $ => choice(/\d[0-9_]*/, $.hex_integer, $.octet_integer),
+    floating: _$ => /([0-9][0-9_]*)\.[_0-9]*/,
 
     // language literals
-    number: $ => choice($.floating, $.integer),
+    number: $ => seq(choice($.floating, $.integer), optional(token.immediate(/\.[A-Za-z_]\w*/))),
 
     // C string from https://github.com/tree-sitter/tree-sitter-c/blob/master/grammar.js
     string: $ => wrap("\"","\"", repeat(choice(
@@ -166,10 +218,12 @@ module.exports = grammar({
         /U[0-9a-fA-F]{8}/,
       ),
     ))),
+    string_cons: $ => seq($.string, alias(token.immediate(/\.[A-Za-z_]\w*/), $.string_cons_var)),
 
     // operator
-    operator: _$ => /[+\-*/\\!@#$%^&=|?.><]+/,
-    operator_id: _$ => /\([+:\-*/\\!@#$%^&=|?.><]+\)/,
+    operator: _$ => /[+\-*/\\!@#$%^&=|?.><;:]+/,
+    operator_id: _$ => /\([+:;\-*/\\!@#$%^&=|?.><]+\)/,
+    macro_id: _$ => /#[A-Za-z_]\w*(#[A-Za-z_]\w*)*!/,
 
     id: _$ => /[A-Za-z_]\w*/,
     // #prefix#name or #prefix#name#(++) simple operator

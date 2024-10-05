@@ -2,6 +2,7 @@
 (string) @string
 (comment) @comment
 (operator_id) @keyword.operator
+(force_id) @string.escape
 
 ;; module
 [(module_id) (qualified_id) (module_path) (use_path)] @module
@@ -24,23 +25,21 @@
 (data "|" @keyword.operator)
 (data ":" @keyword.operator)
 
-(primitive_type_expr
+(primitive_type
   "#!(" @type.builtin
   ")" @type.builtin)
 
-(type_expr "forall" @keyword)
-(type_expr "=" @type.builtin)
-(type_expr "~" @type.builtin)
-(type_expr ":" @keyword.operator)
+(type "forall" @keyword)
+(type "=" @type.builtin)
+(type "~" @type.builtin)
+(type ":" @keyword.operator)
 (type_unit) @type.builtin
 (type_tuple "(" @type.builtin "," ")" @type.builtin)
-(type_effect_suffix "!{" @type.builtin "}" @type.builtin)
+(type_effect_suffix "!{" @keyword.operator "}" @keyword.operator)
 (type_eff_name) @type.builtin
 (type_reserved_function) @type.builtin
-(type_expr (operator) @operator)
+(type (operator) @operator)
 (primitive_compound (operator) @operator)
-
-(force_id) @string.escape
 
 (primitive_reverse_atom_prim) @type.builtin
 (primitive_reverse_atom) @keyword.operator
@@ -53,3 +52,35 @@
 (primitive_compound ";" @keyword.operator)
 
 (data "{" @keyword.operator "," @keyword.operator "}" @keyword.operator)
+
+;; binding
+(let_binding "let" @keyword)
+(let_binding "=" @keyword.operator)
+(let_binding "|" @keyword.operator)
+
+;; expression
+(expression (number) @number)
+(expression ":" @keyword.operator)
+(expression "forall" @keyword "." @keyword.operator)
+(expression ["<-" "|" "="] @keyword.operator)
+(expression ["let" "do" "with" "in" "or" "const"] @keyword)
+(string_cons (string_cons_var) @attribute)
+
+;; operator fixity
+(fixity "_" @keyword.operator)
+(fixity ["fixity" "postfix" "prefix" "infix"] @keyword)
+(fixity (operator) @operator)
+
+;; pattern
+(pattern (pattern_wildcard) @keyword)
+(pattern_var "?" @keyword.operator) @variable
+(pattern (pattern_cons) @constructor)
+(pattern (pattern_unit) @constant.builtin)
+(pattern "(" @keyword.operator "," ")" @keyword.operator)
+(pattern "@" @keyword.operator)
+(pattern "@" "(" @keyword.operator "," ")" @keyword.operator)
+(pattern (number) @number)
+(pattern "!" @keyword.operator "->" @keyword.operator)
+
+;; macro
+(macro_id) @variable.parameter.builtin
