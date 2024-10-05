@@ -2,7 +2,49 @@
   {
     "type": "data",
     "named": true,
-    "fields": {}
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "data_constructor",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "newtype_evidence",
+          "named": true
+        },
+        {
+          "type": "newtype_reverse_evidence",
+          "named": true
+        },
+        {
+          "type": "type_constructor",
+          "named": true
+        },
+        {
+          "type": "type_expr",
+          "named": true
+        },
+        {
+          "type": "type_param",
+          "named": true
+        },
+        {
+          "type": "type_tuple",
+          "named": true
+        },
+        {
+          "type": "type_unit",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "declaration",
@@ -60,6 +102,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "force_id",
+          "named": true
+        },
         {
           "type": "id",
           "named": true
@@ -126,6 +172,104 @@
     }
   },
   {
+    "type": "primitive_compound",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "integer",
+          "named": true
+        },
+        {
+          "type": "operator",
+          "named": true
+        },
+        {
+          "type": "primitive_compound",
+          "named": true
+        },
+        {
+          "type": "primitive_cons",
+          "named": true
+        },
+        {
+          "type": "primitive_reverse_atom",
+          "named": true
+        },
+        {
+          "type": "primitive_reverse_prim",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "primitive_cons",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "type_implicit_var",
+          "named": true
+        },
+        {
+          "type": "type_var_id",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "primitive_reverse_atom",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "primitive_reverse_atom_prim",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "primitive_reverse_prim",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "type_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "primitive_type_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "primitive_compound",
+          "named": true
+        },
+        {
+          "type": "primitive_reverse_atom_prim",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "source_file",
     "named": true,
     "fields": {},
@@ -164,6 +308,110 @@
     }
   },
   {
+    "type": "type_effect_suffix",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "type_eff_name",
+          "named": true
+        },
+        {
+          "type": "type_implicit_var",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "type_expr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "operator",
+          "named": true
+        },
+        {
+          "type": "primitive_type_expr",
+          "named": true
+        },
+        {
+          "type": "type_effect_suffix",
+          "named": true
+        },
+        {
+          "type": "type_expr",
+          "named": true
+        },
+        {
+          "type": "type_reserved_function",
+          "named": true
+        },
+        {
+          "type": "type_tuple",
+          "named": true
+        },
+        {
+          "type": "type_unit",
+          "named": true
+        },
+        {
+          "type": "type_var",
+          "named": true
+        },
+        {
+          "type": "type_var_id",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "type_tuple",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "type_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "type_var",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "type_implicit_var",
+          "named": true
+        },
+        {
+          "type": "type_var_id",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "use",
     "named": true,
     "fields": {},
@@ -171,6 +419,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "module_annotation",
+          "named": true
+        },
         {
           "type": "module_attr",
           "named": true
@@ -190,6 +442,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "force_id",
+          "named": true
+        },
         {
           "type": "id",
           "named": true
@@ -230,7 +486,19 @@
     }
   },
   {
+    "type": "!{",
+    "named": false
+  },
+  {
     "type": "\"",
+    "named": false
+  },
+  {
+    "type": "#!",
+    "named": false
+  },
+  {
+    "type": "#!(",
     "named": false
   },
   {
@@ -254,7 +522,27 @@
     "named": false
   },
   {
+    "type": ":",
+    "named": false
+  },
+  {
+    "type": ";",
+    "named": false
+  },
+  {
     "type": ";;",
+    "named": false
+  },
+  {
+    "type": "=",
+    "named": false
+  },
+  {
+    "type": "[",
+    "named": false
+  },
+  {
+    "type": "]",
     "named": false
   },
   {
@@ -266,7 +554,15 @@
     "named": false
   },
   {
+    "type": "data_constructor",
+    "named": true
+  },
+  {
     "type": "exclude",
+    "named": false
+  },
+  {
+    "type": "forall",
     "named": false
   },
   {
@@ -282,11 +578,31 @@
     "named": false
   },
   {
+    "type": "module_annotation",
+    "named": true
+  },
+  {
     "type": "module_id",
     "named": true
   },
   {
     "type": "module_path",
+    "named": true
+  },
+  {
+    "type": "newtype_evidence",
+    "named": true
+  },
+  {
+    "type": "newtype_reverse_evidence",
+    "named": true
+  },
+  {
+    "type": "of",
+    "named": false
+  },
+  {
+    "type": "operator",
     "named": true
   },
   {
@@ -299,6 +615,34 @@
   },
   {
     "type": "string_content",
+    "named": true
+  },
+  {
+    "type": "type_constructor",
+    "named": true
+  },
+  {
+    "type": "type_eff_name",
+    "named": true
+  },
+  {
+    "type": "type_implicit_var",
+    "named": true
+  },
+  {
+    "type": "type_param",
+    "named": true
+  },
+  {
+    "type": "type_reserved_function",
+    "named": true
+  },
+  {
+    "type": "type_unit",
+    "named": true
+  },
+  {
+    "type": "type_var_id",
     "named": true
   },
   {
@@ -334,7 +678,15 @@
     "named": false
   },
   {
+    "type": "|",
+    "named": false
+  },
+  {
     "type": "}",
+    "named": false
+  },
+  {
+    "type": "~",
     "named": false
   }
 ]

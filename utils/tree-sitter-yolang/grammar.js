@@ -7,27 +7,33 @@ module.exports = grammar({
   rules: {
     source_file: $ => seq($.module, repeat($._top)),
 
+    // top level items in a file, include all things here.
     _top: $ => choice(
+      $.use,
       $.declaration,
-      $.use
     ),
 
-    // module declaration
+    // module declaration and its exporting list
     module: $ => statement(seq("module", optional($.module_attr), $.module_path, optional(choice(
       // inside parenthesis
-      wrap("(", ")", sep(",", choice(
+      wrapsep("(", ")", ",", choice(
         $.qualified_id,
         $.id,
         $.module_export,
-        seq("*", optional(seq("exclude", wrap("(", ")", $.qualified_id))))
-      ))),
+        seq("*", optional(seq("exclude", wrapsep("(", ")", ",", choice(
+          $.operator_id,
+          $.force_id,
+          $.id
+        )))))
+      )),
       // after everything *
-      seq("*", optional(seq("exclude", wrap("(", ")", sep(",", choice(
+      seq("*", optional(seq("exclude", wrapsep("(", ")", ",", choice(
         $.identifier,
         $.operator_id,
-      ))))))
+      )))))
     )))),
     module_attr: $ => $.string,
+    module_annotation: _$ => /[A-Za-z_]\w*:/,
     module_path: _$ => token(sep1("/", /[A-Za-z_]\w*/)),
     module_export: $ => seq("module", choice(
       seq($.module_id, optional(choice(
@@ -40,7 +46,7 @@ module.exports = grammar({
     module_id: _$ => /#[A-Za-z_]\w*(#[A-Za-z_]\w*)*/,
 
     // use statement
-    use: $ => statement(seq("use", optional($.module_attr), $.use_piece)),
+    use: $ => statement(seq("use", optional($.module_attr), optional($.module_annotation), $.use_piece)),
     use_piece: $ => seq(
       alias($.module_path, $.use_path),
       optional(choice(
@@ -48,10 +54,12 @@ module.exports = grammar({
         seq(alias("alias", $.use_keyword_alias), $.id),
         alias("self", $.use_keyword_self))),
       optional(choice(
-        wrap("{", "}", sep(",", choice($.use_piece, $.operator_id))),
+        wrap("{", "}", sep(",", choice($.use_piece, $.operator_id, $.force_id))),
         seq(
           alias("*", $.use_keyword_star),
-          optional(seq(alias("exclude", $.use_keyword_exclude), wrap("(", ")", choice($.id, $.operator_id))))
+          optional(seq(alias("exclude", $.use_keyword_exclude), wrapsep("(", ")", ",", choice(
+            $.id, $.operator_id, $.force_id
+          ))))
         )
       ))
     ),
@@ -61,10 +69,71 @@ module.exports = grammar({
       seq('//', /(\\+(.|\r?\n)|[^\\\n])*/),
       seq( '/*', /[^*]*\*+([^/*][^*]*\*+)*/, '/',))),
 
-    declaration: $ => choice($.data),
+    declaration: $ => choice(
+      $.data
+    ),
 
     // type declaration
-    data: _$ => statement("data"),
+    data: $ => statement(seq("data", alias($.id, $.type_constructor), repeat(alias($.id, $.type_param)), optional(choice(
+      seq("=", optional(seq(
+          alias($.id, $.newtype_evidence),
+          optional(seq(",", alias($.id, $.newtype_reverse_evidence))),
+          "of"
+        )),
+        $.type_expr
+      ),
+      repeat1(seq("|", alias($.id, $.data_constructor), repeat(choice($.id, $.type_unit, $.type_tuple)))),
+      wrap("{", "}", sep1(",", seq($.id, ":", $.type_expr)))
+    )))),
+
+    type_expr: $ => prec.right(1, seq(
+      choice(
+        seq("forall", repeat1(choice(
+          alias($.id, $.type_var_id),
+          // TODO: refine semantic of ":", after it should be kind expression instead of type_expr
+          wrap("(", ")", seq(alias($.id, $.type_var_id), choice("=", "~", ":"), $.type_expr))
+        )),".", $.type_expr),
+        alias("->", $.type_reserved_function),
+        $.operator,
+        $.type_var,
+        $.type_unit,
+        $.type_tuple,
+        wrap("(", ")", $.type_expr),
+        $.primitive_type_expr
+      ),
+      repeat(choice($.type_expr, $.type_effect_suffix)),
+    )),
+
+    // type effect suffix
+    type_effect_suffix: $ => choice(
+      alias(seq("!", token.immediate(/'?[A-Za-z_]\w*/)), $.type_eff_name),
+      wrap("!{", "}", sep(",", choice($.identifier, $.type_implicit_var)))
+    ),
+    type_unit: _$ => /\(\s*\)/,
+    type_tuple: $ => wrap("(", ")", sep1(",", $.type_expr)),
+    type_var: $ => choice(alias($.id, $.type_var_id), $.type_implicit_var),
+    type_implicit_var: _$ => /'[A-Za-z_]\w*/,
+
+    primitive_type_expr: $ => choice(
+      alias($.primitive_reverse_atom, $.primitive_reverse_atom_prim),
+      wrap("#!(", ")", seq($.primitive_compound, choice(
+        repeat(seq("|", $.primitive_compound)),
+        repeat1(seq(",", $.primitive_compound)),
+      ))),
+    ),
+    primitive_reverse_atom: _$ => seq("#!", token.immediate(/[A-Za-z_]\w*/)),
+    primitive_reverse_prim: $ => wrap("#!(", ")", $.type_expr),
+    primitive_compound: $ => prec.left(2, choice(
+      seq(alias($.type_var, $.primitive_cons), repeat($.primitive_compound)),
+      $.operator,
+      $.primitive_reverse_atom,
+      $.primitive_reverse_prim,
+      wrap("[", "]", seq($.primitive_compound, ";", $.integer)),
+      wrap("(", ")", seq($.primitive_compound, choice(
+        repeat(seq("|", $.primitive_compound)),
+        repeat1(seq(",", $.primitive_compound))
+      )))
+    )),
 
     type_decl: _$ => /type/,
 
@@ -103,6 +172,7 @@ module.exports = grammar({
     operator_id: _$ => /\([+:\-*/\\!@#$%^&=|?.><]+\)/,
 
     id: _$ => /[A-Za-z_]\w*/,
+    // #prefix#name or #prefix#name#(++) simple operator
     qualified_id: _$ => /#[A-Za-z_]\w*(#[A-Za-z_]\w*)*(#\([+:\-*/\\!@#$%^&=|?.><]+\))?/,
     force_id: _$ => /##[A-Za-z_]\w*/,
     identifier: $ => choice($.force_id, $.qualified_id, $.id)
@@ -132,6 +202,26 @@ function sep(delimiter, rule) {
  */
 function wrap(left, right, rule) {
   return seq(left, rule, right)
+}
+
+/**
+ * @param {RuleOrLiteral} left
+ * @param {RuleOrLiteral} right
+ * @param {RuleOrLiteral} delimiter
+ * @param {RuleOrLiteral} rule
+ */
+function wrapsep(left, right, delimiter, rule) {
+  return wrap(left, right, sep(delimiter, rule))
+}
+
+/**
+ * @param {RuleOrLiteral} left
+ * @param {RuleOrLiteral} right
+ * @param {RuleOrLiteral} delimiter
+ * @param {RuleOrLiteral} rule
+ */
+function wrapsep1(left, right, delimiter, rule) {
+  return wrap(left, right, sep1(delimiter, rule))
 }
 
 /**

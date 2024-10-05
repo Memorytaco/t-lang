@@ -24,7 +24,10 @@
   },
   "scripts": {
     "install": "node-gyp-build",
-    "prebuildify": "prebuildify --napi --strip"
+    "prebuildify": "prebuildify --napi --strip",
+    "parse": "tree-sitter parse",
+    "gen": "tree-sitter generate",
+    "debug": "tree-sitter parse --debug-graph"
   },
   "files": [
     "grammar.js",

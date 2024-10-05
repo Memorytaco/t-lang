@@ -1,0 +1,59 @@
+module standard/type * // we export everything here
+;;
+
+// standard maybe
+data maybe a
+| nothing
+| just a
+;;
+
+// yet another option
+data optional a
+| none
+| some a
+;;
+
+// phantom data
+data phantom
+;;
+
+data marker holder
+;;
+
+// newtype wrapper for pointer
+data ptr a = ptr, raw_ptr of #!(ptr #!a)
+;;
+
+// unlimited sized vector.
+// we use implicit variable of 'size to store
+// size of the array and use ptr to align the data in an array.
+data vec a = vec, raw_vec of #!(ptr [ptr #!a; 0], 'size)
+;;
+
+// structure
+data clist a {
+  len: int,
+  // same as optional ('x, list a)
+  content: forall x. optional (x, list a)
+};;
+
+// linked list
+data list a
+| nil
+| cons a (list a)
+;;
+
+// simple pair
+data pair a b = pair, unpair of (a, b)
+;;
+
+// native type fixpoint
+data fix f = fix of #!(ptr #!(f (fix f)))
+;;
+
+// one possible implementation of monad
+data monad eff a {
+  return: a -> a !eff,
+  bind: ('b -> a) -> 'b !eff -> a !eff
+}
+;;
