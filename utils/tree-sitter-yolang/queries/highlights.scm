@@ -29,17 +29,23 @@
   "#!(" @type.builtin
   ")" @type.builtin)
 
-(type "forall" @keyword)
+(record_field) @variable.member
+
+(type ["forall" ":" "."] @keyword)
 (type "=" @type.builtin)
 (type "~" @type.builtin)
-(type ":" @keyword.operator)
 (type_unit) @type.builtin
 (type_tuple "(" @type.builtin "," ")" @type.builtin)
 (type_effect_suffix "!{" @keyword.operator "}" @keyword.operator)
 (type_eff_name) @type.builtin
-(type_reserved_function) @type.builtin
+(type_reserved_operator) @type.builtin
 (type (operator) @operator)
 (primitive_compound (operator) @operator)
+(type_effect_suffix ".." @keyword)
+(handler_type [";;" ".."] @keyword)
+(handler_type "{" @type.builtin "}" @type.builtin)
+(record_type "=" @keyword)
+(record_type "{" @type.builtin "}" @type.builtin)
 
 (primitive_reverse_atom_prim) @type.builtin
 (primitive_reverse_atom) @keyword.operator
@@ -54,17 +60,16 @@
 (data "{" @keyword.operator "," @keyword.operator "}" @keyword.operator)
 
 ;; binding
-(let_binding "let" @keyword)
-(let_binding "=" @keyword.operator)
-(let_binding "|" @keyword.operator)
+(let_binding ["let" "do" "=" "|"] @keyword)
 
 ;; expression
 (expression (number) @number)
-(expression ":" @keyword.operator)
-(expression "forall" @keyword "." @keyword.operator)
-(expression ["<-" "|" "="] @keyword.operator)
-(expression ["let" "do" "with" "in" "or" "const"] @keyword)
+(expression "forall" @keyword "." @keyword)
+(expression [":" "|" "[" "]"] @keyword)
+(do_block ["let" "const" "<-" "|" "="] @keyword)
+(expression ["let" "do" "with" "in" "or"] @keyword)
 (string_cons (string_cons_var) @attribute)
+(handler ["forall" "|"] @keyword)
 
 ;; operator fixity
 (fixity "_" @keyword.operator)
@@ -81,6 +86,17 @@
 (pattern "@" "(" @keyword.operator "," ")" @keyword.operator)
 (pattern (number) @number)
 (pattern "!" @keyword.operator "->" @keyword.operator)
+(or_pattern "or" @keyword)
+
+;; effects
+(effect "effect" @keyword)
+(effect ["." ":"] @keyword.operator)
+(effect "{" @keyword "}" @keyword)
+(effect (method) @variable.member)
+(handler "handler" @keyword)
+(handler (handler_resume) @variable.builtin)
+(handler "=" @keyword)
+(handler (method) @variable.member)
 
 ;; macro
 (macro_id) @variable.parameter.builtin

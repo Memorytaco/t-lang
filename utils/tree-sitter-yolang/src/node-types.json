@@ -59,11 +59,57 @@
           "named": true
         },
         {
+          "type": "effect",
+          "named": true
+        },
+        {
           "type": "fixity",
           "named": true
         },
         {
           "type": "let_binding",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "do_block",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "or_pattern",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "effect",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "method",
+          "named": true
+        },
+        {
+          "type": "type",
           "named": true
         }
       ]
@@ -78,7 +124,15 @@
       "required": false,
       "types": [
         {
+          "type": "do_block",
+          "named": true
+        },
+        {
           "type": "expression",
+          "named": true
+        },
+        {
+          "type": "handler",
           "named": true
         },
         {
@@ -102,7 +156,7 @@
           "named": true
         },
         {
-          "type": "pattern",
+          "type": "or_pattern",
           "named": true
         },
         {
@@ -130,6 +184,60 @@
       "types": [
         {
           "type": "operator",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "handler",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "force_id",
+          "named": true
+        },
+        {
+          "type": "handler_resume",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "method",
+          "named": true
+        },
+        {
+          "type": "or_pattern",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "handler_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "type",
           "named": true
         }
       ]
@@ -186,6 +294,10 @@
       "required": true,
       "types": [
         {
+          "type": "do_block",
+          "named": true
+        },
+        {
           "type": "expression",
           "named": true
         },
@@ -202,7 +314,7 @@
           "named": true
         },
         {
-          "type": "pattern",
+          "type": "or_pattern",
           "named": true
         },
         {
@@ -303,6 +415,25 @@
         },
         {
           "type": "integer",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "or_pattern",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "pattern",
           "named": true
         }
       ]
@@ -483,6 +614,48 @@
     }
   },
   {
+    "type": "record_field",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "force_id",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "qualified_id",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "record_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "record_field",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "source_file",
     "named": true,
     "fields": {},
@@ -548,11 +721,19 @@
       "required": true,
       "types": [
         {
+          "type": "handler_type",
+          "named": true
+        },
+        {
           "type": "operator",
           "named": true
         },
         {
           "type": "primitive_type",
+          "named": true
+        },
+        {
+          "type": "record_type",
           "named": true
         },
         {
@@ -564,7 +745,7 @@
           "named": true
         },
         {
-          "type": "type_reserved_function",
+          "type": "type_reserved_operator",
           "named": true
         },
         {
@@ -596,6 +777,10 @@
       "types": [
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "type",
           "named": true
         },
         {
@@ -767,6 +952,10 @@
     "named": false
   },
   {
+    "type": "..",
+    "named": false
+  },
+  {
     "type": ":",
     "named": false
   },
@@ -827,6 +1016,10 @@
     "named": false
   },
   {
+    "type": "effect",
+    "named": false
+  },
+  {
     "type": "exclude",
     "named": false
   },
@@ -844,6 +1037,14 @@
   },
   {
     "type": "force_id",
+    "named": true
+  },
+  {
+    "type": "handler",
+    "named": false
+  },
+  {
+    "type": "handler_resume",
     "named": true
   },
   {
@@ -868,6 +1069,10 @@
   },
   {
     "type": "macro_id",
+    "named": true
+  },
+  {
+    "type": "method",
     "named": true
   },
   {
@@ -955,7 +1160,7 @@
     "named": true
   },
   {
-    "type": "type_reserved_function",
+    "type": "type_reserved_operator",
     "named": true
   },
   {

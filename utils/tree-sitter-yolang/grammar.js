@@ -72,7 +72,8 @@ module.exports = grammar({
     declaration: $ => choice(
       $.data,
       $.let_binding,
-      $.fixity
+      $.fixity,
+      $.effect,
     ),
 
     // type declaration
@@ -90,28 +91,33 @@ module.exports = grammar({
     ))),
 
     // type expression
-    type: $ => prec.right(1, seq(
+    type: $ => prec.left(1, seq(
       choice(
         seq("forall", repeat1(choice(
           alias($.id, $.type_var_id),
           // TODO: refine semantic of ":", after it should be kind expression instead of type
           wrap("(", ")", seq(alias($.id, $.type_var_id), choice("=", "~", ":"), $.type))
         )),".", $.type),
-        alias("->", $.type_reserved_function),
+        alias(choice("->", "=>"), $.type_reserved_operator),
         $.operator,
         $.type_var,
         $.type_unit,
         $.type_tuple,
         wrap("(", ")", $.type),
+        $.handler_type,
+        $.record_type,
         $.primitive_type
       ),
       repeat(choice($.type, $.type_effect_suffix)),
     )),
 
+    handler_type: $ => wrap("{", "}", seq(sep1(",", seq(optional(".."), $.type)), ";;", $.type)),
+    record_type: $ => wrapsep("{", "}", ",", seq(alias($.identifier, $.record_field), "=", $.type)),
+
     // type effect suffix
     type_effect_suffix: $ => choice(
       alias(seq("!", token.immediate(/'?[A-Za-z_]\w*/)), $.type_eff_name),
-      wrapsep("!{", "}", ",", choice($.identifier, $.type_implicit_var))
+      wrapsep("!{", "}", ",", choice($.type, seq("..", choice($.identifier, $.type_implicit_var))))
     ),
     type_unit: _$ => /\(\s*\)/,
     type_tuple: $ => wrap("(", ")", sep1(",", $.type)),
@@ -149,8 +155,8 @@ module.exports = grammar({
     // let binding includes effect block, value definition and function definition
     let_binding: $ => statement("let", choice($.id, $.force_id, $.operator_id), optional(seq(":", $.type)), choice(
       seq("=", $.expression),
-      repeat1(seq("|", sep1(",", $.pattern), "=", $.expression)),
-      seq("do", wrapsep("{", "}", ";;", $.id))
+      repeat1(seq("|", sep1(",", $.or_pattern), "=", $.expression)),
+      seq("do", choice($.do_block, $.expression))
     )),
 
     // expression
@@ -158,18 +164,32 @@ module.exports = grammar({
       choice(
         $.macro_id, $.identifier, $.number,
         $.string, $.string_cons, $.operator,
+        $.handler,
         seq("forall", repeat1($.id), ".", $.expression),
-        seq("let", sep1(",", seq($.pattern, optional(seq("or", $.expression)), "=", $.expression)), "in", $.expression),
-        seq(wrapsep1("|", "|", ",", $.pattern), $.expression),
-        seq(optional(seq("with", sep1(",", $.identifier))), "do", wrapsep("{", "}", ";;", choice(
-          seq("let", $.pattern, "<-", $.expression),
-          seq("const", sep1(",", seq($.pattern, optional(seq("or", $.expression)), "=", $.expression))),
-          $.expression
-        ))),
-        wrapsep1("[", "]", "|", seq(sep1(",", $.pattern), "=", $.expression)),
+        seq("let", sep1(",", seq($.or_pattern, "=", $.expression)), "in", $.expression),
+        seq(wrapsep1("|", "|", ",", $.or_pattern), $.expression),
+        seq(optional(seq("with", sep1(",", $.expression))), "do", choice($.do_block, $.expression)),
+        wrapsep1("[", "]", "|", seq(sep1(",", $.or_pattern), "=", $.expression)),
         wrapsep("(", ")", ",", $.expression),
       ), optional(choice(seq(":", $.type), repeat1($.expression)))
     )),
+
+    or_pattern: $ => seq($.pattern, optional(seq("or", $.expression))),
+
+    do_block: $ => wrapsep("{", "}", ";;", choice(
+      seq("let", $.or_pattern, "<-", $.expression),
+      seq("const", sep1(",", seq($.or_pattern, "=", $.expression))),
+      $.expression
+    )),
+
+    handler: $ => prec(1, seq("handler", choice(
+      seq(sep1(",", alias($.id, $.method)), alias($.id, $.handler_resume), "=", $.expression),
+      seq(optional(seq("forall", repeat(choice($.id, $.force_id)))), wrapsep1("|", "|", ",", $.type), wrapsep("{", "}", ",",
+        seq(alias($.id, $.method), alias($.id, $.handler_resume), choice(
+          seq("=", $.expression),
+          repeat1(seq("|", sep1(",", $.or_pattern), "=", $.expression)))
+        )))
+    ))),
 
     // definition of pattern
     pattern: $ => prec.left(1, seq(
@@ -191,6 +211,12 @@ module.exports = grammar({
     pattern_cons: $ => prec(1, $.id),
     pattern_unit: _$ => /\(\s*\)/,
 
+
+    // effect
+    effect: $ => statement("effect", choice(
+      seq(optional(seq(repeat($.id), ".")), sep1(",", alias($.id, $.method)), ":", $.type),
+      seq(repeat1($.id), wrapsep("{", "}", ",", seq(alias($.id, $.method), ":", $.type)))
+    )),
 
     // definition of terminal symbol
     hex_integer: _$ => /0[xX][_A-Za-z0-9]+/,
