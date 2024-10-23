@@ -1,0 +1,16 @@
+module constraint * ;;
+
+rule ##open _ _, (<=) _ _ {
+  fixity 1 <= >= _ infix;;
+
+  reflexity1 forall a b @ a >= b | a = b <=> true .
+  reflexity2 forall a b @ a <= b | a = b <=> true .
+  transitivity1 forall x y z @ x <= y, y <= z ==> x <= z .
+  transitivity2 forall x y z @ x >= y, y >= z ==> x >= z .
+  reduction1 forall a b c @ a <= b <= c
+    | a = b and b = c <=> true
+    | a = b <=> b <= c
+    | b = c <=> a <= b
+    .
+}
+;;

@@ -1,43 +1,49 @@
 ;; common
 (string) @string
 (comment) @comment
-(operator_id) @keyword.operator
 (force_id) @string.escape
+[","] @punctuation.delimiter
 
 ;; module
-[(module_id) (qualified_id) (module_path) (use_path)] @module
-[","] @punctuation.delimiter
-["use" "data" ] @keyword
+[(absolute_id) (qualified_id) (namespace)] @module
 (module "module" @keyword)
-(module_export "module" @keyword)
-(module_export "exclude" @keyword)
+(export "module" @keyword)
+(export "exclude" @keyword)
 (module "*"  @keyword.operator)
-(module_export "*"  @keyword.operator)
+(export "*"  @keyword.operator)
 (use_keyword_star) @keyword.operator
 (module_annotation) @keyword
+
+(use "use" @keyword)
+(piece ".." @keyword)
 
 [(use_keyword_exclude) (use_keyword_self) (use_keyword_alias) (use_keyword_as)] @keyword
 (module "exclude" @keyword)
 
 ;; data
 [(newtype_evidence) (newtype_reverse_evidence)] @constructor
+(data "data" @keyword)
 (data "of" @keyword)
 (data "|" @keyword.operator)
 (data ":" @keyword.operator)
+(data (unit) @type.builtin)
+(data (tuple_type "(" @type.builtin "," ")" @type.builtin))
+(data (data_constructor) @constructor)
+(data (type_annotation_var) @type.builtin)
 
-(primitive_type
-  "#!(" @type.builtin
-  ")" @type.builtin)
+(primitive_type "#!(" @type.builtin ")" @type.builtin)
 
 (record_field) @variable.member
 
 (type ["forall" ":" "."] @keyword)
 (type "=" @type.builtin)
 (type "~" @type.builtin)
-(type_unit) @type.builtin
-(type_tuple "(" @type.builtin "," ")" @type.builtin)
+(type (unit) @type.builtin)
+(type (tuple_type "(" @type.builtin "," ")" @type.builtin))
 (type_effect_suffix "!{" @keyword.operator "}" @keyword.operator)
 (type_eff_name) @type.builtin
+(type "forall" "{" @keyword (type_annotation_var) @type.builtin "}" @keyword)
+(type_var (type_annotation_var) @type.builtin)
 (type_reserved_operator) @type.builtin
 (type (operator) @operator)
 (primitive_compound (operator) @operator)
@@ -49,7 +55,7 @@
 
 (primitive_reverse_atom_prim) @type.builtin
 (primitive_reverse_atom) @keyword.operator
-(type_implicit_var) @attribute
+(type_implicit_var) @type.builtin
 (type_constructor) @type.definition
 (type_param) @variable.parameter
 
@@ -64,39 +70,58 @@
 
 ;; expression
 (expression (number) @number)
+(expression [(operator) (force_operator_id)] @operator)
 (expression "forall" @keyword "." @keyword)
+(expression "auto" @keyword)
 (expression [":" "|" "[" "]"] @keyword)
-(do_block ["let" "const" "<-" "|" "="] @keyword)
+(expression "(" @keyword.operator "," ")" @keyword.operator)
+(expression (unlift_type "@(" @keyword.operator ")" @keyword.operator))
+(expression (unlift_type "@" @keyword.operator))
+(expression (unlift_type (unlift_var) @type.builtin))
+(expression (unit) @constructor)
 (expression ["let" "do" "with" "in" "or"] @keyword)
+(do_block ["bind" "="] @keyword)
 (string_cons (string_cons_var) @attribute)
-(handler ["forall" "|"] @keyword)
+(handler ["forall" "with" "auto" "|"] @keyword)
 
 ;; operator fixity
-(fixity "_" @keyword.operator)
+(fixity "_" @keyword)
 (fixity ["fixity" "postfix" "prefix" "infix"] @keyword)
-(fixity (operator) @operator)
+(fixity [(operator) (force_operator_id)] @operator)
 
 ;; pattern
 (pattern (pattern_wildcard) @keyword)
-(pattern_var "?" @keyword.operator) @variable
+(pattern_var ["?"] @keyword.operator) @variable
 (pattern (pattern_cons) @constructor)
-(pattern (pattern_unit) @constant.builtin)
+(pattern (unit) @constructor)
 (pattern "(" @keyword.operator "," ")" @keyword.operator)
 (pattern "@" @keyword.operator)
 (pattern "@" "(" @keyword.operator "," ")" @keyword.operator)
 (pattern (number) @number)
-(pattern "!" @keyword.operator "->" @keyword.operator)
+(pattern ["<-"] @keyword)
 (or_pattern "or" @keyword)
 
+;; binding
+(binding ["bind" "<-" ":" "{" "}"] @keyword)
+(binding (cons) @constructor)
+(binding (id) @variable.member)
+
 ;; effects
-(effect "effect" @keyword)
+(effect ["effect" "auto" "forall"] @keyword)
 (effect ["." ":"] @keyword.operator)
 (effect "{" @keyword "}" @keyword)
 (effect (method) @variable.member)
-(handler "handler" @keyword)
+(effect (type_annotation_var) @type.builtin)
+(handler ["handler" ":"] @keyword)
 (handler (handler_resume) @variable.builtin)
 (handler "=" @keyword)
 (handler (method) @variable.member)
+
+;; constraint
+(constraint ["rule" "<=>" "==>" "\\" "|" "@" "." "forall"] @keyword)
+(constraint (property) @variable.member)
+(constraint (rulename) @constructor)
+(chr [(operator) (force_operator_id)] @operator)
 
 ;; macro
 (macro_id) @variable.parameter.builtin

@@ -1,0 +1,39 @@
+{
+  "grammars": [
+    {
+      "name": "yolang",
+      "camelcase": "Yolang",
+      "scope": "source.yolang",
+      "path": ".",
+      "file-types": [
+        "yo",
+        "y"
+      ],
+      "highlights": [
+        "queries/highlights.scm"
+      ],
+      "injection-regex": "^yolang$"
+    }
+  ],
+  "metadata": {
+    "version": "1.0.0",
+    "license": "MIT",
+    "description": "tree sitter parser for yolang.",
+    "authors": [
+      {
+        "name": "Andrew Elliot"
+      }
+    ],
+    "links": {
+      "repository": "https://github.com/tree-sitter/tree-sitter-yolang"
+    }
+  },
+  "bindings": {
+    "c": true,
+    "go": true,
+    "node": true,
+    "python": true,
+    "rust": true,
+    "swift": true
+  }
+}
