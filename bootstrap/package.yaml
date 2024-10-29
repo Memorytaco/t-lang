@@ -42,7 +42,11 @@ dependencies:
 - prettyprinter
 - random
 - comonad
-- isocline
+- haskeline
+- effectful
+- effectful-core
+- effectful-th
+- effectful-plugin
 
 ghc-options:
 - -Wall
@@ -54,6 +58,7 @@ ghc-options:
 - -Wmissing-home-modules
 - -Wpartial-fields
 - -Wredundant-constraints
+- -fplugin=Effectful.Plugin
 
 default-extensions:
 

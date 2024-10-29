@@ -7,14 +7,20 @@ module EvalLoop.Loop
 where
 
 
-import System.Console.Isocline
+import System.Console.Haskeline
+
+import EvalLoop.Handler.InputHandler
+
+import Effectful
+import Effectful.State.Dynamic
+import Effectful.Reader.Dynamic
+import Effectful.Dispatch.Dynamic (EffectHandler, interpret, localSeqUnlift)
 
 import Data.Text (Text, pack, dropWhileEnd, stripPrefix, unpack)
+import qualified Data.Text as Text (reverse)
 import qualified Data.Text.IO as Text (putStrLn)
-import Control.Monad.Catch (MonadMask, MonadCatch, MonadThrow)
-import Text.Megaparsec
+import Text.Megaparsec hiding (State)
 import Control.Monad
-import Control.Monad.State (StateT (..))
 import Data.Functor (($>))
 
 import Language.Core.Decl
@@ -29,13 +35,8 @@ import EvalLoop.Read
 import EvalLoop.Store
 
 import Control.Lens hiding (op)
-import Capability.Source (HasSource, MonadState (..), Field (..), Rename (..))
-import Capability.Sink (HasSink)
-import Capability.State ( get, modify, gets, HasState )
-import Control.Monad.IO.Class ( MonadIO(..) )
 import GHC.Generics (Generic)
 import Compiler.SourceParsing
-import Capability.Reader (HasReader, ReadState (..))
 import LLVM.Context (withContext)
 import LLVM (withModuleFromAST, moduleLLVMAssembly)
 import qualified Data.ByteString as ByteString
@@ -60,45 +61,37 @@ type History = String
 
 evaDriver :: Maybe History -> IO ()
 evaDriver history'opt = do
-  case history'opt of
-    Just history -> setHistory history 200
-    Nothing -> return ()
-  styleDef "ic-prompt" "ansi-maroon"
-  void $ enableAutoTab True
-
+  let settings = Settings {historyFile=history'opt, complete=completer, autoAddHistory=True}
   stat <- newEvalState
-  driveEva (EvaControl False "eva" stat) evaFeed $> ()
 
-data UserEva
-type EvaT m = StateT (EvaControl EvalState) m
-type UseStageStoreField'UseLoop m =
-  Rename "_stageStore" (Field "_stageStore" "_evalStore" (Field "_evalStore" "_loopState" (Field "_loopState" UserEva m)))
+  runEff . handleHaskeline settings . evalStateLocal (EvaControl False "eva> " stat) $ evaFeed
 
-newtype Eva m a = Eva
-  { emitEva :: EvaT m a
-  } deriving newtype (Functor, Applicative, Monad, MonadThrow, MonadCatch, MonadIO, MonadMask, MonadFail)
-    deriving (HasSource UserEva (EvaControl EvalState), HasSink UserEva (EvaControl EvalState))
-        via MonadState (EvaT m)
-    deriving (HasState UserEva (EvaControl EvalState))
-        via MonadState (EvaT m)
-    deriving (HasReader UserEva (EvaControl EvalState))
-        via ReadState (Eva m)
-    deriving (HasSource UseCompilerStore StageStore, HasSink UseCompilerStore StageStore)
-        via (UseStageStoreField'UseLoop (Eva m))
-    deriving (HasState UseCompilerStore StageStore)
-        via (UseStageStoreField'UseLoop (Eva m))
-    deriving (HasReader UseCompilerStore StageStore)
-        via (UseStageStoreField'UseLoop (Eva m))
+compilerStoreHandler :: State (EvaControl EvalState) :> es => EffectHandler (State StageStore) es
+compilerStoreHandler env = \case
+  Get -> get @(EvaControl EvalState) <&> (^. loopState . evalStore . stageStore)
+  Put s -> modify (loopState . evalStore . stageStore .~ s)
+  State update -> state \s ->
+      let (a, val) = update $ s ^. loopState . evalStore . stageStore
+       in (a, loopState . evalStore . stageStore .~ val $ s)
+  StateM updateM -> stateM \s -> do
+      (a, val) <- localSeqUnlift env \unlift -> unlift . updateM $ s ^. loopState . evalStore . stageStore
+      return (a, loopState . evalStore . stageStore .~ val $ s)
 
-driveEva :: EvaControl EvalState -> Eva m a -> m (a, EvaControl EvalState)
-driveEva s m = runStateT (emitEva m) s
+accessCompilerStoreHandler :: State (EvaControl EvalState) :> es => EffectHandler (Reader StageStore) es
+accessCompilerStoreHandler env = \case
+  Ask -> get <&> (^. loopState . evalStore . stageStore)
+  Local f m -> do
+    val <- get
+    modify (loopState . evalStore . stageStore %~ f)
+    res <- localSeqUnlift env \unlift -> unlift m
+    put val $> res
 
-completer :: CompletionEnv -> String -> IO ()
-completer env input
-  | dropWhileEnd isSpace (pack input) == ":load" = completeFileName env input Nothing [".", ".."] []
-  | otherwise = addCompletions env (commands input) >> wordCompleter keywords env input
+completer :: MonadIO m => CompletionFunc m
+completer arg@(left, _right)
+  | Text.reverse (dropWhileEnd isSpace (pack left)) == ":load" = completeFilename ("", "")
+  | otherwise = completeWordWithPrev Nothing [' '] commands arg
   where
-    commands prefix =
+    commands _ prefix = return
       let tp = pack prefix in
       [ (":def", "top level definition")
       , (":load", "load a source file")
@@ -109,26 +102,23 @@ completer env input
       , (":type", "show type of an expression")
       , (":dump", "dump internal representation")] >>= \(w, h) ->
         case stripPrefix tp (pack w) of
-          Just txt -> [Completion (unpack txt) w h]
+          Just txt -> [Completion (unpack txt) h False]
           Nothing -> []
-    keywords = ["let", "module", "data", "in", "use"]
+    _keywords :: [String] = ["let", "module", "data", "in", "use"]
 
-styler :: String -> Fmt
-styler = undefined
-
-evaFeed :: (MonadIO m, MonadMask m, MonadFail m) => Eva m ()
-evaFeed = do
-  lControl :: EvaControl EvalState <- get @UserEva
-  line'maybe <- liftIO do
+evaFeed :: (IOE :> es, Haskeline :> es, State (EvaControl EvalState) :> es) => Eff es ()
+evaFeed = interpret accessCompilerStoreHandler $ interpret compilerStoreHandler do
+  lControl :: EvaControl EvalState <- get
+  line'maybe <- do
     let prompt = mconcat [show (lControl ^. loopState . linesNumber), " ", lControl ^. loopPrompt]
-    readlineExMaybe prompt (Just completer) Nothing
+    getUserInput prompt
   case line'maybe of
     Nothing ->
       if lControl ^. loopEnding
       then return ()
       else do
-        liftIO $ putStrLn "Press ^D again to exit"
-        modify @UserEva (loopEnding .~ True)
+        putStrLine "Press ^D again to exit"
+        modify (loopEnding .~ True)
         evaFeed
     Just txt -> do
       pRes'either <- driveInterface (lControl ^. loopState) (pack txt)
@@ -141,22 +131,22 @@ evaFeed = do
                 RDefineGlobal decl -> do
                   case isDeclOf @(Item (UserOperator Text)) decl of
                     Just (Item (UserOperator op) _) ->
-                      modify @UserEva $ loopState . evalStore . operators %~ (op:)
+                      modify $ loopState . evalStore . operators %~ (op:)
                     Nothing -> return ()
-                  modify @UserEva (loopState . evalStore . thisModule . moduleDecls %~ (DeclStore . (decl:) . unDeclStore))
+                  modify (loopState . evalStore . thisModule . moduleDecls %~ (DeclStore . (decl:) . unDeclStore))
                   liftIO $ print decl
                 RListSource (Just name) -> do
-                  sourceStore <- gets @UserEva (^. (loopState . evalStore . stageStore . stageSourceParsing . spFiles))
+                  sourceStore <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spFiles))
                   case Map.lookup name sourceStore of
                     Nothing -> liftIO . putStrLn $ "source for module " <> show name <> " is not available"
                     Just content -> liftIO $ Text.putStrLn content
                 RListSource Nothing -> do
-                  pairs <- gets @UserEva (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources))
+                  pairs <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources))
                   let outputs = pairs & traverse %~ (\(path, m) ->
                         show (fuseModuleName $ m ^. moduleHeader) <> ": " <> path)
                   liftIO $ forM_ outputs print
                 RListModules -> do
-                  mods <- gets @UserEva (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources)) <&> fmap snd
+                  mods <- gets (fmap snd . (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources)))
                   liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (print . fuseModuleName)
                 RListDecls -> liftIO do
                   mapM_ print $ unDeclStore $ lControl ^. loopState . evalStore . thisModule . moduleDecls
@@ -178,7 +168,7 @@ evaFeed = do
                   liftIO $ withContext \ctx -> withModuleFromAST ctx m (ByteString.putStr <=< moduleLLVMAssembly)
             ReadExpr e -> liftIO . print $ pretty e
             ReadNothing -> return ()
-      modify @UserEva (loopEnding .~ False)
-      modify @UserEva (loopState . linesNumber %~ (+1))
+      modify (loopEnding .~ False)
+      modify (loopState . linesNumber %~ (+1))
       evaFeed
 

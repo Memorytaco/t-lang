@@ -47,24 +47,24 @@ import Language.Core
   , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, DeclStore (unDeclStore)
   , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface, ConstraintEdgesSurface, ConstraintNodesSurface
   )
-import Compiler.Store ( HasCompilerStore, UseCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
+import Compiler.Store ( HasCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
 import Data.Text (Text)
 import Data.List (intercalate)
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Driver.Parser (driveParser, surfaceDecl, surfaceType, surfaceExpr, surfaceModule)
+
+import Effectful
+import Effectful.State.Dynamic
+import Effectful.Reader.Dynamic
+import Effectful.Error.Dynamic
 
 import Language.Parser.Lexer ( reservedOp )
 import Text.Megaparsec (eof, ParseErrorBundle, MonadParsec (lookAhead), errorBundlePretty)
 import Data.Void (Void)
 import Data.Functor ( ($>) )
 import Control.Lens ( (<&>), (%~), _2, (^..), (^.) )
-import Capability.State ( modify, gets )
 import qualified Data.Map as Map
 import qualified Data.Text.IO as Text
-import Capability.Reader (asks)
 
-import Control.Monad.Except (runExceptT, MonadError (throwError))
-import Control.Monad.Trans (MonadTrans(..))
 import Driver.Transform.TypeGraph (toGraphicTypeMock, ToGraphicTypeErr)
 import Transform.TypeGraph (TypeContextTable)
 import Graph.Core (Hole, CoreG)
@@ -84,7 +84,7 @@ prettyShowSurfaceModule (Module header impts decls) = intercalate "\n" (headerDo
 -- ** actions for source file
 
 loadModuleFromFile
-  :: (HasCompilerStore m, MonadIO m) => FilePath -> m (Either String ModuleSurface)
+  :: (HasCompilerStore m, IOE :> m) => FilePath -> Eff m (Either String ModuleSurface)
 loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText path
 {-# INLINE loadModuleFromFile #-}
 
@@ -94,16 +94,15 @@ loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText pat
 --
 -- TOOD: consider outdated files
 loadModuleFromText
-  :: (HasCompilerStore m) => String -> Text -> m (Either String ModuleSurface)
-loadModuleFromText path content = runExceptT do
-  sources <- lift $ gets @UseCompilerStore (^.. (stageSourceParsing . spSources . traverse . _2))
+  :: (HasCompilerStore m) => String -> Text -> Eff m (Either String ModuleSurface)
+loadModuleFromText path content = runErrorNoCallStack do
+  sources <- gets (^.. (stageSourceParsing . spSources . traverse . _2))
   (m'either, _) <- driveParser builtinStore (surfaceModule sources (reservedOp ";;" $> ()) eof) path content
   m <- case m'either of
     Right m -> return m
     Left err -> throwError $ errorBundlePretty err
-  lift do
-    modify @UseCompilerStore ((stageSourceParsing . spSources) %~ ((path, m):))
-    modify @UseCompilerStore ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
+  modify ((stageSourceParsing . spSources) %~ ((path, m):))
+  modify ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
   return m
 
 -- | try fetching expression ast from text.
@@ -159,9 +158,9 @@ getSurfaceDeclEof ops prompt content = driveParser ops (surfaceDecl eof) prompt 
 -- ** methods available for store
 
 -- | lookup module with its canonical name
-lookupSurfaceModule :: AccessCompilerStore m => Name -> m (Maybe ModuleSurface)
+lookupSurfaceModule :: AccessCompilerStore m => Name -> Eff m (Maybe ModuleSurface)
 lookupSurfaceModule name =
-  asks @UseCompilerStore (^. (stageSourceParsing . spSources))
+  asks (^. (stageSourceParsing . spSources))
   <&> lookup name . (traverse %~ \(_, m) -> (fuseModuleName (m ^. moduleHeader), m))
 
 -- *** syntactic type and graphic type conversion

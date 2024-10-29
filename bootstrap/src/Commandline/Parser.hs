@@ -1,4 +1,4 @@
-module CLI.Parser
+module Commandline.Parser
   ( Command (..)
   , commands
   , getcommand
@@ -37,5 +37,7 @@ commands =
 
 -- | parse command line options
 getcommand :: IO Command
-getcommand = execParser (info ((commands <|> pure C'none) <**> helper) $ progDesc "compiler and interpreter for the language")
+getcommand = execParser
+  (info ((commands <|> pure C'none) <**> helper)
+    $ progDesc "compiler and interpreter for the language")
 

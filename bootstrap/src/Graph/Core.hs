@@ -63,7 +63,7 @@ deriving instance (Eq (e (Link e))) => Eq (Link e)
 deriving instance (Ord (e (Link e))) => Ord (Link e)
 
 -- | generic node for graph
-data Hole e a = Hole (e (Hole e a)) a deriving (Functor, Foldable, Traversable)
+data Hole e a = Hole !(e (Hole e a)) !a deriving (Functor, Foldable, Traversable)
 deriving instance (Show (e (Hole e a)), Show a) => Show (Hole e a)
 deriving instance (Eq (e (Hole e a)), Eq a) => Eq (Hole e a)
 deriving instance (Ord (e (Hole e a)), Ord a) => Ord (Hole e a)

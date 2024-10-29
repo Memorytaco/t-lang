@@ -88,7 +88,9 @@ newtype NodeLit lit = NodeLit lit deriving (Show, Eq, Ord)
 newtype NodeApp = NodeApp Integer deriving (Show, Eq, Ord)
 
 -- | Type constructor node. It refers to global nominal type or simply a type variable.
-data NodeRef name = NodeRef Arity name deriving (Show, Eq, Ord)
+data NodeRef name where
+  NodeRef :: Arity -> name -> NodeRef name
+  deriving (Show, Eq, Ord)
 
 -- | primitive type node, inherit equality from its type parameter
 newtype NodeRep r = NodeRep r deriving (Show, Eq, Ord)

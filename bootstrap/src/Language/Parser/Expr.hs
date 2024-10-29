@@ -232,15 +232,15 @@ instance ( ExprParserEnv e m, Apply :<: f
                 (Expr f name) m where
   tokenize _ parser end = do
     let iPat = pratt @proxy @(pat (Expr f name))
-                     (void . lookAhead . choice $ reservedOp <$> [",", "="]) Go
+                     (void . lookAhead . choice $ reservedOp <$> [",", "|"]) Go
                <?> "Lambda Parameter pattern"
         gPat = Grp <$> iPat <*> many (reservedOp "," *> iPat)
-        branch = (,) <$> gPat <*> (reservedOp "=" *> parser (void $ lookAhead end) Go)
+        branch = (,) <$> (reservedOp "|" *> gPat <* reservedOp "|") <*> parser (void $ lookAhead end) Go
         lambda = do
           heads <- Equation . Prefixes . fromMaybe [] <$> optional
             (try $ ((:> (TypPht :: Type tbind trep tname a)) . Name <$> identifier) `manyTill`  reservedOp ";;")
           heads <$> branch <*> return []
-    reservedOp "\\" *> (lambda <&> Expr . inj) <&> literal
+    lambda <&> Expr . inj <&> literal
 
 -- | type application
 instance ( ExprParserEnv e m

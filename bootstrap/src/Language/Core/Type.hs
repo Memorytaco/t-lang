@@ -29,6 +29,7 @@ newtype Arity = Arity [Variance]
 -- | Variance of parameter position
 data Variance = Positive | Negative deriving (Show, Eq, Ord)
 
+
 -- | type representation. parameterised with some extensions.
 -- please refer to `Language.Core.Extension.Type` for all available options.
 type Type :: (T.Type -> T.Type -> T.Type) -> (T.Type -> T.Type) -> T.Type -> T.Type -> T.Type

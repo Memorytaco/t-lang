@@ -1,6 +1,6 @@
+{-# LANGUAGE TypeOperators, TemplateHaskell #-}
 module Language.Core.Utility
   (
-
     type (+>) (..)
   , (:==) (..)
 

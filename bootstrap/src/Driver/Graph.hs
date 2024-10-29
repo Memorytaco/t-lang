@@ -26,3 +26,7 @@ dumpGraphType suffix typ = do
 -- | TODO
 exportViaShow :: a
 exportViaShow = undefined
+
+export_temp :: Monad m => m a
+export_temp = do
+  return undefined

@@ -1,6 +1,7 @@
 module Language.Generic.Data
   ( (:+:) (..)
   , (:++:) (..)
+
   , type (|:) (..)
   , type (|:$) (..)
   )

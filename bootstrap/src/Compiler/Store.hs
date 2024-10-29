@@ -24,7 +24,6 @@ module Compiler.Store
   , emptyStageNameChecking
 
   -- ** methods
-  , UseCompilerStore
   , AccessCompilerStore
   , HasCompilerStore
   )
@@ -33,12 +32,14 @@ where
 import Language.Core ( Name, ModuleSurface )
 
 import Control.Lens ( makeLenses )
-import Capability.Reader (HasReader)
-import Capability.State (HasState)
 
 import Data.Map (Map, empty)
 import qualified Data.Set as Set
 import Data.Text (Text)
+
+import Effectful
+import Effectful.State.Dynamic
+import Effectful.Reader.Dynamic
 
 -- | a global store for holding data in different stages of compiler
 data StageStore
@@ -88,13 +89,10 @@ makeLenses ''StageNameChecking
 makeLenses ''StageSourceParsing
 makeLenses ''StageStore
 
--- | marker which indicates there is a compiler store somewhere.
---
--- Implementation of CompilerStore may get changed
-data UseCompilerStore
 -- | we have an environment contained the store.
-type AccessCompilerStore m = (HasReader UseCompilerStore StageStore m)
+type AccessCompilerStore m = Reader StageStore :> m
+
 -- | we have an environment contained the store and are allowed to modify it.
 --
 -- We can have the invariant store as a reference.
-type HasCompilerStore m = (HasState UseCompilerStore StageStore m, AccessCompilerStore m)
+type HasCompilerStore m = State StageStore :> m

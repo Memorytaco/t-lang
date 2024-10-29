@@ -1,6 +1,6 @@
 module Main (main) where
 
-import CLI.Parser (getcommand, Command (..))
+import Commandline.Parser (getcommand, Command (..))
 
 import EvalLoop.Loop
 

@@ -28,7 +28,7 @@ source-repository head
 
 library
   exposed-modules:
-      CLI.Parser
+      Commandline.Parser
       Compiler.Backend.LLVM.Definition
       Compiler.Backend.LLVM.IR
       Compiler.Backend.LLVM.Runtime
@@ -50,6 +50,7 @@ library
       Driver.Transform.GraphType
       Driver.Transform.TypeGraph
       Driver.Unification
+      EvalLoop.Handler.InputHandler
       EvalLoop.Loop
       EvalLoop.Read
       EvalLoop.Store
@@ -149,7 +150,7 @@ library
       TypeFamilies
       DataKinds
       TemplateHaskell
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fplugin=Effectful.Plugin
   build-depends:
       QuickCheck
     , base >=4.9 && <5
@@ -158,9 +159,13 @@ library
     , capability
     , comonad
     , containers
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , free
-    , isocline
+    , haskeline
     , lens
     , libffi
     , llvm-hs
@@ -216,7 +221,7 @@ executable yo
       TypeFamilies
       DataKinds
       TemplateHaskell
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fplugin=Effectful.Plugin -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , base >=4.9 && <5
@@ -226,9 +231,13 @@ executable yo
     , capability
     , comonad
     , containers
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , free
-    , isocline
+    , haskeline
     , lens
     , libffi
     , llvm-hs
@@ -290,7 +299,7 @@ test-suite bootstrap-test
       TypeFamilies
       DataKinds
       TemplateHaskell
-  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -threaded -rtsopts -with-rtsopts=-N
+  ghc-options: -Wall -Wcompat -Widentities -Wincomplete-record-updates -Wincomplete-uni-patterns -Wmissing-export-lists -Wmissing-home-modules -Wpartial-fields -Wredundant-constraints -fplugin=Effectful.Plugin -threaded -rtsopts -with-rtsopts=-N
   build-depends:
       QuickCheck
     , base >=4.9 && <5
@@ -300,9 +309,13 @@ test-suite bootstrap-test
     , capability
     , comonad
     , containers
+    , effectful
+    , effectful-core
+    , effectful-plugin
+    , effectful-th
     , exceptions
     , free
-    , isocline
+    , haskeline
     , lens
     , libffi
     , llvm-hs
