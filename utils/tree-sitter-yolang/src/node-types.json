@@ -179,6 +179,10 @@
           "named": true
         },
         {
+          "type": "definition",
+          "named": true
+        },
+        {
           "type": "effect",
           "named": true
         },
@@ -187,7 +191,69 @@
           "named": true
         },
         {
-          "type": "let_binding",
+          "type": "instance_chain",
+          "named": true
+        },
+        {
+          "type": "typeclass",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "decorated",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "declaration",
+          "named": true
+        },
+        {
+          "type": "macro",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "definition",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "do_block",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "force_id",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "operator_id",
+          "named": true
+        },
+        {
+          "type": "or_pattern",
+          "named": true
+        },
+        {
+          "type": "type",
           "named": true
         }
       ]
@@ -226,6 +292,14 @@
         },
         {
           "type": "method",
+          "named": true
+        },
+        {
+          "type": "name",
+          "named": true
+        },
+        {
+          "type": "named",
           "named": true
         },
         {
@@ -348,6 +422,10 @@
         {
           "type": "operator",
           "named": true
+        },
+        {
+          "type": "operator_id",
+          "named": true
         }
       ]
     }
@@ -430,6 +508,64 @@
     }
   },
   {
+    "type": "instance",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "classname",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "field",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "name",
+          "named": true
+        },
+        {
+          "type": "or_pattern",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        },
+        {
+          "type": "type_var",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "instance_chain",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "instance",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "integer",
     "named": true,
     "fields": {},
@@ -449,27 +585,80 @@
     }
   },
   {
-    "type": "let_binding",
+    "type": "macro",
     "named": true,
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
-          "type": "do_block",
+          "type": "macro_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "macro_dict",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "key",
           "named": true
         },
         {
-          "type": "expression",
+          "type": "macro_expr",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "macro_expr",
+    "named": true,
+    "fields": {
+      "type": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "@",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "force_operator_id",
           "named": true
         },
         {
-          "type": "force_id",
+          "type": "identifier",
           "named": true
         },
         {
-          "type": "id",
+          "type": "macro_dict",
+          "named": true
+        },
+        {
+          "type": "macro_expr",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "operator",
           "named": true
         },
         {
@@ -477,7 +666,11 @@
           "named": true
         },
         {
-          "type": "or_pattern",
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "string_cons",
           "named": true
         },
         {
@@ -552,15 +745,26 @@
   {
     "type": "or_pattern",
     "named": true,
-    "fields": {},
+    "fields": {
+      "altpattern": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "expression",
+            "named": true
+          },
+          {
+            "type": "or",
+            "named": false
+          }
+        ]
+      }
+    },
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": true,
       "types": [
-        {
-          "type": "expression",
-          "named": true
-        },
         {
           "type": "pattern",
           "named": true
@@ -571,25 +775,74 @@
   {
     "type": "pattern",
     "named": true,
-    "fields": {},
+    "fields": {
+      "annotation": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ":",
+            "named": false
+          },
+          {
+            "type": "type",
+            "named": true
+          }
+        ]
+      },
+      "constructor": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "pattern_cons",
+            "named": true
+          }
+        ]
+      },
+      "literal": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "number",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          },
+          {
+            "type": "string_cons",
+            "named": true
+          },
+          {
+            "type": "unit",
+            "named": true
+          }
+        ]
+      },
+      "view": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "<-",
+            "named": false
+          },
+          {
+            "type": "expression",
+            "named": true
+          }
+        ]
+      }
+    },
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
-          "type": "expression",
-          "named": true
-        },
-        {
-          "type": "number",
-          "named": true
-        },
-        {
           "type": "pattern",
-          "named": true
-        },
-        {
-          "type": "pattern_cons",
           "named": true
         },
         {
@@ -598,18 +851,6 @@
         },
         {
           "type": "pattern_wildcard",
-          "named": true
-        },
-        {
-          "type": "string",
-          "named": true
-        },
-        {
-          "type": "string_cons",
-          "named": true
-        },
-        {
-          "type": "type",
           "named": true
         },
         {
@@ -628,7 +869,19 @@
       "required": true,
       "types": [
         {
+          "type": "force_operator_id",
+          "named": true
+        },
+        {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "operator",
+          "named": true
+        },
+        {
+          "type": "operator_id",
           "named": true
         }
       ]
@@ -844,7 +1097,7 @@
       "required": true,
       "types": [
         {
-          "type": "declaration",
+          "type": "decorated",
           "named": true
         },
         {
@@ -1017,6 +1270,92 @@
     }
   },
   {
+    "type": "typeclass",
+    "named": true,
+    "fields": {
+      "class": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "classname",
+            "named": true
+          }
+        ]
+      },
+      "class_var": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "id",
+            "named": true
+          }
+        ]
+      },
+      "default": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": ";;",
+            "named": false
+          },
+          {
+            "type": "=",
+            "named": false
+          },
+          {
+            "type": "default",
+            "named": false
+          },
+          {
+            "type": "expression",
+            "named": true
+          },
+          {
+            "type": "field",
+            "named": true
+          },
+          {
+            "type": "or_pattern",
+            "named": true
+          },
+          {
+            "type": "|",
+            "named": false
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "field",
+          "named": true
+        },
+        {
+          "type": "fixity",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        },
+        {
+          "type": "type_var",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "unlift_type",
     "named": true,
     "fields": {},
@@ -1075,6 +1414,10 @@
     "named": false
   },
   {
+    "type": "#[",
+    "named": false
+  },
+  {
     "type": "(",
     "named": false
   },
@@ -1088,6 +1431,10 @@
   },
   {
     "type": ",",
+    "named": false
+  },
+  {
+    "type": "->",
     "named": false
   },
   {
@@ -1127,6 +1474,10 @@
     "named": false
   },
   {
+    "type": "=>",
+    "named": false
+  },
+  {
     "type": "?",
     "named": false
   },
@@ -1163,8 +1514,12 @@
     "named": false
   },
   {
-    "type": "bind",
+    "type": "class",
     "named": false
+  },
+  {
+    "type": "classname",
+    "named": true
   },
   {
     "type": "comment",
@@ -1183,6 +1538,14 @@
     "named": true
   },
   {
+    "type": "default",
+    "named": false
+  },
+  {
+    "type": "deriving",
+    "named": false
+  },
+  {
     "type": "do",
     "named": false
   },
@@ -1191,8 +1554,20 @@
     "named": false
   },
   {
+    "type": "else",
+    "named": false
+  },
+  {
     "type": "exclude",
     "named": false
+  },
+  {
+    "type": "fail",
+    "named": false
+  },
+  {
+    "type": "field",
+    "named": true
   },
   {
     "type": "fixity",
@@ -1239,12 +1614,24 @@
     "named": false
   },
   {
+    "type": "instance",
+    "named": false
+  },
+  {
+    "type": "key",
+    "named": true
+  },
+  {
     "type": "let",
     "named": false
   },
   {
     "type": "macro_id",
     "named": true
+  },
+  {
+    "type": "match",
+    "named": false
   },
   {
     "type": "method",
@@ -1256,6 +1643,14 @@
   },
   {
     "type": "module_annotation",
+    "named": true
+  },
+  {
+    "type": "name",
+    "named": true
+  },
+  {
+    "type": "named",
     "named": true
   },
   {
@@ -1288,6 +1683,10 @@
   },
   {
     "type": "or",
+    "named": false
+  },
+  {
+    "type": "pattern",
     "named": false
   },
   {
@@ -1389,6 +1788,10 @@
   {
     "type": "use_keyword_star",
     "named": true
+  },
+  {
+    "type": "via",
+    "named": false
   },
   {
     "type": "with",

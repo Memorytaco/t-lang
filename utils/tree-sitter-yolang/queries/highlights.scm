@@ -1,8 +1,9 @@
 ;; common
 (string) @string
+(number) @number
 (comment) @comment
 (force_id) @string.escape
-[","] @punctuation.delimiter
+["," ";;"] @punctuation.delimiter
 
 ;; module
 [(absolute_id) (qualified_id) (namespace)] @module
@@ -22,8 +23,7 @@
 
 ;; data
 [(newtype_evidence) (newtype_reverse_evidence)] @constructor
-(data "data" @keyword)
-(data "of" @keyword)
+(data ["data" "of" "deriving" "via"] @keyword)
 (data "|" @keyword.operator)
 (data ":" @keyword.operator)
 (data (unit) @type.builtin)
@@ -65,11 +65,11 @@
 
 (data "{" @keyword.operator "," @keyword.operator "}" @keyword.operator)
 
-;; binding
-(let_binding ["let" "do" "=" "|"] @keyword)
+;; top level value definition
+(definition ["let" "do" "=" "|" ":"] @keyword)
+(definition [(operator_id)] @operator)
 
 ;; expression
-(expression (number) @number)
 (expression [(operator) (force_operator_id)] @operator)
 (expression "forall" @keyword "." @keyword)
 (expression "auto" @keyword)
@@ -79,30 +79,30 @@
 (expression (unlift_type "@" @keyword.operator))
 (expression (unlift_type (unlift_var) @type.builtin))
 (expression (unit) @constructor)
-(expression ["let" "do" "with" "in" "or"] @keyword)
-(do_block ["bind" "="] @keyword)
+(expression ["let" "match" "do" "with" "in" "or"] @keyword)
+(do_block ["->" "=" ";;"] @keyword)
+(do_block [","] @keyword.operator)
 (string_cons (string_cons_var) @attribute)
 (handler ["forall" "with" "auto" "|"] @keyword)
 
 ;; operator fixity
 (fixity "_" @keyword)
 (fixity ["fixity" "postfix" "prefix" "infix"] @keyword)
-(fixity [(operator) (force_operator_id)] @operator)
+(fixity [(operator) (operator_id) (force_operator_id)] @operator)
 
 ;; pattern
-(pattern (pattern_wildcard) @keyword)
+(pattern [(pattern_wildcard) ":"] @keyword)
 (pattern_var ["?"] @keyword.operator) @variable
 (pattern (pattern_cons) @constructor)
 (pattern (unit) @constructor)
 (pattern "(" @keyword.operator "," ")" @keyword.operator)
 (pattern "@" @keyword.operator)
 (pattern "@" "(" @keyword.operator "," ")" @keyword.operator)
-(pattern (number) @number)
 (pattern ["<-"] @keyword)
 (or_pattern "or" @keyword)
 
 ;; binding
-(binding ["bind" "<-" ":" "{" "}"] @keyword)
+(binding ["pattern" "<-" ":" "{" "}"] @keyword)
 (binding (cons) @constructor)
 (binding (id) @variable.member)
 
@@ -110,12 +110,26 @@
 (effect ["effect" "auto" "forall"] @keyword)
 (effect ["." ":"] @keyword.operator)
 (effect "{" @keyword "}" @keyword)
-(effect (method) @variable.member)
+(effect (method) @variable.member @markup.italic)
+(effect (named) @variable.member @markup.italic @markup.strong)
+(effect (name) @markup.strong)
 (effect (type_annotation_var) @type.builtin)
 (handler ["handler" ":"] @keyword)
 (handler (handler_resume) @variable.builtin)
 (handler "=" @keyword)
 (handler (method) @variable.member)
+
+;; type class
+(typeclass ["default" "class" "forall" "=>" "|" ":" "."] @keyword)
+(typeclass (field) @variable.member)
+(typeclass (classname) @type.definition)
+
+;; class instance
+(instance_chain ["instance" "else"] @keyword)
+(instance ["forall" "fail" "=>" "=" "|" ":" "."] @keyword)
+(instance (name) @label)
+(instance (classname) @type @markup.italic @markup.strong)
+(instance (field) @variable.member)
 
 ;; constraint
 (constraint ["rule" "<=>" "==>" "\\" "|" "@" "." "forall"] @keyword)
@@ -125,3 +139,7 @@
 
 ;; macro
 (macro_id) @variable.parameter.builtin
+(macro ["#[" "]"] @punctuation.special)
+(macro_dict ["{" "}" ":" ".."] @keyword)
+(macro_expr "@(" @keyword.operator ")" @keyword.operator)
+(macro_expr "@" @keyword.operator)
