@@ -89,7 +89,7 @@ module.exports = grammar({
         $.identifier, $.operator, $.operator_id, $.force_operator_id,
         $.string_cons, $.string, $.number,
         $.macro_dict, field("type", seq("@", token.immediate(/[A-Za-z_]\w*/))), wrap("@(", ")", $.type),
-        wrap("(", ")", $.macro_expr)
+        wrapsep("(", ")", ",", $.macro_expr)
       ),
       repeat($.macro_expr)
     )),
@@ -100,6 +100,7 @@ module.exports = grammar({
 
     declaration: $ => choice(
       $.data,
+      $.type_alias,
       $.definition,
       $.fixity,
       $.effect,
@@ -107,9 +108,24 @@ module.exports = grammar({
       $.constraint,
       $.typeclass,
       $.instance_chain,
+      $.foreign,
     ),
 
-    decorated: $ => seq(optional($.macro), $.declaration),
+    decorated: $ => seq(repeat($.macro), $.declaration),
+
+    foreign: $ => statement("foreign", optional(choice("import", "export")),
+      optional(wrapsep("[", "]", ",", $.macro_expr)),
+      sep1(",", field("name", seq(
+        alias($.id, $.name),
+        optional(alias($.string, $.rawname)),
+        optional(wrapsep("[", "]", ",", $.macro_expr))
+      ))),
+      ":", $.type,
+      optional(choice(
+        seq("=", $.expression),
+        seq(wrapsep("|", "|", ",", $.or_pattern), $.expression),
+      ))
+    ),
 
     typeclass: $ => statement("class",
       optional(seq("forall", repeat1($.type_var), ".")),
@@ -166,6 +182,8 @@ module.exports = grammar({
       )),
       optional(seq("deriving", sep1(",", repeat1($.id)), optional(seq("via", sep1(",", repeat1($.id))))))
     ),
+
+    type_alias: $ => statement("type", alias($.id, $.name), repeat(field("var", $.id)), "=", $.type),
 
     // type expression
     type: $ => prec.right(PRIORITY.TYPE, seq(
@@ -270,7 +288,7 @@ module.exports = grammar({
         $.macro_id, $.identifier, $.number,
         $.string, $.string_cons, $.operator,
         $.operator_id, $.force_operator_id,
-        $.handler,
+        $.handler, $.macro_block,
         seq("forall", repeat1($.id), ".", $.expression),
         seq("let", sep1(",", seq($.or_pattern, choice("=", wrapsep("|", "|", ",", $.or_pattern)), $.expression)), "in", $.expression),
         seq(wrapsep1("|", "|", ",", $.or_pattern), $.expression),
@@ -283,10 +301,21 @@ module.exports = grammar({
       ), optional(choice(seq(":", $.type), repeat1($.expression)))
     )),
 
-    unit: _$ => token(seq("(", ")")),
+    unit: _$ => seq("(", ")"),
     unlift_type: $ => choice(
       wrapsep("@(", ")", ",", $.type),
       seq("@", alias(token.immediate(/'?[A-Za-z_]\w*/), $.unlift_var))
+    ),
+
+    macro_block: $ => wrap(alias(seq("{", token.immediate(/[A-Za-z_]\w*!/)), $.name), "}",
+      field("content", repeat($._macro_block_content))),
+    _macro_block_content: $ => choice(
+      $.identifier, $.number, $.string, $.operator, $.operator_id,
+      $.force_operator_id, $.macro_id, $.macro_block,
+      choice("|", ",", ":", "="),
+      wrap("(", ")", repeat($._macro_block_content)),
+      wrap("[", "]", repeat($._macro_block_content)),
+      wrap("{", "}", repeat($._macro_block_content))
     ),
 
     or_pattern: $ => seq($.pattern, optional(field("altpattern", seq("or", $.expression)))),
@@ -299,7 +328,7 @@ module.exports = grammar({
     handler: $ => prec(PRIORITY.EXPRESSION, seq("handler", choice(
       seq("with", wrapsep("{", "}", ",", $.expression)),
       seq("auto", "with", wrapsep("{", "}", ",", $.type)),
-      seq(sep1(",", alias($.id, $.method)), alias($.id, $.handler_resume), "=", wrapsep("|", "|", ",", $.or_pattern), $.expression),
+      seq(sep1(",", alias($.id, $.method)), alias($.id, $.handler_resume), choice("=", wrapsep("|", "|", ",", $.or_pattern)), $.expression),
       seq(optional(seq("forall", repeat(choice($.id, $.force_id)))), wrapsep1("|", "|", ",", $.type), wrapsep("{", "}", ",",
         seq(alias($.id, $.method), choice(alias($.id, $.handler_resume), wrap("(", ")", seq(alias($.id, $.handler_resume), ":", $.type))), choice(
           seq("=", $.expression),

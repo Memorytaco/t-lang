@@ -1,0 +1,39 @@
+module standard/lib * ;;
+
+use std/type/option;;
+
+// direct function definition
+let test1 : () !io | ?a, ?b |
+  #print! "hello" "world"
+;;
+
+// direct function without type annotation
+let test2 | ?a, ?b | do {
+  a
+}
+;;
+
+// direct function with multiple branches
+let test3: option a -> a -> a
+| some ?a, _ = a
+| none, ?a = a
+;;
+
+// direct computation
+let test4 do {
+  do println "test output string" ;;
+  getInput -> some ?str or fail "a input is necessary";;
+  str
+}
+;;
+
+// direct computation with type annotation
+let test5: () !{IO, fail} do {
+  getInput -> some ?str;;
+  do match str with [
+  | ":" = println "not allowed empty"
+  | ":list" = println "list moudle"
+  | _ = fail "unknown command"
+  ]
+}
+;;

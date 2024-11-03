@@ -31,6 +31,10 @@
 (data (data_constructor) @constructor)
 (data (type_annotation_var) @type.builtin)
 
+;; type alias
+(type_alias ["type" "="] @keyword)
+(type_alias (name) @type)
+
 (primitive_type "#!(" @type.builtin ")" @type.builtin)
 
 (record_field) @variable.member
@@ -47,6 +51,7 @@
 (type_reserved_operator) @type.builtin
 (type (operator) @operator)
 (primitive_compound (operator) @operator)
+(primitive_compound (integer) @number)
 (type_effect_suffix ".." @keyword)
 (handler_type [";;" ".."] @keyword)
 (handler_type "{" @type.builtin "}" @type.builtin)
@@ -139,7 +144,16 @@
 
 ;; macro
 (macro_id) @variable.parameter.builtin
-(macro ["#[" "]"] @punctuation.special)
+(macro ["#[" "]"] @punctuation.special @markup.strong)
 (macro_dict ["{" "}" ":" ".."] @keyword)
 (macro_expr "@(" @keyword.operator ")" @keyword.operator)
 (macro_expr "@" @keyword.operator)
+(macro_block [(name) "}"] @function.macro @markup.italic)
+(macro_block (operator) @operator)
+(macro_block (name) ["(" ")" "[" "]" "{" "}" "|" "," ":" "="] @keyword.operator @markup.italic "}")
+
+;; foreign FFI
+(foreign ["foreign" "import" "export" "|" "=" ":"] @keyword)
+(foreign ["[" "]"] @function.macro)
+(foreign (rawname) @keyword.function)
+(foreign (name) @function)
