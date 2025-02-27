@@ -17,7 +17,7 @@ module EvalLoop.Store.Compiler
   )
 where
 
-import Language.Core (Name, OperatorStore, builtinStore, ModuleSurface, Module (..), ModuleName (..), DeclStore (..))
+import Language.Core (Name, OperatorStore, builtinStore, ModuleSurface, Module (..), ModuleName (..), DeclStore (..), CoreStage (..))
 import Compiler.Store
 
 import JIT.LLVM as JIT
@@ -33,7 +33,7 @@ data EvalCompilerStore
     { _stageStore :: StageStore
     , _operators  :: OperatorStore
     -- | hold declarations for current repl
-    , _thisModule :: ModuleSurface
+    , _thisModule :: ModuleSurface SParsing
     , _compiledModules :: [(Name, LLVM.Module)]
     , _evalJITSession :: EvalJITSession
     } deriving Generic
@@ -50,7 +50,7 @@ makeLenses ''EvalCompilerStore
 
 newEvalCompilerStore :: MonadIO m => Name -> String -> m EvalCompilerStore
 newEvalCompilerStore name sessionName =
-  newDefaulEvalJITSession sessionName <&> EvalCompilerStore initStageStore builtinStore (Module (ModuleName [] name) [] (DeclStore [])) []
+  newDefaulEvalJITSession sessionName <&> EvalCompilerStore initStageStore builtinStore (ModuleSource (ModuleName [] name) [] (DeclStore []) "memory") []
 
 newDefaulEvalJITSession :: MonadIO m => String -> m EvalJITSession
 newDefaulEvalJITSession name = do

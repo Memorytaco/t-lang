@@ -26,7 +26,7 @@ import Data.Functor (($>))
 import Language.Core.Decl
     ( DeclStore(..), isDeclOf )
 import Language.Core.Module
-    ( moduleHeader, moduleDecls, fuseModuleName )
+    ( msName, msDecls, fuseModuleName )
 import Language.Core.Extension.Decl (Item (..), UserOperator (..))
 
 import qualified Data.Map as Map
@@ -133,7 +133,7 @@ evaFeed = interpret accessCompilerStoreHandler $ interpret compilerStoreHandler 
                     Just (Item (UserOperator op) _) ->
                       modify $ loopState . evalStore . operators %~ (op:)
                     Nothing -> return ()
-                  modify (loopState . evalStore . thisModule . moduleDecls %~ (DeclStore . (decl:) . unDeclStore))
+                  modify (loopState . evalStore . thisModule . msDecls %~ (DeclStore . (decl:) . unDeclStore))
                   liftIO $ print decl
                 RListSource (Just name) -> do
                   sourceStore <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spFiles))
@@ -143,15 +143,15 @@ evaFeed = interpret accessCompilerStoreHandler $ interpret compilerStoreHandler 
                 RListSource Nothing -> do
                   pairs <- gets (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources))
                   let outputs = pairs & traverse %~ (\(path, m) ->
-                        show (fuseModuleName $ m ^. moduleHeader) <> ": " <> path)
+                        show (fuseModuleName $ m ^. msName) <> ": " <> path)
                   liftIO $ forM_ outputs print
                 RListModules -> do
                   mods <- gets (fmap snd . (^. (loopState . evalStore . stageStore . stageSourceParsing . spSources)))
-                  liftIO $ forM_ (mods & traverse %~ (^. moduleHeader)) (print . fuseModuleName)
+                  liftIO $ forM_ (mods & traverse %~ (^. msName)) (print . fuseModuleName)
                 RListDecls -> liftIO do
-                  mapM_ print $ unDeclStore $ lControl ^. loopState . evalStore . thisModule . moduleDecls
+                  mapM_ print $ unDeclStore $ lControl ^. loopState . evalStore . thisModule . msDecls
                 RLoadSource path -> loadModuleFromFile path >>= \case
-                  Right m -> liftIO . putStrLn $ "load module "<> show (fuseModuleName $ m ^. moduleHeader) <> " from source \"" <> path <> "\""
+                  Right m -> liftIO . putStrLn $ "load module "<> show (fuseModuleName $ m ^. msName) <> " from source \"" <> path <> "\""
                   Left s -> liftIO $ putStrLn s
                 RShowModule name -> lookupSurfaceModule name >>= liftIO . \case
                   Just m ->  putStrLn $ prettyShowSurfaceModule m

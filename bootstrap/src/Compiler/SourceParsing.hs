@@ -44,8 +44,9 @@ where
 
 import Language.Core
   ( ModuleSurface, TypSurface, ExprSurface, DeclSurface
-  , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, moduleHeader, DeclStore (unDeclStore)
+  , OperatorStore, builtinStore, fuseModuleName, Module (..), Name, msName, DeclStore (unDeclStore)
   , GraphicNodesSurface, GraphicEdgesSurface, GraphicTypeSurface, ConstraintEdgesSurface, ConstraintNodesSurface
+  , CoreStage (..)
   )
 import Compiler.Store ( HasCompilerStore, stageSourceParsing, spSources, spFiles, AccessCompilerStore )
 import Data.Text (Text)
@@ -74,8 +75,8 @@ import Transform.GraphType (GraphToTypeErr)
 -- ** general methods for surface module
 
 -- | show basic information of a module
-prettyShowSurfaceModule :: ModuleSurface -> String
-prettyShowSurfaceModule (Module header impts decls) = intercalate "\n" (headerDoc <> imptsDoc <> declsDoc)
+prettyShowSurfaceModule :: ModuleSurface SParsing -> String
+prettyShowSurfaceModule (ModuleSource header impts decls path) = intercalate "\n" (headerDoc <> imptsDoc <> declsDoc)
   where
     headerDoc = [show $ fuseModuleName header <> " :"]
     imptsDoc = "imports:":"":(impts <&> show)
@@ -84,7 +85,7 @@ prettyShowSurfaceModule (Module header impts decls) = intercalate "\n" (headerDo
 -- ** actions for source file
 
 loadModuleFromFile
-  :: (HasCompilerStore m, IOE :> m) => FilePath -> Eff m (Either String ModuleSurface)
+  :: (HasCompilerStore m, IOE :> m) => FilePath -> Eff m (Either String (ModuleSurface SParsing))
 loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText path
 {-# INLINE loadModuleFromFile #-}
 
@@ -94,7 +95,7 @@ loadModuleFromFile path = liftIO (Text.readFile path) >>= loadModuleFromText pat
 --
 -- TOOD: consider outdated files
 loadModuleFromText
-  :: (HasCompilerStore m) => String -> Text -> Eff m (Either String ModuleSurface)
+  :: (HasCompilerStore m) => String -> Text -> Eff m (Either String (ModuleSurface SParsing))
 loadModuleFromText path content = runErrorNoCallStack do
   sources <- gets (^.. (stageSourceParsing . spSources . traverse . _2))
   (m'either, _) <- driveParser builtinStore (surfaceModule sources (reservedOp ";;" $> ()) eof) path content
@@ -102,7 +103,7 @@ loadModuleFromText path content = runErrorNoCallStack do
     Right m -> return m
     Left err -> throwError $ errorBundlePretty err
   modify ((stageSourceParsing . spSources) %~ ((path, m):))
-  modify ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ _moduleHeader m) content)
+  modify ((stageSourceParsing . spFiles) %~ Map.insert (fuseModuleName $ m ^. msName) content)
   return m
 
 -- | try fetching expression ast from text.
@@ -158,10 +159,10 @@ getSurfaceDeclEof ops prompt content = driveParser ops (surfaceDecl eof) prompt 
 -- ** methods available for store
 
 -- | lookup module with its canonical name
-lookupSurfaceModule :: AccessCompilerStore m => Name -> Eff m (Maybe ModuleSurface)
+lookupSurfaceModule :: AccessCompilerStore m => Name -> Eff m (Maybe (ModuleSurface SParsing))
 lookupSurfaceModule name =
   asks (^. (stageSourceParsing . spSources))
-  <&> lookup name . (traverse %~ \(_, m) -> (fuseModuleName (m ^. moduleHeader), m))
+  <&> lookup name . (traverse %~ \(_, m) -> (fuseModuleName (m ^. msName), m))
 
 -- *** syntactic type and graphic type conversion
 

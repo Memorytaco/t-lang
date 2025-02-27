@@ -116,7 +116,19 @@
       "required": true,
       "types": [
         {
+          "type": "data_accessor",
+          "named": true
+        },
+        {
           "type": "data_constructor",
+          "named": true
+        },
+        {
+          "type": "data_repr",
+          "named": true
+        },
+        {
+          "type": "field",
           "named": true
         },
         {
@@ -132,15 +144,15 @@
           "named": true
         },
         {
+          "type": "region_id",
+          "named": true
+        },
+        {
           "type": "tuple_type",
           "named": true
         },
         {
           "type": "type",
-          "named": true
-        },
-        {
-          "type": "type_annotation_var",
           "named": true
         },
         {
@@ -153,6 +165,49 @@
         },
         {
           "type": "unit",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "data_repr",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "annotation",
+          "named": true
+        },
+        {
+          "type": "data_repr",
+          "named": true
+        },
+        {
+          "type": "field",
+          "named": true
+        },
+        {
+          "type": "number",
+          "named": true
+        },
+        {
+          "type": "string",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        },
+        {
+          "type": "value",
+          "named": true
+        },
+        {
+          "type": "var",
           "named": true
         }
       ]
@@ -196,6 +251,10 @@
         },
         {
           "type": "instance_chain",
+          "named": true
+        },
+        {
+          "type": "region",
           "named": true
         },
         {
@@ -311,11 +370,11 @@
           "named": true
         },
         {
-          "type": "type",
+          "type": "region_id",
           "named": true
         },
         {
-          "type": "type_annotation_var",
+          "type": "type",
           "named": true
         }
       ]
@@ -346,7 +405,7 @@
     "fields": {},
     "children": {
       "multiple": true,
-      "required": true,
+      "required": false,
       "types": [
         {
           "type": "do_block",
@@ -394,6 +453,10 @@
         },
         {
           "type": "or_pattern",
+          "named": true
+        },
+        {
+          "type": "region_id",
           "named": true
         },
         {
@@ -915,11 +978,43 @@
         "required": false,
         "types": [
           {
+            "type": ",",
+            "named": false
+          },
+          {
+            "type": "..",
+            "named": false
+          },
+          {
+            "type": "=",
+            "named": false
+          },
+          {
             "type": "expression",
             "named": true
           },
           {
+            "type": "id",
+            "named": true
+          },
+          {
             "type": "or",
+            "named": false
+          },
+          {
+            "type": "pattern_var",
+            "named": true
+          },
+          {
+            "type": "return",
+            "named": false
+          },
+          {
+            "type": "{",
+            "named": false
+          },
+          {
+            "type": "}",
             "named": false
           }
         ]
@@ -1015,6 +1110,10 @@
         },
         {
           "type": "pattern_wildcard",
+          "named": true
+        },
+        {
+          "type": "region_id",
           "named": true
         },
         {
@@ -1151,7 +1250,7 @@
       "required": true,
       "types": [
         {
-          "type": "type_annotation_var",
+          "type": "region_id",
           "named": true
         },
         {
@@ -1267,6 +1366,85 @@
     }
   },
   {
+    "type": "region",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "data_accessor",
+          "named": true
+        },
+        {
+          "type": "data_constructor",
+          "named": true
+        },
+        {
+          "type": "data_repr",
+          "named": true
+        },
+        {
+          "type": "expression",
+          "named": true
+        },
+        {
+          "type": "field",
+          "named": true
+        },
+        {
+          "type": "from",
+          "named": true
+        },
+        {
+          "type": "id",
+          "named": true
+        },
+        {
+          "type": "newtype_evidence",
+          "named": true
+        },
+        {
+          "type": "newtype_reverse_evidence",
+          "named": true
+        },
+        {
+          "type": "pattern",
+          "named": true
+        },
+        {
+          "type": "region_id",
+          "named": true
+        },
+        {
+          "type": "repr",
+          "named": true
+        },
+        {
+          "type": "repr_param",
+          "named": true
+        },
+        {
+          "type": "to",
+          "named": true
+        },
+        {
+          "type": "tuple_type",
+          "named": true
+        },
+        {
+          "type": "type",
+          "named": true
+        },
+        {
+          "type": "unit",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "source_file",
     "named": true,
     "root": true,
@@ -1364,15 +1542,15 @@
           "named": true
         },
         {
+          "type": "region_id",
+          "named": true
+        },
+        {
           "type": "tuple_type",
           "named": true
         },
         {
           "type": "type",
-          "named": true
-        },
-        {
-          "type": "type_annotation_var",
           "named": true
         },
         {
@@ -1464,7 +1642,7 @@
       "required": true,
       "types": [
         {
-          "type": "type_annotation_var",
+          "type": "region_id",
           "named": true
         },
         {
@@ -1632,6 +1810,10 @@
     "named": false
   },
   {
+    "type": "%null",
+    "named": false
+  },
+  {
     "type": "(",
     "named": false
   },
@@ -1724,6 +1906,10 @@
     "named": true
   },
   {
+    "type": "annotation",
+    "named": true
+  },
+  {
     "type": "auto",
     "named": false
   },
@@ -1736,6 +1922,10 @@
     "named": true
   },
   {
+    "type": "close",
+    "named": false
+  },
+  {
     "type": "comment",
     "named": true
   },
@@ -1746,6 +1936,10 @@
   {
     "type": "data",
     "named": false
+  },
+  {
+    "type": "data_accessor",
+    "named": true
   },
   {
     "type": "data_constructor",
@@ -1810,6 +2004,10 @@
   {
     "type": "foreign",
     "named": false
+  },
+  {
+    "type": "from",
+    "named": true
   },
   {
     "type": "handler",
@@ -1900,6 +2098,10 @@
     "named": false
   },
   {
+    "type": "open",
+    "named": false
+  },
+  {
     "type": "operator",
     "named": true
   },
@@ -1936,6 +2138,26 @@
     "named": true
   },
   {
+    "type": "region",
+    "named": false
+  },
+  {
+    "type": "region_id",
+    "named": true
+  },
+  {
+    "type": "repr",
+    "named": true
+  },
+  {
+    "type": "repr_param",
+    "named": true
+  },
+  {
+    "type": "return",
+    "named": false
+  },
+  {
     "type": "rule",
     "named": false
   },
@@ -1952,12 +2174,12 @@
     "named": true
   },
   {
-    "type": "type",
-    "named": false
+    "type": "to",
+    "named": true
   },
   {
-    "type": "type_annotation_var",
-    "named": true
+    "type": "type",
+    "named": false
   },
   {
     "type": "type_constructor",
@@ -2013,6 +2235,14 @@
   },
   {
     "type": "use_keyword_star",
+    "named": true
+  },
+  {
+    "type": "value",
+    "named": true
+  },
+  {
+    "type": "var",
     "named": true
   },
   {

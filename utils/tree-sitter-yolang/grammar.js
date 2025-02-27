@@ -15,6 +15,8 @@ module.exports = grammar({
   conflicts: $ => [
     [$.expression, $.pattern_cons],
     [$.expression, $.pattern],
+    [$.data_repr, $.type_var],
+    [$.data_repr, $.tuple_type],
   ],
   rules: {
     source_file: $ => seq($.module, repeat($._top)),
@@ -109,6 +111,7 @@ module.exports = grammar({
       $.typeclass,
       $.instance_chain,
       $.foreign,
+      $.region,
     ),
 
     decorated: $ => seq(repeat($.macro), $.declaration),
@@ -162,9 +165,37 @@ module.exports = grammar({
       )),
       ),
 
+    region: $ => statement("region", optional(choice("open", "close")), $.region_id,
+      optional(seq(
+        alias($.id, $.repr), repeat(alias($.id, $.repr_param)), choice(
+          wrapsep1("{", "}", ",", seq(alias($.id, $.data_accessor), ":", $.type, optional(seq("=", alias($.id, $.field))))),
+          repeat1(seq("|", alias($.id, $.data_constructor), choice(
+            seq(":", $.type, optional(seq("=", $.data_repr))),
+            repeat(seq(
+              choice($.id, $.unit, wrap("(", ")", seq($.type, optional(seq("=", alias($.id, $.field))))), $.tuple_type),
+              optional(seq("=", $.data_repr))
+            ))
+          ))),
+          seq("=",
+            optional(seq(
+              alias($.id, $.newtype_evidence),
+              optional(seq(",", alias($.id, $.newtype_reverse_evidence))),
+              "of"
+            )),
+            $.type,
+            optional(seq("=", $.data_repr))
+          ),
+        ),
+        optional(seq("=", $.data_repr))
+      )),
+      "with", optional(wrapsep("{", "}", ",", $.expression)),
+      choice("_", seq(alias($.id, $.from), $.pattern, repeat1(seq("|", $.pattern, "=", $.expression)))),
+      ",", choice("_", seq(alias($.id, $.to), $.pattern, repeat1(seq("|", $.pattern, "=", $.expression))))
+    ),
+
     // type declaration
     data: $ => statement("data",
-      repeat($.type_annotation_var), alias($.id, $.type_constructor), repeat(alias($.id, $.type_param)),
+      repeat($.region_id), alias($.id, $.type_constructor), repeat(alias($.id, $.type_param)),
       optional(choice(
         seq("=",
           optional(seq(
@@ -172,15 +203,42 @@ module.exports = grammar({
             optional(seq(",", alias($.id, $.newtype_reverse_evidence))),
             "of"
           )),
-          $.type
+          $.type,
+          optional(seq("=", $.data_repr))
         ),
-        repeat1(seq("|", repeat($.type_annotation_var), alias($.id, $.data_constructor), choice(
-          seq(":", $.type),
-          repeat(choice($.id, $.unit, wrap("(", ")", $.type), $.tuple_type))
+        repeat1(seq("|", alias($.id, $.data_constructor), choice(
+          seq(":", $.type, optional(seq("=", $.data_repr))),
+          repeat(seq(
+            choice($.id, $.unit, wrap("(", ")", seq($.type, optional(seq("=", alias($.id, $.field))))), $.tuple_type),
+            optional(seq("=", $.data_repr))
+          ))
         ))),
-        wrap("{", "}", sep1(",", seq(repeat($.type_annotation_var), $.id, ":", $.type)))
+        seq(
+          wrapsep1("{", "}", ",", seq(
+            repeat($.region_id),
+            alias($.id, $.data_accessor),
+            ":", $.type, optional(seq("=", alias($.id, $.field)))
+          )),
+          optional(seq("=", $.data_repr))
+        )
       )),
       optional(seq("deriving", sep1(",", repeat1($.id)), optional(seq("via", sep1(",", repeat1($.id))))))
+    ),
+
+    // explicit representation of a data type and also its memory management
+    data_repr: $ => seq(
+      choice(
+        alias($.id, $.var),
+        wrapsep1("(", ")", ",", choice(
+          seq(
+            $.type,
+            optional(seq("=", choice(alias($.id, $.value), alias(/\$[0-9]+/, $.field), $.number, $.string))),
+            optional(alias($.region_id, $.annotation))
+          ),
+          $.data_repr
+        ))
+      ),
+      optional(alias($.region_id, $.annotation))
     ),
 
     type_alias: $ => statement("type", alias($.id, $.name), repeat(field("var", $.id)), "=", $.type),
@@ -189,7 +247,7 @@ module.exports = grammar({
     type: $ => prec.right(PRIORITY.TYPE, seq(
       choice(
         seq("forall", repeat1(choice(
-          wrapsep("{", "}", ",", $.type_annotation_var),
+          wrapsep("{", "}", ",", $.region_id),
           alias($.id, $.type_var_id),
           // TODO: refine semantic of ":", after it should be kind expression instead of type
           wrap("(", ")", seq(alias($.id, $.type_var_id), choice("=", "~", ":"), $.type))
@@ -216,9 +274,8 @@ module.exports = grammar({
       alias(seq("!", token.immediate(/'?[A-Za-z_]\w*/)), $.type_eff_name),
       wrapsep("!{", "}", ",", choice($.type, seq("..", choice($.identifier, $.type_implicit_var))))
     ),
-    type_var: $ => choice(alias($.id, $.type_var_id), $.type_implicit_var, $.type_annotation_var),
+    type_var: $ => choice(alias($.id, $.type_var_id), $.type_implicit_var, $.region_id),
     type_implicit_var: _$ => /'[A-Za-z_]\w*/,
-    type_annotation_var: _$ => /%[A-Za-z_]\w*/,
 
     primitive_type: $ => choice(
       alias($.primitive_reverse_atom, $.primitive_reverse_atom_prim),
@@ -288,7 +345,7 @@ module.exports = grammar({
         $.macro_id, $.identifier, $.number,
         $.string, $.string_cons, $.operator,
         $.operator_id, $.force_operator_id,
-        $.handler, $.macro_block,
+        $.handler, $.macro_block, $.region_id, "%null",
         seq("forall", repeat1($.id), ".", $.expression),
         seq("let", sep1(",", seq($.or_pattern, choice("=", wrapsep("|", "|", ",", $.or_pattern)), $.expression)), "in", $.expression),
         seq(wrapsep1("|", "|", ",", $.or_pattern), $.expression),
@@ -318,7 +375,10 @@ module.exports = grammar({
       wrap("{", "}", repeat($._macro_block_content))
     ),
 
-    or_pattern: $ => seq($.pattern, optional(field("altpattern", seq("or", $.expression)))),
+    or_pattern: $ => seq($.pattern, optional(field("altpattern", choice(
+      seq("or", choice(wrapsep("{", "}", ",", choice(seq(optional(seq($.id, "=")), $.expression), seq(optional(".."), $.pattern_var))), $.expression, $.pattern_var)),
+      seq("return", seq(optional(seq("..", $.id, ",")), $.expression))
+    )))),
 
     do_block: $ => wrapsep("{", "}", ";;", choice(
       sep1(",", seq($.or_pattern, "=", $.expression)),
@@ -344,6 +404,7 @@ module.exports = grammar({
           token.immediate("@"),
           choice($.unit, wrapsep("(", ")", ",", $.pattern))
         ))),
+        $.region_id, "%null",
         field("constructor", $.pattern_cons),
         field("literal", choice($.unit, $.string_cons, $.string, $.number)),
         wrapsep1("(", ")", ",", $.pattern)
@@ -358,8 +419,8 @@ module.exports = grammar({
     // effect
     effect: $ => statement("effect", choice(
       seq(optional(seq("forall", repeat1($.id), ".")), sep1(",", alias($.id, $.named)), ":", sep1(",", $.type)),
-      seq("auto", sep1(",", seq($.id, repeat(choice($.id, $.type_annotation_var))))),
-      seq(alias($.id, $.name), repeat(choice($.id, $.type_annotation_var)), wrapsep("{", "}", ";;",
+      seq("auto", sep1(",", seq($.id, repeat(choice($.id, $.region_id))))),
+      seq(alias($.id, $.name), repeat(choice($.id, $.region_id)), wrapsep("{", "}", ";;",
         seq(optional(seq("forall", repeat1($.id), ".")), alias($.id, $.method), ":", sep1(",", $.type)))
       )
     )),
@@ -402,6 +463,7 @@ module.exports = grammar({
     operator_id: _$ => /\([+\-*/\\!~@#$%^&=|?,.><;:]+\)/,
     force_operator_id: _$ => /#\([+\-*/\\!~@#$%^&=|?,.><;:]+\)/,
     macro_id: _$ => /#[A-Za-z_]\w*(#[A-Za-z_]\w*)*!/,
+    region_id: _$ => /%[A-Za-z_]\w*/,
 
     id: _$ => /[A-Za-z_]\w*/,
     // #prefix#name or #prefix#name#(++) simple operator

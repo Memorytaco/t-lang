@@ -13,7 +13,7 @@ homepage:       https://github.com/memorytaco/yo#readme
 bug-reports:    https://github.com/memorytaco/yo/issues
 author:         Andrew Elliot
 maintainer:     memorytoco@gmail.com
-copyright:      2024 Andrew Elliot
+copyright:      2025 Andrew Elliot
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
@@ -85,6 +85,7 @@ library
       Language.Core.Name
       Language.Core.Operator
       Language.Core.Pattern
+      Language.Core.Stage
       Language.Core.Term
       Language.Core.Type
       Language.Core.Utility

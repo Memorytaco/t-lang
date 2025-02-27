@@ -29,7 +29,7 @@ module Compiler.Store
   )
 where
 
-import Language.Core ( Name, ModuleSurface )
+import Language.Core ( Name, ModuleSurface, CoreStage (..) )
 
 import Control.Lens ( makeLenses )
 
@@ -58,7 +58,7 @@ initStageStore = StageStore emptyStageSourceParsing emptyStageNameChecking
 data StageSourceParsing
   = StageSourceParsing
     { -- | modules which are parsed with no problem, with operator resolved and file path tracked
-      _spSources :: [(FilePath, ModuleSurface)]
+      _spSources :: [(FilePath, ModuleSurface SParsing)]
       -- | the source file loaded with mangled module name as key
     , _spFiles  :: Map Name Text
       -- | track outdated module content
@@ -77,7 +77,7 @@ emptyStageSourceParsing = StageSourceParsing [] empty empty
 data StageNameChecking
   = StageNameChecking
     { -- | modules which are checked and have names mangled.
-      _ncModules :: Map Name ModuleSurface
+      _ncModules :: Map Name (ModuleSurface SParsing)
       -- | modules which need rechecking
     , _ncOutdates :: Set.Set Name
     }

@@ -29,8 +29,18 @@ data list a
 
 // a string piece, internal represented as
 // an anonymous struct with fixed size.
-data str = #[{uint32, ptr (bit 8)}]
+#[feature (cpu "x86", cpu "amd64", cpu "arm64")]
+data %s str = #!(uint32, ptr (bit 8) %s)
 ;;
 
-data int = #[int32]
+#[feature (cpu "arm32")]
+data str = #!(uint32, ptr (bit 8))
+;;
+
+#[feature (cpu "x86", cpu "amd64", cpu "arm64")]
+data int = #!int32
+;;
+
+#[feature (cpu "arm32")]
+data int = #!int16
 ;;

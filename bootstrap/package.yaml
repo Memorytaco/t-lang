@@ -4,7 +4,7 @@ github:              "memorytaco/yo/bootstrap"
 license:             BSD3
 author:              "Andrew Elliot"
 maintainer:          "memorytoco@gmail.com"
-copyright:           "2024 Andrew Elliot"
+copyright:           "2025 Andrew Elliot"
 language:            GHC2021
 
 extra-source-files:
@@ -39,10 +39,12 @@ dependencies:
 - tasty-quickcheck
 - capability
 - lens
-- prettyprinter
 - random
 - comonad
+- prettyprinter
+
 - haskeline
+
 - effectful
 - effectful-core
 - effectful-th

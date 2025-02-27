@@ -6,36 +6,39 @@ data bool
 | true
 ;;
 
-type tuple a b =
+data pair a b
 { fst : a
 , snd : b
 }
 ;;
 
 // sequence operator
-operator ; _ 0 infix
+fixity 0 ; _ infix
 ;;
 
-let ; : forall a b. a -> b -> b =
-[ _, ?a = a ]
+let (;) : forall a b. a !'e1 -> b !'e2 -> b !{..'e1, ..'e2}
+| ?e1, ?e2 | do {
+  do e1, do e2
+}
 ;;
 
-operator _ $ 0 infix
+fixity 0 $ _ infix
 ;;
 
-let $ : forall a b. (a -> b) -> a -> b =
-[ ?f, ?val = f val ]
+let ($) : forall a b. (a -> b) -> a -> b | ?f, ?val | f val
 ;;
 
-let when: forall a b. bool -> a -> b =
-[ true, ?a, _ = a
+let when: forall a b. bool -> a -> b
+| true, ?a, _ = a
 | false, _, ?b = b
-]
 ;;
 
-operator & _ 0 infix
+fixity 0 & _ infix
 ;;
 
-let & : forall a b. a -> (a -> b) -> b =
-[ ?val, ?f = f val ]
+let (&) : forall a b. a -> (a -> b) -> b | ?val, ?f | f val
+;;
+
+let flip: ('a -> 'b -> 'c) -> 'b -> 'a -> 'c
+| ?f, ?a, ?b | f b a
 ;;

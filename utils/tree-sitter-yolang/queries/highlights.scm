@@ -29,7 +29,12 @@
 (data (unit) @type.builtin)
 (data (tuple_type "(" @type.builtin "," ")" @type.builtin))
 (data (data_constructor) @constructor)
-(data (type_annotation_var) @type.builtin)
+(data (data_accessor) @variable.member)
+(data (region_id) @type.builtin)
+(data (field) @keyword.modifier)
+(data_repr "=" @keyword)
+(data_repr [(field) (value)] @keyword.modifier)
+(data_repr (annotation) @keyword.directive)
 
 ;; type alias
 (type_alias ["type" "="] @keyword)
@@ -46,8 +51,8 @@
 (type (tuple_type "(" @type.builtin "," ")" @type.builtin))
 (type_effect_suffix "!{" @keyword.operator "}" @keyword.operator)
 (type_eff_name) @type.builtin
-(type "forall" "{" @keyword (type_annotation_var) @type.builtin "}" @keyword)
-(type_var (type_annotation_var) @type.builtin)
+(type "forall" "{" @keyword (region_id) @type.builtin "}" @keyword)
+(type_var (region_id) @type.builtin)
 (type_reserved_operator) @type.builtin
 (type (operator) @operator)
 (primitive_compound (operator) @operator)
@@ -84,7 +89,8 @@
 (expression (unlift_type "@" @keyword.operator))
 (expression (unlift_type (unlift_var) @type.builtin))
 (expression (unit) @constructor)
-(expression ["let" "match" "do" "with" "in" "or"] @keyword)
+(expression ["let" "match" "=" "do" "with" "in" "or" "%null"] @keyword)
+(expression (region_id) @type)
 (do_block ["->" "=" ";;"] @keyword)
 (do_block [","] @keyword.operator)
 (string_cons (string_cons_var) @attribute)
@@ -96,7 +102,7 @@
 (fixity [(operator) (operator_id) (force_operator_id)] @operator)
 
 ;; pattern
-(pattern [(pattern_wildcard) ":"] @keyword)
+(pattern [(pattern_wildcard) ":" "%null"] @keyword)
 (pattern_var ["?"] @keyword.operator) @variable
 (pattern (pattern_cons) @constructor)
 (pattern (unit) @constructor)
@@ -104,7 +110,8 @@
 (pattern "@" @keyword.operator)
 (pattern "@" "(" @keyword.operator "," ")" @keyword.operator)
 (pattern ["<-"] @keyword)
-(or_pattern "or" @keyword)
+(pattern (region_id) @type)
+(or_pattern ["or" "return" "{" ".." "}" "="] @keyword)
 
 ;; binding
 (binding ["pattern" "<-" ":" "{" "}"] @keyword)
@@ -118,7 +125,7 @@
 (effect (method) @variable.member @markup.italic)
 (effect (named) @variable.member @markup.italic @markup.strong)
 (effect (name) @markup.strong)
-(effect (type_annotation_var) @type.builtin)
+(effect (region_id) @type.builtin)
 (handler ["handler" ":"] @keyword)
 (handler (handler_resume) @variable.builtin)
 (handler "=" @keyword)
@@ -157,3 +164,9 @@
 (foreign ["[" "]"] @function.macro)
 (foreign (rawname) @keyword.function)
 (foreign (name) @function)
+
+;; region
+(region ["region" "open" "close" "with" "=" "_" "of" "|"] @keyword)
+(region [(region_id) (repr)] @type)
+(region (from) @constructor)
+(region (to) @variable.member)

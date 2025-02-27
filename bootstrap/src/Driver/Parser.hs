@@ -228,6 +228,6 @@ surfaceModule ::
     HasReader "TermOperator" [Operator Text] m,
     HasReader "TypeOperator" [Operator Text] m,
     HasReader "PatternOperator" [Operator Text] m
-  ) => [ModuleSurface] -> m () -> m ()
-  -> m ModuleSurface
+  ) => [ModuleSurface SParsing] -> m () -> m ()
+  -> m (ModuleSurface SParsing)
 surfaceModule ms sep = module' ms (surfaceDecl (lookAhead sep) <* sep)

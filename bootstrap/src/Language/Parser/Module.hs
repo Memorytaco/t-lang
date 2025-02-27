@@ -58,15 +58,15 @@ module'
    . ( ShowErrorComponent e, MonadParsec e Text m, MonadFail m
      , HasState "OperatorStore" OperatorStore m
      , Item (UserOperator Text) :<: set)
-  => [Module set Name] -> m (Decl set Name)
-  -> m () -> m (Module set Name)
+  => [Module SParsing set Name] -> m (Decl set Name)
+  -> m () -> m (Module SParsing set Name)
 module' ms declaraton e = do
   whiteSpace
   name <- reserved "module" *> moduleName <* reservedOp ";;"
   uses <- many stmtUse >>= \deps -> do
     forM deps \(pos, u@(Use namespace@(Alias from _) imps)) -> region (setErrorOffset pos) do
       forM_ imps \(Alias sym _) -> do
-        case isDeclStoreOf @(Item (UserOperator Text)) . (^. moduleDecls) <$> lookUpModule from ms of
+        case isDeclStoreOf @(Item (UserOperator Text)) . (^. msDecls) <$> lookUpModule from ms of
           Just entries -> case filter (\(Item _ _name) -> _name == sym) entries of
                         [] -> fail $
                           "module (" <> show namespace <> ") does not contain definition for" <> show sym
@@ -75,8 +75,8 @@ module' ms declaraton e = do
             $ "module (" <> show namespace <> ") doesn't contain operator definition"
       return u
   decls <- many declaraton <* e
-  return (Module name uses $ DeclStore decls)
+  return (ModuleSource name uses (DeclStore decls) "todo")
   where
-    lookUpModule :: ModuleName -> [Module set Name] -> Maybe (Module set Name)
-    lookUpModule name = find $ (== name) . _moduleHeader
+    lookUpModule :: ModuleName -> [Module SParsing set Name] -> Maybe (Module SParsing set Name)
+    lookUpModule name = find $ (== name) . _msName
     putIntoEnv (Item (UserOperator op) _) = modify @"OperatorStore" (op:)

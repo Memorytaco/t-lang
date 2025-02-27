@@ -6,3 +6,4 @@ a.out
 *.png
 *.t
 *.c
+*/**/.liquid

@@ -6,7 +6,7 @@
 module std/platforms/unix
 ;;
 
-use root:std { ctype, type };;
+use root: std { ctype, type };;
 use module ctype (cstr, cptr, cint);;
 use module type (str);;
 
@@ -21,5 +21,6 @@ data fd = cint
 type handle = fd
 ;;
 
-foreign [name "open"] open: str -> handle
+#[bindgen "c" "unix.h"]
+external [name "open"] open: str -> handle
 ;;

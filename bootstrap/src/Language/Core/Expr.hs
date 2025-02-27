@@ -23,11 +23,11 @@ instance (Pretty typ, Pretty term) => Pretty (typ ::: term) where
 -- | a `Free` like structure for defining `Expr`
 --
 -- `Val` is simply a syntactic constant to `Expr` (e.g. a name reference, a variable)
-data Expr f a
-  = Val a
-  | Expr (f (Expr f a))
-  deriving (Functor)
+data Expr f a where
+  Val :: a -> Expr f a
+  Expr :: f (Expr f a) -> Expr f a
 
+deriving instance Functor f => Functor (Expr f)
 deriving instance (Show (f (Expr f a)), Show a) => Show (Expr f a)
 deriving instance (Eq (f (Expr f a)), Eq a) => Eq (Expr f a)
 instance (forall x. Pretty x => Pretty (f x), Pretty a) => Pretty (Expr f a) where

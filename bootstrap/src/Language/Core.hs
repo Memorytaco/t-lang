@@ -74,6 +74,8 @@ module Language.Core
   , SugarLetRecur
   , SugarLetTerm
 
+  , CoreStage (..)
+
   -- ** re-export of structure
   , module Expr
   , module Module
@@ -108,6 +110,7 @@ import Language.DataLayout (Rep (..))
 import Data.Text (Text)
 import Graph.Extension.GraphicType
 import Graph.Core (CoreG)
+import Language.Core.Stage (CoreStage (..))
 
 -----------------------------------------
 -----------------------------------------
@@ -186,7 +189,7 @@ type DeclSurfaceExt typ expr =
 ----------------------------------
 
 -- | this is what structure we used to store raw ingrediants.
-type ModuleSurface = Module (ModuleSurfaceExt TypSurface (ExprSurface TypSurface)) Name
+type ModuleSurface (stage :: CoreStage) = Module stage (ModuleSurfaceExt TypSurface (ExprSurface TypSurface)) Name
 type ModuleSurfaceExt typ expr = DeclSurfaceExt typ expr
 
 

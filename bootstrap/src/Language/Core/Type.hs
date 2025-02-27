@@ -1,4 +1,5 @@
 {-# LANGUAGE RankNTypes, QuantifiedConstraints #-}
+{-@ LIQUID "--no-positivity-check" @-}
 module Language.Core.Type
   ( Type (..)
   , TypeF (..)

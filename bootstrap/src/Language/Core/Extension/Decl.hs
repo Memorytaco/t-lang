@@ -117,6 +117,6 @@ data UserValue val typ info
 -- ** extensions for parser rule (user defined operator for now)
 
 -- | User defined operator, with name as operator name
-data UserOperator name
+newtype UserOperator name
   = UserOperator (OperatorSpace (Operator name))
   deriving (Show, Eq, Functor)

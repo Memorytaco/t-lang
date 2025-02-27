@@ -1,7 +1,11 @@
 module Language.Core.Extension.Annotated
   ( SourceRange (..)
+  , SourcePos (..)
+  , unPos, mkPos
   )
 where
+
+import Text.Megaparsec.Pos
 
 -- | Annotation for source parsing.
 --
